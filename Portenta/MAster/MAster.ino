@@ -1,8 +1,4 @@
-/* * PROYECTO: BRAZO CARTESIANO - PORTENTA H7 (MAESTRO)
- * ARQUITECTURA: Polleo Rápido (15ms) a 100kHz
- * FUNCIONES: Homing (24V), Servos (0-180°), Joystick Z, Menú Seguro
- */
-
+//------------------------------------------------------------------------------------------------DELCARACION-DE-LIBRERIAS**********----------------------------------------------------------------------------------------------------
 #include <Arduino_MachineControl.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
@@ -18,7 +14,7 @@ Adafruit_SH1106G pantalla(128, 64, &Wire, -1);
 const int pP_Z = 0; const int pP_X = 2; const int pP_Y = 4;
 const int pD_Z = 1; const int pD_X = 3; const int pD_Y = 5;
 
-const float velocidadMotores = 0.0003; // 600 microsegundos
+const float velocidadMotores = 0.0003; // MS
 mbed::Ticker motorTicker;
 volatile bool estadoPulso = false;
 volatile int8_t movX = 0, movY = 0, movZ = 0; 
@@ -32,11 +28,11 @@ int faseHoming = 0;
 
 // --- VARIABLES SENSORES Y ACTUADORES ---
 bool sensorX = false, sensorY = false, sensorZ = false;
-uint8_t posServoRot = 90; // Servo 1
-uint8_t posServoPin = 90; // Servo 2
+uint8_t posServoRot = 90; // SERVO 01
+uint8_t posServoPin = 90; // SERVO 02 
 
 // --- VARIABLES COMUNICACIÓN Y CONTROL ---
-#define DIRECCION_ESP32 0x40
+#define DIRECCION_ESP32 0x40    // DIRECCION DE ESTA    
 unsigned long tAnteriorI2C = 0;
 bool esp32Conectado = false;
 bool btConectado = false;
@@ -47,7 +43,7 @@ uint8_t prevBtnTri = 0;
 
 // --- INTERRUPCIÓN HARDWARE (TICKER MOTORES) ---
 void generarPulsoMotor() {
-    estadoPulso = !estadoPulso;
+    estadoPulso = !estadoPulso; 
     if (movX != 0) digital_outputs.set(pP_X, estadoPulso);
     else digital_outputs.set(pP_X, LOW);
     
