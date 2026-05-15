@@ -11,10 +11,17 @@ using namespace machinecontrol;
 Adafruit_SH1106G pantalla(128, 64, &Wire, -1);
 
 // --- CONFIGURACIÓN MOTORES STEPPER ---
-const int pP_Z = 0; const int pP_X = 2; const int pP_Y = 4;
-const int pD_Z = 1; const int pD_X = 3; const int pD_Y = 5;
+//DIR+ = 4  X
+//PIL+ = 5  X
+//DIR+ = 2  Y
+//PIL+ = 3  Y
+//DIR+ = 1  Z
+//PIL+ = 2  Z
 
-const float velocidadMotores = 0.0003; // MS
+const int pP_Z = 0; const int pP_X = 4; const int pP_Y = 2;
+const int pD_Z = 1; const int pD_X = 5; const int pD_Y = 3;
+
+const float velocidadMotores = 0.0001; // MS
 mbed::Ticker motorTicker;
 volatile bool estadoPulso = false;
 volatile int8_t movX = 0, movY = 0, movZ = 0; 

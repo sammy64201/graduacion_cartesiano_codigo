@@ -35,8 +35,8 @@ void processControllers() {
   for (auto ctl : myControllers) {
     if (ctl && ctl->isConnected() && ctl->hasData()) {
       // 1. Joystick Izquierdo (X e Y)
-      ejeX = (abs(ctl->axisX()) > 100) ? (ctl->axisX() > 0 ? 1 : -1) : 0;
-      ejeY = (abs(ctl->axisY()) > 100) ? (ctl->axisY() > 0 ? 1 : -1) : 0;
+      ejeX = (abs(ctl->axisX()) > 100) ? (ctl->axisX() > 0 ? -1 : 1) : 0;
+      ejeY = (abs(ctl->axisY()) > 100) ? (ctl->axisY() > 0 ? -1 : 1) : 0;
 
       // 2. Joystick Derecho (Eje Z en vertical | Servo 1 en horizontal)
       int rY = ctl->axisRY();
