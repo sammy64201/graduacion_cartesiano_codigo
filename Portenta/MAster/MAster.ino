@@ -3,18 +3,11 @@
 //------------------------------------------------------------------------------------------------
 #include <Arduino_MachineControl.h>
 #include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SH110X.h>
 #include "mbed.h"
 #include <math.h>
 #include <stdio.h>
 
 using namespace machinecontrol;
-
-//------------------------------------------------------------------------------------------------
-// CONFIGURACION PANTALLA OLED
-//------------------------------------------------------------------------------------------------
-Adafruit_SH1106G pantalla(128, 64, &Wire, -1);
 
 //------------------------------------------------------------------------------------------------
 // CONFIGURACION MOTORES STEPPER
@@ -220,8 +213,18 @@ uint8_t posServoPin = 90;
 //------------------------------------------------------------------------------------------------
 #define DIRECCION_ESP32 0x40
 
+const unsigned long PERIODO_CONTROL_MS = 5;
+const unsigned long PERIODO_ESTADO_PANTALLA_MS = 150;
+const unsigned long TIMEOUT_CONTROL_MS = 150;
+
+uint8_t ultimoErrorEnvioPantalla = 255;
+unsigned long ultimoReporteI2C = 0;
+uint32_t enviosPantallaOk = 0;
+uint32_t enviosPantallaError = 0;
+
 unsigned long tAnteriorI2C = 0;
-unsigned long tAnteriorTerminal = 0;
+unsigned long tAnteriorEstadoPantalla = 0;
+unsigned long ultimoPaqueteControlMs = 0;
 
 bool esp32Conectado = false;
 bool btConectado = false;
@@ -229,6 +232,33 @@ bool btConectado = false;
 int8_t prevInputY = 0;
 uint8_t prevBtnX = 0;
 uint8_t prevBtnTri = 0;
+
+// Paquete que se envia desde la Portenta hacia el ESP32 para que el ESP32 dibuje la OLED.
+struct __attribute__((packed)) PaquetePantalla {
+    uint8_t magic;
+    uint8_t version;
+    uint8_t estado;
+    uint8_t opcionMenu;
+    uint8_t faseCal;
+    uint8_t flags;
+    uint8_t limites;
+    int8_t movX;
+    int8_t movY;
+    int8_t movZ;
+    uint8_t servoRot;
+    uint8_t servoPin;
+    uint8_t errorCal;
+    int32_t valor1;
+    int32_t valor2;
+    int32_t valor3;
+    int32_t valor4;
+    uint8_t checksum;
+};
+
+static_assert(sizeof(PaquetePantalla) <= 32, "PaquetePantalla excede el buffer I2C");
+
+const uint8_t MAGIC_PANTALLA = 0xA5;
+const uint8_t VERSION_PANTALLA = 1;
 
 //------------------------------------------------------------------------------------------------
 // VARIABLES MODO CARTESIANO
@@ -1538,145 +1568,285 @@ void leerTerminal() {
 }
 
 //------------------------------------------------------------------------------------------------
-// PANTALLA
+// COMUNICACION: PORTENTA -> ESP32 PARA LA PANTALLA
 //------------------------------------------------------------------------------------------------
-void actualizarPantalla() {
-    pantalla.clearDisplay();
-    pantalla.setCursor(0, 0);
+uint8_t calcularChecksum(const uint8_t *datos, size_t longitud) {
+    uint8_t resultado = 0;
 
-    if (estadoActual == MENU_PRINCIPAL) {
-        pantalla.println(F("--- MENU PRINCIPAL ---"));
-        pantalla.drawLine(0, 10, 128, 10, SH110X_WHITE);
-
-        pantalla.setCursor(4, 15);
-        pantalla.print(opcionMenu == 0 ? "-> " : "   ");
-        pantalla.println(F("MODO MANUAL"));
-
-        pantalla.setCursor(4, 29);
-        pantalla.print(opcionMenu == 1 ? "-> " : "   ");
-        pantalla.println(F("CALIBRACION"));
-
-        pantalla.setCursor(4, 43);
-        pantalla.print(opcionMenu == 2 ? "-> " : "   ");
-        pantalla.println(F("POSICION XYZ"));
-
-        pantalla.setCursor(0, 56);
-        pantalla.print(calibracionXYValida ? F("XY CALIBRADO") : F("XY SIN CALIBRAR"));
+    for (size_t i = 0; i < longitud; i++) {
+        resultado ^= datos[i];
     }
 
-    else if (estadoActual == MODO_MANUAL) {
-        pantalla.println(F("CONTROL MANUAL"));
-        pantalla.drawLine(0, 10, 128, 10, SH110X_WHITE);
+    return resultado;
+}
 
-        pantalla.setCursor(0, 14);
-        pantalla.print(F("X:"));
-        pantalla.print(movX == 0 ? " 0" : (movX > 0 ? "+1" : "-1"));
-        pantalla.print(F(" Y:"));
-        pantalla.print(movY == 0 ? " 0" : (movY > 0 ? "+1" : "-1"));
-        pantalla.print(F(" Z:"));
-        pantalla.println(movZ == 0 ? " 0" : (movZ > 0 ? "+1" : "-1"));
+uint8_t codigoErrorCalibracion() {
+    if (faseCal != CAL_ERROR) return 0;
 
-        pantalla.setCursor(0, 28);
-        pantalla.print(F("X+:"));
-        pantalla.print(limiteXmas ? "ON " : "OFF");
-        pantalla.print(F(" X-:"));
-        pantalla.println(limiteXmenos ? "ON" : "OFF");
+    if (strcmp(mensajeError, "Tiempo maximo excedido") == 0) return 1;
+    if (strcmp(mensajeError, "Rango X invalido") == 0) return 2;
+    if (strcmp(mensajeError, "Rango Y invalido") == 0) return 3;
+    if (strcmp(mensajeError, "No se pudo calcular la escala") == 0) return 4;
 
-        pantalla.setCursor(0, 42);
-        pantalla.print(F("Y+:"));
-        pantalla.print(limiteYmas ? "ON " : "OFF");
-        pantalla.print(F(" Y-:"));
-        pantalla.println(limiteYmenos ? "ON" : "OFF");
+    return 255;
+}
 
-        pantalla.setCursor(0, 56);
-        pantalla.print(F("S1:"));
-        pantalla.print(posServoRot);
-        pantalla.print(F(" S2:"));
-        pantalla.print(posServoPin);
+void construirPaquetePantalla(PaquetePantalla &p) {
+    memset(&p, 0, sizeof(p));
+
+    p.magic = MAGIC_PANTALLA;
+    p.version = VERSION_PANTALLA;
+    p.estado = (uint8_t)estadoActual;
+    p.opcionMenu = (uint8_t)opcionMenu;
+    p.faseCal = (uint8_t)faseCal;
+
+    if (calibracionXYValida) p.flags |= 0x01;
+    if (movimientoCartesianoActivo) p.flags |= 0x02;
+    if (escalaConfigurada()) p.flags |= 0x04;
+    if (esp32Conectado) p.flags |= 0x08;
+    if (btConectado) p.flags |= 0x10;
+
+    if (limiteXmas) p.limites |= 0x01;
+    if (limiteXmenos) p.limites |= 0x02;
+    if (limiteYmas) p.limites |= 0x04;
+    if (limiteYmenos) p.limites |= 0x08;
+
+    noInterrupts();
+    p.movX = movX;
+    p.movY = movY;
+    p.movZ = movZ;
+    interrupts();
+
+    p.servoRot = posServoRot;
+    p.servoPin = posServoPin;
+    p.errorCal = codigoErrorCalibracion();
+
+    if (estadoActual == MODO_HOMING) {
+        p.valor1 = leerPasosX();
+        p.valor2 = leerPasosY();
+        p.valor3 = rangoXPasos;
+        p.valor4 = rangoYPasos;
     }
-
-    else if (estadoActual == MODO_HOMING) {
-        pantalla.println(F("--- CALIBRACION ---"));
-        pantalla.drawLine(0, 10, 128, 10, SH110X_WHITE);
-
-        if (faseCal == CAL_ESPERA) {
-            pantalla.setCursor(0, 20);
-            pantalla.println(F("PRESIONA X"));
-            pantalla.println(F("PARA INICIAR"));
-            pantalla.println(F("TRI: SALIR"));
-        }
-
-        else if (faseCal == CAL_COMPLETA) {
-            pantalla.setCursor(0, 18);
-            pantalla.println(F("CALIBRACION OK"));
-            pantalla.println(F("HOME X=0 Y=0"));
-            pantalla.println(F("TRI: MENU"));
-        }
-
-        else if (faseCal == CAL_ERROR) {
-            pantalla.setCursor(0, 18);
-            pantalla.println(F("ERROR CALIBRACION"));
-            pantalla.println(mensajeError);
-            pantalla.println(F("TRI: MENU"));
-        }
-
-        else {
-            pantalla.setCursor(0, 16);
-            pantalla.println(nombreFase());
-
-            pantalla.setCursor(0, 32);
-            pantalla.print(F("X:"));
-            pantalla.print(leerPasosX());
-            pantalla.print(F(" Y:"));
-            pantalla.println(leerPasosY());
-
-            pantalla.setCursor(0, 46);
-            pantalla.print(F("RX:"));
-            pantalla.print(rangoXPasos);
-            pantalla.print(F(" RY:"));
-            pantalla.println(rangoYPasos);
-
-            pantalla.setCursor(0, 57);
-            pantalla.print(F("TRI: CANCELAR"));
-        }
-    }
-
     else if (estadoActual == MODO_CARTESIANO) {
-        pantalla.println(F("--- POSICION XYZ ---"));
-        pantalla.drawLine(0, 10, 128, 10, SH110X_WHITE);
-
-        pantalla.setCursor(0, 15);
-
-        if (escalaConfigurada()) {
-            pantalla.print(F("X:"));
-            pantalla.print(posicionXmm(), 1);
-            pantalla.print(F(" Y:"));
-            pantalla.println(posicionYmm(), 1);
-        }
-        else {
-            pantalla.println(F("SIN ESCALA MM"));
-        }
-
-        pantalla.setCursor(0, 29);
-        pantalla.print(F("TX:"));
-        pantalla.print(objetivoXmm, 1);
-        pantalla.print(F(" TY:"));
-        pantalla.println(objetivoYmm, 1);
-
-        pantalla.setCursor(0, 43);
-
-        if (movimientoCartesianoActivo) {
-            pantalla.println(F("ESTADO: MOVIENDO"));
-        }
-        else {
-            pantalla.println(F("ESTADO: LISTO"));
-        }
-
-        pantalla.setCursor(0, 56);
-        pantalla.print(F("SERIAL 115200"));
+        p.valor1 = lroundf(posicionXmm() * 10.0f);
+        p.valor2 = lroundf(posicionYmm() * 10.0f);
+        p.valor3 = lroundf(objetivoXmm * 10.0f);
+        p.valor4 = lroundf(objetivoYmm * 10.0f);
     }
 
-    pantalla.display();
+    p.checksum = calcularChecksum(
+        (const uint8_t *)&p,
+        sizeof(PaquetePantalla) - 1
+    );
+}
+
+bool enviarEstadoPantalla() {
+    PaquetePantalla paquete;
+    construirPaquetePantalla(paquete);
+
+    Wire.beginTransmission((uint8_t)DIRECCION_ESP32);
+
+    const size_t bytesEnBuffer = Wire.write(
+        (const uint8_t *)&paquete,
+        sizeof(paquete)
+    );
+
+    const uint8_t error = Wire.endTransmission(true);
+    ultimoErrorEnvioPantalla = error;
+
+    if (bytesEnBuffer == sizeof(paquete) && error == 0) {
+        enviosPantallaOk++;
+        return true;
+    }
+
+    enviosPantallaError++;
+    return false;
+}
+
+//------------------------------------------------------------------------------------------------
+// COMUNICACION: ESP32 -> PORTENTA PARA EL CONTROL
+//------------------------------------------------------------------------------------------------
+void procesarControlRecibido(
+    int8_t jX,
+    int8_t jY,
+    int8_t jZ,
+    uint8_t rBtnX,
+    uint8_t rBtnTri
+) {
+    bool clickX = (rBtnX == 1 && prevBtnX == 0);
+    bool clickTri = (rBtnTri == 1 && prevBtnTri == 0);
+
+    prevBtnX = rBtnX;
+    prevBtnTri = rBtnTri;
+
+    if (!btConectado) {
+        if (estadoActual != MODO_CARTESIANO) {
+            detenerTodos();
+            estadoActual = MENU_PRINCIPAL;
+            faseCal = CAL_ESPERA;
+        }
+
+        return;
+    }
+
+    //--------------------------------------------------------------------------------------------
+    // MENU PRINCIPAL
+    //--------------------------------------------------------------------------------------------
+    if (estadoActual == MENU_PRINCIPAL) {
+        detenerTodos();
+
+        if (jY != 0 && prevInputY == 0) {
+            opcionMenu -= jY;
+
+            if (opcionMenu < 0) opcionMenu = 2;
+            if (opcionMenu > 2) opcionMenu = 0;
+        }
+
+        prevInputY = jY;
+
+        if (clickX) {
+            if (opcionMenu == 0) {
+                estadoActual = MODO_MANUAL;
+            }
+            else if (opcionMenu == 1) {
+                estadoActual = MODO_HOMING;
+                faseCal = CAL_ESPERA;
+                mensajeError = "";
+            }
+            else if (opcionMenu == 2) {
+                if (!calibracionXYValida) {
+                    Serial.println(F("[ERROR] Debes calibrar X/Y antes de usar POSICION XYZ."));
+                }
+                else {
+                    estadoActual = MODO_CARTESIANO;
+                    detenerTodos();
+                    movimientoCartesianoActivo = false;
+
+                    Serial.println();
+                    Serial.println(F("MODO POSICION XYZ"));
+
+                    imprimirRangoTrabajo();
+                    mostrarAyudaTerminal();
+                }
+            }
+        }
+
+        return;
+    }
+
+    //--------------------------------------------------------------------------------------------
+    // MODO MANUAL
+    //--------------------------------------------------------------------------------------------
+    if (estadoActual == MODO_MANUAL) {
+        if ((jX > 0 && limiteXmas) || (jX < 0 && limiteXmenos)) {
+            jX = 0;
+        }
+
+        if ((jY > 0 && limiteYmas) || (jY < 0 && limiteYmenos)) {
+            jY = 0;
+        }
+
+        moverXContinuo(jX, DIV_MANUAL);
+        moverYContinuo(jY, DIV_MANUAL);
+        moverZContinuo(jZ, DIV_MANUAL);
+
+        aplicarBloqueoPorFinales();
+
+        if (clickTri) {
+            detenerTodos();
+            estadoActual = MENU_PRINCIPAL;
+            prevInputY = 0;
+        }
+
+        return;
+    }
+
+    //--------------------------------------------------------------------------------------------
+    // MODO CALIBRACION
+    //--------------------------------------------------------------------------------------------
+    if (estadoActual == MODO_HOMING) {
+        if (clickTri) {
+            detenerTodos();
+            estadoActual = MENU_PRINCIPAL;
+            faseCal = CAL_ESPERA;
+            prevInputY = 0;
+        }
+        else {
+            if (faseCal == CAL_ESPERA && clickX) {
+                iniciarCalibracion();
+            }
+
+            procesarCalibracion();
+            aplicarBloqueoPorFinales();
+        }
+
+        return;
+    }
+
+    //--------------------------------------------------------------------------------------------
+    // MODO CARTESIANO
+    //--------------------------------------------------------------------------------------------
+    if (estadoActual == MODO_CARTESIANO) {
+        moverZContinuo(0, DIV_MANUAL);
+
+        if (clickTri) {
+            cancelarMovimientoCartesiano("Salida al menu");
+            estadoActual = MENU_PRINCIPAL;
+            prevInputY = 0;
+        }
+    }
+}
+
+bool leerControlESP32() {
+    int bytes = Wire.requestFrom(
+        (uint8_t)DIRECCION_ESP32,
+        (uint8_t)8
+    );
+
+    if (bytes != 8 || Wire.available() < 8) {
+        while (Wire.available()) Wire.read();
+        return false;
+    }
+
+    int8_t rawX = (int8_t)Wire.read();
+    int8_t rawY = (int8_t)Wire.read();
+    int8_t rawZ = (int8_t)Wire.read();
+
+    uint8_t rBT = (uint8_t)Wire.read();
+    uint8_t rBtnX = (uint8_t)Wire.read();
+    uint8_t rBtnTri = (uint8_t)Wire.read();
+
+    posServoRot = (uint8_t)Wire.read();
+    posServoPin = (uint8_t)Wire.read();
+
+    int8_t jX = (rawX == 0) ? 0 : (rawX == 1 ? 1 : -1);
+    int8_t jY = (rawY == 0) ? 0 : (rawY == 1 ? 1 : -1);
+    int8_t jZ = (rawZ == 0) ? 0 : (rawZ == 1 ? 1 : -1);
+
+    btConectado = (rBT == 1);
+    esp32Conectado = true;
+    ultimoPaqueteControlMs = millis();
+
+    procesarControlRecibido(jX, jY, jZ, rBtnX, rBtnTri);
+
+    return true;
+}
+
+void aplicarTimeoutComunicacion() {
+    if (millis() - ultimoPaqueteControlMs <= TIMEOUT_CONTROL_MS) {
+        return;
+    }
+
+    esp32Conectado = false;
+    btConectado = false;
+    prevBtnX = 0;
+    prevBtnTri = 0;
+
+    if (estadoActual != MODO_CARTESIANO) {
+        detenerTodos();
+        estadoActual = MENU_PRINCIPAL;
+        faseCal = CAL_ESPERA;
+    }
 }
 
 //------------------------------------------------------------------------------------------------
@@ -1685,16 +1855,24 @@ void actualizarPantalla() {
 void setup() {
     Serial.begin(115200);
 
+    // La Portenta es el unico maestro de este bus.
+    // La OLED ya no esta conectada aqui.
+    // Se usa 100 kHz porque era la velocidad del codigo que ya funcionaba
+    // y es mas tolerante para el ESP32 actuando como esclavo.
     Wire.begin();
+    Wire.setClock(100000);
+    delay(200);
 
-    delay(100);
+    Wire.beginTransmission((uint8_t)DIRECCION_ESP32);
+    const uint8_t errorDeteccionESP32 = Wire.endTransmission(true);
 
-    if (pantalla.begin(0x3C, true)) {
-        pantalla.clearDisplay();
-        pantalla.display();
-        delay(50);
-        pantalla.setTextSize(1);
-        pantalla.setTextColor(SH110X_WHITE);
+    Serial.print(F("Deteccion ESP32 I2C 0x40: "));
+    if (errorDeteccionESP32 == 0) {
+        Serial.println(F("OK"));
+    }
+    else {
+        Serial.print(F("ERROR "));
+        Serial.println(errorDeteccionESP32);
     }
 
     digital_inputs.init();
@@ -1711,9 +1889,13 @@ void setup() {
 
     motorTicker.attach(&generarPulsoMotor, velocidadMotores);
 
+    ultimoPaqueteControlMs = millis();
+
     Serial.println();
     Serial.println(F("Sistema listo"));
     Serial.println(F("Monitor serial: 115200 baudios"));
+    Serial.println(F("Control I2C: 5 ms"));
+    Serial.println(F("Estado de pantalla: 150 ms"));
 
     mostrarAyudaTerminal();
 }
@@ -1724,176 +1906,42 @@ void setup() {
 void loop() {
     leerTerminal();
 
-    unsigned long tActual = millis();
+    // Estas tareas ya no dependen de la actualizacion de la OLED.
+    leerFinalesCarrera();
+    actualizarMovimientoCartesiano();
+    aplicarBloqueoPorFinales();
 
-    if (tActual - tAnteriorI2C >= 15) {
-        tAnteriorI2C = tActual;
+    unsigned long ahora = millis();
 
-        leerFinalesCarrera();
+    bool huboLecturaI2C = false;
 
-        actualizarMovimientoCartesiano();
-
-        int bytes = Wire.requestFrom((uint8_t)DIRECCION_ESP32, (uint8_t)8);
-
-        if (bytes == 8) {
-            esp32Conectado = true;
-
-            int8_t rawX = Wire.read();
-            int8_t rawY = Wire.read();
-            int8_t rawZ = Wire.read();
-
-            uint8_t rBT = Wire.read();
-            uint8_t rBtnX = Wire.read();
-            uint8_t rBtnTri = Wire.read();
-
-            posServoRot = Wire.read();
-            posServoPin = Wire.read();
-
-            btConectado = (rBT == 1);
-
-            int8_t jX = (rawX == 0) ? 0 : (rawX == 1 ? 1 : -1);
-            int8_t jY = (rawY == 0) ? 0 : (rawY == 1 ? 1 : -1);
-            int8_t jZ = (rawZ == 0) ? 0 : (rawZ == 1 ? 1 : -1);
-
-            bool clickX = (rBtnX == 1 && prevBtnX == 0);
-            bool clickTri = (rBtnTri == 1 && prevBtnTri == 0);
-
-            prevBtnX = rBtnX;
-            prevBtnTri = rBtnTri;
-
-            if (btConectado) {
-                //--------------------------------------------------------------------------------
-                // MENU PRINCIPAL
-                //--------------------------------------------------------------------------------
-                if (estadoActual == MENU_PRINCIPAL) {
-                    detenerTodos();
-
-                    if (jY != 0 && prevInputY == 0) {
-                        opcionMenu -= jY;
-
-                        if (opcionMenu < 0) opcionMenu = 2;
-                        if (opcionMenu > 2) opcionMenu = 0;
-                    }
-
-                    prevInputY = jY;
-
-                    if (clickX) {
-                        if (opcionMenu == 0) {
-                            estadoActual = MODO_MANUAL;
-                        }
-
-                        else if (opcionMenu == 1) {
-                            estadoActual = MODO_HOMING;
-                            faseCal = CAL_ESPERA;
-                            mensajeError = "";
-                        }
-
-                        else if (opcionMenu == 2) {
-                            if (!calibracionXYValida) {
-                                Serial.println(F("[ERROR] Debes calibrar X/Y antes de usar POSICION XYZ."));
-                            }
-                            else {
-                                estadoActual = MODO_CARTESIANO;
-
-                                detenerTodos();
-
-                                movimientoCartesianoActivo = false;
-
-                                Serial.println();
-                                Serial.println(F("MODO POSICION XYZ"));
-
-                                imprimirRangoTrabajo();
-                                mostrarAyudaTerminal();
-                            }
-                        }
-                    }
-                }
-
-                //--------------------------------------------------------------------------------
-                // MODO MANUAL
-                //--------------------------------------------------------------------------------
-                else if (estadoActual == MODO_MANUAL) {
-                    if ((jX > 0 && limiteXmas) || (jX < 0 && limiteXmenos)) {
-                        jX = 0;
-                    }
-
-                    if ((jY > 0 && limiteYmas) || (jY < 0 && limiteYmenos)) {
-                        jY = 0;
-                    }
-
-                    moverXContinuo(jX, DIV_MANUAL);
-                    moverYContinuo(jY, DIV_MANUAL);
-                    moverZContinuo(jZ, DIV_MANUAL);
-
-                    aplicarBloqueoPorFinales();
-
-                    if (clickTri) {
-                        detenerTodos();
-                        estadoActual = MENU_PRINCIPAL;
-                    }
-                }
-
-                //--------------------------------------------------------------------------------
-                // MODO CALIBRACION
-                //--------------------------------------------------------------------------------
-                else if (estadoActual == MODO_HOMING) {
-                    if (clickTri) {
-                        detenerTodos();
-                        estadoActual = MENU_PRINCIPAL;
-                        faseCal = CAL_ESPERA;
-                    }
-                    else {
-                        if (faseCal == CAL_ESPERA && clickX) {
-                            iniciarCalibracion();
-                        }
-
-                        procesarCalibracion();
-                        aplicarBloqueoPorFinales();
-                    }
-                }
-
-                //--------------------------------------------------------------------------------
-                // MODO CARTESIANO
-                //--------------------------------------------------------------------------------
-                else if (estadoActual == MODO_CARTESIANO) {
-                    // En este modo X/Y se controlan desde la terminal.
-                    // No se debe copiar jX ni jY a los motores.
-
-                    moverZContinuo(0, DIV_MANUAL);
-
-                    if (clickTri) {
-                        cancelarMovimientoCartesiano("Salida al menu");
-                        estadoActual = MENU_PRINCIPAL;
-                    }
-                }
-            }
-
-            else {
-                // Si el control Bluetooth se desconecta:
-                // - En manual/calibracion se detiene todo.
-                // - En modo cartesiano se permite seguir usando terminal.
-
-                if (estadoActual != MODO_CARTESIANO) {
-                    detenerTodos();
-                    estadoActual = MENU_PRINCIPAL;
-                }
-            }
-        }
-
-        else {
-            esp32Conectado = false;
-            btConectado = false;
-
-            // Si se pierde I2C:
-            // - En manual/calibracion se detiene.
-            // - En modo cartesiano se permite seguir usando terminal.
-
-            if (estadoActual != MODO_CARTESIANO) {
-                detenerTodos();
-                estadoActual = MENU_PRINCIPAL;
-            }
-        }
-
-        actualizarPantalla();
+    // Lectura rapida del joystick y botones.
+    if (ahora - tAnteriorI2C >= PERIODO_CONTROL_MS) {
+        tAnteriorI2C = ahora;
+        leerControlESP32();
+        huboLecturaI2C = true;
     }
+
+    // No se hace lectura y escritura en la misma vuelta del loop.
+    // Esto da tiempo al ESP32 para procesar el callback del bus esclavo.
+    if (
+        !huboLecturaI2C &&
+        ahora - tAnteriorEstadoPantalla >= PERIODO_ESTADO_PANTALLA_MS
+    ) {
+        tAnteriorEstadoPantalla = ahora;
+        enviarEstadoPantalla();
+    }
+
+    if (ahora - ultimoReporteI2C >= 1000) {
+        ultimoReporteI2C = ahora;
+
+        Serial.print(F("[I2C TX OLED] ok="));
+        Serial.print(enviosPantallaOk);
+        Serial.print(F(" error="));
+        Serial.print(enviosPantallaError);
+        Serial.print(F(" ultimoCodigo="));
+        Serial.println(ultimoErrorEnvioPantalla);
+    }
+
+    aplicarTimeoutComunicacion();
 }
