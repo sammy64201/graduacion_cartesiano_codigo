@@ -112,6 +112,12 @@ portMUX_TYPE estadoMux = portMUX_INITIALIZER_UNLOCKED;
 PaquetePantalla estadoPantalla = {};
 volatile bool estadoPantallaNuevo = false;
 bool estadoPantallaValido = false;
+bool pantallaInicializada = false;
+bool busPantallaIniciado = false;
+bool i2cEsclavoIniciado = false;
+bool sistemaBaseListo = false;
+unsigned long proximoIntentoOLED = 0;
+uint32_t intentosInicioOLED = 0;
 
 //=================================================================================================
 // CONTROL BLUETOOTH
@@ -168,6 +174,65 @@ void ponerControlEnNeutro() {
     botonTri = 0;
     dpadRaw = 0;
     btConectado = 0;
+}
+
+//=================================================================================================
+// ARRANQUE NO BLOQUEANTE DE LA PANTALLA OLED
+//=================================================================================================
+// La pantalla NO se inicializa dentro de setup(). De esta manera, aunque el SH1106 tarde en
+// encender o el bus quede temporalmente ocupado, Bluepad32 y el resto del ESP32 pueden arrancar.
+// El loop intenta inicializar la OLED periódicamente sin detener el sistema.
+void intentarInicializarOLEDNoBloqueante() {
+    if (pantallaInicializada || !busPantallaIniciado) {
+        return;
+    }
+
+    const unsigned long ahora = millis();
+
+    // Dar prioridad absoluta al arranque de Bluetooth y del sistema base.
+    if (!sistemaBaseListo || ahora < 1500UL) {
+        return;
+    }
+
+    if ((long)(ahora - proximoIntentoOLED) < 0) {
+        return;
+    }
+
+    proximoIntentoOLED = ahora + 1000UL;
+    intentosInicioOLED++;
+
+    // Primero verificar ACK. El timeout del bus evita que un SH1106 lento bloquee el programa.
+    I2C_Pantalla.beginTransmission(OLED_DIRECCION);
+    const uint8_t error = I2C_Pantalla.endTransmission(true);
+
+    if (error != 0) {
+        Serial.print(F("[OLED] Intento "));
+        Serial.print(intentosInicioOLED);
+        Serial.print(F(": sin ACK, codigo "));
+        Serial.println(error);
+        return;
+    }
+
+    // Solo se llama begin() cuando el controlador ya respondio.
+    if (!pantalla.begin(OLED_DIRECCION, true)) {
+        Serial.print(F("[OLED] Intento "));
+        Serial.print(intentosInicioOLED);
+        Serial.println(F(": fallo pantalla.begin()"));
+        return;
+    }
+
+    pantalla.clearDisplay();
+    pantalla.setTextSize(1);
+    pantalla.setTextColor(SH110X_WHITE);
+    pantalla.setCursor(0, 0);
+    pantalla.println(F("ESP32 INICIADO"));
+    pantalla.println(F("OLED CONECTADA"));
+    pantalla.display();
+
+    pantallaInicializada = true;
+    ultimaPantalla = 0;
+
+    Serial.println(F("[OLED] Inicializada correctamente sin bloquear el arranque"));
 }
 
 //=================================================================================================
@@ -379,6 +444,10 @@ const char *textoErrorCal(uint8_t error) {
 // ACTUALIZACION DE PANTALLA EN EL ESP32
 //=================================================================================================
 void mostrarSinPortenta() {
+    if (!pantallaInicializada) {
+        return;
+    }
+
     pantalla.clearDisplay();
     pantalla.setCursor(0, 0);
     pantalla.println(F("ESP32 LISTO"));
@@ -393,6 +462,10 @@ void mostrarSinPortenta() {
 }
 
 void actualizarPantallaESP32(const PaquetePantalla &p) {
+    if (!pantallaInicializada) {
+        return;
+    }
+
     const bool calibrado = (p.flags & 0x01) != 0;
     const bool movimientoXYZ = (p.flags & 0x02) != 0;
     const bool escalaValida = (p.flags & 0x04) != 0;
@@ -581,36 +654,16 @@ void procesarEstadoPantalla() {
 //=================================================================================================
 void setup() {
     Serial.begin(115200);
+    delay(100);
 
-    // I2C 0: esclavo de la Portenta.
-    // Los callbacks se registran antes de begin(), como recomienda la API de ESP32.
-    Wire.onReceive(receiveEvent);
-    Wire.onRequest(requestEvent);
-    Wire.setBufferSize(64);
+    Serial.println();
+    Serial.println(F("[BOOT] Iniciando ESP32..."));
 
-    const bool i2cEsclavoOk = Wire.begin(
-        (uint8_t)DIRECCION_ESP32,
-        I2C_PORTENTA_SDA,
-        I2C_PORTENTA_SCL,
-        100000
-    );
+    // 1. Iniciar primero Bluetooth. No debe depender de la OLED ni de la Portenta.
+    BP32.setup(&onConnectedController, &onDisconnectedController);
+    Serial.println(F("[BOOT] Bluepad32 configurado"));
 
-    // I2C 1: maestro de la pantalla OLED.
-    I2C_Pantalla.setBufferSize(128);
-    const bool i2cPantallaOk = I2C_Pantalla.begin(
-        OLED_SDA,
-        OLED_SCL,
-        400000
-    );
-
-    if (pantalla.begin(OLED_DIRECCION, true)) {
-        pantalla.clearDisplay();
-        pantalla.setTextSize(1);
-        pantalla.setTextColor(SH110X_WHITE);
-        pantalla.display();
-    }
-
-    // Servos.
+    // 2. Inicializar servos.
     ESP32PWM::allocateTimer(0);
     ESP32PWM::allocateTimer(1);
 
@@ -622,27 +675,52 @@ void setup() {
 
     servo25.write(anguloS1);
     servo26.write(anguloS2);
+    Serial.println(F("[BOOT] Servos configurados"));
 
-    // Bluetooth.
-    BP32.setup(&onConnectedController, &onDisconnectedController);
+    // 3. Preparar el bus de la OLED, pero NO llamar pantalla.begin() aqui.
+    I2C_Pantalla.setBufferSize(128);
+    I2C_Pantalla.setTimeOut(25);
+    busPantallaIniciado = I2C_Pantalla.begin(
+        OLED_SDA,
+        OLED_SCL,
+        100000
+    );
 
-    mostrarSinPortenta();
+    Serial.print(F("[BOOT] Bus OLED: "));
+    Serial.println(busPantallaIniciado ? F("OK") : F("ERROR"));
 
-    Serial.println(F("ESP32 listo"));
-    Serial.print(F("I2C esclavo Portenta: "));
-    Serial.println(i2cEsclavoOk ? F("OK") : F("ERROR AL INICIAR"));
+    // 4. Activar el ESP32 como esclavo I2C AL FINAL. Asi la Portenta no puede ejecutar
+    // callbacks mientras Bluepad32 y los perifericos principales todavia se inicializan.
+    Wire.onReceive(receiveEvent);
+    Wire.onRequest(requestEvent);
+    Wire.setBufferSize(64);
+
+    i2cEsclavoIniciado = Wire.begin(
+        (uint8_t)DIRECCION_ESP32,
+        I2C_PORTENTA_SDA,
+        I2C_PORTENTA_SCL,
+        100000
+    );
+
+    sistemaBaseListo = true;
+
+    Serial.print(F("[BOOT] I2C esclavo Portenta: "));
+    Serial.println(i2cEsclavoIniciado ? F("OK") : F("ERROR"));
     Serial.println(F("  SDA=27, SCL=14, direccion=0x40, 100 kHz"));
-    Serial.print(F("I2C pantalla: "));
-    Serial.println(i2cPantallaOk ? F("OK") : F("ERROR AL INICIAR"));
-    Serial.println(F("  SDA=21, SCL=22, direccion=0x3C, 400 kHz"));
+    Serial.println(F("[BOOT] Sistema base listo. La OLED se iniciara desde loop()."));
 }
 
 //=================================================================================================
 // LOOP
 //=================================================================================================
 void loop() {
+    // Bluetooth siempre tiene prioridad, incluso si la OLED no responde.
     BP32.update();
     processControllers();
+
+    // La OLED se recupera automaticamente sin bloquear setup().
+    intentarInicializarOLEDNoBloqueante();
+
     procesarEstadoPantalla();
 
     // Reporte de diagnostico fuera del callback I2C.

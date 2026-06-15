@@ -47,7 +47,7 @@ const uint16_t DIV_MANUAL = 1;
 const uint16_t DIV_CAL_RAPIDA = 2;
 const uint16_t DIV_CAL_LENTA = 8;
 const uint16_t DIV_HOME = 2;
-const uint16_t DIV_POSICION = 2;
+const uint16_t DIV_POSICION = 1;
 
 //------------------------------------------------------------------------------------------------
 // PARAMETROS DE CALIBRACION
@@ -216,6 +216,7 @@ uint8_t posServoPin = 90;
 const unsigned long PERIODO_CONTROL_MS = 5;
 const unsigned long PERIODO_ESTADO_PANTALLA_MS = 150;
 const unsigned long TIMEOUT_CONTROL_MS = 150;
+const unsigned long RETARDO_ARRANQUE_ESP32_MS = 3000;
 
 uint8_t ultimoErrorEnvioPantalla = 255;
 unsigned long ultimoReporteI2C = 0;
@@ -228,6 +229,8 @@ unsigned long ultimoPaqueteControlMs = 0;
 
 bool esp32Conectado = false;
 bool btConectado = false;
+bool comunicacionI2CHabilitada = false;
+unsigned long tiempoEncendidoSistema = 0;
 
 int8_t prevInputY = 0;
 uint8_t prevBtnX = 0;
@@ -1861,19 +1864,13 @@ void setup() {
     // y es mas tolerante para el ESP32 actuando como esclavo.
     Wire.begin();
     Wire.setClock(100000);
-    delay(200);
 
-    Wire.beginTransmission((uint8_t)DIRECCION_ESP32);
-    const uint8_t errorDeteccionESP32 = Wire.endTransmission(true);
+    // No se transmite nada al ESP32 durante sus primeros 3 segundos de encendido.
+    // Esto evita callbacks I2C mientras Bluepad32 y los buses del ESP32 arrancan.
+    tiempoEncendidoSistema = millis();
+    comunicacionI2CHabilitada = false;
 
-    Serial.print(F("Deteccion ESP32 I2C 0x40: "));
-    if (errorDeteccionESP32 == 0) {
-        Serial.println(F("OK"));
-    }
-    else {
-        Serial.print(F("ERROR "));
-        Serial.println(errorDeteccionESP32);
-    }
+    Serial.println(F("I2C hacia ESP32 retenido durante 3000 ms"));
 
     digital_inputs.init();
 
@@ -1913,23 +1910,46 @@ void loop() {
 
     unsigned long ahora = millis();
 
-    bool huboLecturaI2C = false;
-
-    // Lectura rapida del joystick y botones.
-    if (ahora - tAnteriorI2C >= PERIODO_CONTROL_MS) {
+    // Habilitar la comunicacion solo cuando el ESP32 ya tuvo tiempo de completar su arranque.
+    if (
+        !comunicacionI2CHabilitada &&
+        ahora - tiempoEncendidoSistema >= RETARDO_ARRANQUE_ESP32_MS
+    ) {
+        comunicacionI2CHabilitada = true;
         tAnteriorI2C = ahora;
-        leerControlESP32();
-        huboLecturaI2C = true;
+        tAnteriorEstadoPantalla = ahora;
+
+        Wire.beginTransmission((uint8_t)DIRECCION_ESP32);
+        const uint8_t errorDeteccionESP32 = Wire.endTransmission(true);
+
+        Serial.print(F("Deteccion tardia ESP32 I2C 0x40: "));
+        if (errorDeteccionESP32 == 0) {
+            Serial.println(F("OK"));
+        }
+        else {
+            Serial.print(F("ERROR "));
+            Serial.println(errorDeteccionESP32);
+        }
     }
 
-    // No se hace lectura y escritura en la misma vuelta del loop.
-    // Esto da tiempo al ESP32 para procesar el callback del bus esclavo.
-    if (
-        !huboLecturaI2C &&
-        ahora - tAnteriorEstadoPantalla >= PERIODO_ESTADO_PANTALLA_MS
-    ) {
-        tAnteriorEstadoPantalla = ahora;
-        enviarEstadoPantalla();
+    bool huboLecturaI2C = false;
+
+    if (comunicacionI2CHabilitada) {
+        // Lectura rapida del joystick y botones.
+        if (ahora - tAnteriorI2C >= PERIODO_CONTROL_MS) {
+            tAnteriorI2C = ahora;
+            leerControlESP32();
+            huboLecturaI2C = true;
+        }
+
+        // No se hace lectura y escritura en la misma vuelta del loop.
+        if (
+            !huboLecturaI2C &&
+            ahora - tAnteriorEstadoPantalla >= PERIODO_ESTADO_PANTALLA_MS
+        ) {
+            tAnteriorEstadoPantalla = ahora;
+            enviarEstadoPantalla();
+        }
     }
 
     if (ahora - ultimoReporteI2C >= 1000) {
