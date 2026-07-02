@@ -164,6 +164,16 @@ enum FaseCalibracion {
     CAL_Y_MAX_SEPARAR,
     CAL_Y_MAX_2,
 
+    CAL_Z_MIN_1,
+    CAL_Z_MIN_LIBERAR,
+    CAL_Z_MIN_SEPARAR,
+    CAL_Z_MIN_2,
+
+    CAL_Z_MAX_1,
+    CAL_Z_MAX_LIBERAR,
+    CAL_Z_MAX_SEPARAR,
+    CAL_Z_MAX_2,
+
     CAL_HOME,
     CAL_COMPLETA,
     CAL_ERROR
@@ -175,11 +185,13 @@ unsigned long inicioFase = 0;
 
 bool homeIniciado = false;
 bool calibracionXYValida = false;
+bool calibracionZValida = false;
 
 const char *mensajeError = "";
 
 long rangoXPasos = 0;
 long rangoYPasos = 0;
+long rangoZPasos = 0;
 
 //------------------------------------------------------------------------------------------------
 // FINALES DE CARRERA
@@ -201,6 +213,8 @@ bool limiteXmas = false;
 bool limiteXmenos = false;
 bool limiteYmenos = false;
 bool limiteYmas = false;
+bool limiteZarriba = false;
+bool limiteZabajo = false;
 
 //------------------------------------------------------------------------------------------------
 // ACTUADORES
@@ -333,6 +347,13 @@ bool objetivoYEnCurso() {
     return valor;
 }
 
+bool objetivoZEnCurso() {
+    noInterrupts();
+    bool valor = objetivoZActivo;
+    interrupts();
+    return valor;
+}
+
 //------------------------------------------------------------------------------------------------
 // LECTURA DE FINALES DE CARRERA
 //------------------------------------------------------------------------------------------------
@@ -341,6 +362,8 @@ void leerFinalesCarrera() {
     limiteXmenos = !digital_inputs.read(DIN_READ_CH_PIN_00); // X-
     limiteYmenos = !digital_inputs.read(DIN_READ_CH_PIN_02); // Y-
     limiteYmas   = !digital_inputs.read(DIN_READ_CH_PIN_03); // Y+
+    limiteZarriba = !digital_inputs.read(DIN_READ_CH_PIN_04); // Z arriba
+    limiteZabajo  = !digital_inputs.read(DIN_READ_CH_PIN_05); // Z abajo
 }
 
 //------------------------------------------------------------------------------------------------
@@ -646,6 +669,32 @@ void moverYHasta(long destino, uint16_t divisor) {
     interrupts();
 }
 
+void moverZHasta(long destino, uint16_t divisor) {
+    long posicionActual = leerPasosZ();
+
+    if (posicionActual == destino) {
+        detenerZ();
+        return;
+    }
+
+    int8_t direccion = destino > posicionActual ? 1 : -1;
+
+    detenerZ();
+    delayMicroseconds(150);
+
+    digital_outputs.set(pD_Z, direccion > 0 ? HIGH : LOW);
+    delayMicroseconds(10);
+
+    noInterrupts();
+    objetivoZ = destino;
+    objetivoZActivo = true;
+    divisorZ = divisor;
+    cuentaZ = 0;
+    pulsoZ = false;
+    movZ = direccion;
+    interrupts();
+}
+
 //------------------------------------------------------------------------------------------------
 // SEGURIDAD POR FINALES
 //------------------------------------------------------------------------------------------------
@@ -656,7 +705,8 @@ void aplicarBloqueoPorFinales() {
     if (movY > 0 && limiteYmas) detenerY();
     if (movY < 0 && limiteYmenos) detenerY();
 
-    // Z no se bloquea todavia porque no tiene finales implementados.
+    if (movZ > 0 && limiteZarriba) detenerZ();
+    if (movZ < 0 && limiteZabajo) detenerZ();
 }
 
 //------------------------------------------------------------------------------------------------
@@ -730,7 +780,14 @@ void imprimirPosicionActual() {
 
     Serial.print(F("Z = "));
     Serial.print(leerPasosZ());
-    Serial.println(F(" pasos | SIN CALIBRACION"));
+    if (calibracionZValida) {
+        Serial.print(F(" pasos | rango Z = "));
+        Serial.print(rangoZPasos);
+        Serial.println(F(" pasos"));
+    }
+    else {
+        Serial.println(F(" pasos | SIN CALIBRACION"));
+    }
 
     Serial.println(F("---------------------------"));
 }
@@ -848,6 +905,10 @@ void imprimirRangoTrabajo() {
 
     Serial.print(F("Rango total Y: "));
     Serial.print(rangoYPasos);
+    Serial.println(F(" pasos"));
+
+    Serial.print(F("Rango total Z: "));
+    Serial.print(rangoZPasos);
     Serial.println(F(" pasos"));
 
     Serial.print(F("X pasos permitidos: "));
@@ -1098,6 +1159,16 @@ const char *nombreFase() {
         case CAL_Y_MAX_SEPARAR: return "SEPARANDO Y+";
         case CAL_Y_MAX_2: return "VERIFICANDO Y+";
 
+        case CAL_Z_MIN_1: return "BUSCANDO Z ABAJO";
+        case CAL_Z_MIN_LIBERAR: return "LIBERANDO Z ABAJO";
+        case CAL_Z_MIN_SEPARAR: return "SEPARANDO Z ABAJO";
+        case CAL_Z_MIN_2: return "VERIFICANDO Z ABAJO";
+
+        case CAL_Z_MAX_1: return "BUSCANDO Z ARRIBA";
+        case CAL_Z_MAX_LIBERAR: return "LIBERANDO Z ARRIBA";
+        case CAL_Z_MAX_SEPARAR: return "SEPARANDO Z ARRIBA";
+        case CAL_Z_MAX_2: return "VERIFICANDO Z ARRIBA";
+
         case CAL_HOME: return "YENDO A HOME";
         case CAL_COMPLETA: return "CALIBRACION OK";
         case CAL_ERROR: return "ERROR";
@@ -1132,17 +1203,19 @@ void iniciarCalibracion() {
     detenerTodos();
 
     calibracionXYValida = false;
+    calibracionZValida = false;
     movimientoCartesianoActivo = false;
 
     rangoXPasos = 0;
     rangoYPasos = 0;
+    rangoZPasos = 0;
 
     homeIniciado = false;
     mensajeError = "";
 
     Serial.println();
     Serial.println(F("================================"));
-    Serial.println(F("INICIO CALIBRACION X/Y"));
+    Serial.println(F("INICIO CALIBRACION X/Y/Z"));
     Serial.println(F("================================"));
 
     cambiarFase(CAL_X_MIN_1);
@@ -1353,12 +1426,108 @@ void procesarCalibracion() {
                 Serial.print(rangoYPasos);
                 Serial.println(F(" pasos"));
 
+                cambiarFase(CAL_Z_MIN_1);
+            }
+            else {
+                moverYContinuo(1, DIV_CAL_LENTA);
+            }
+            break;
+
+        //----------------------------------------------------------------------------------------
+        // Z ABAJO
+        //----------------------------------------------------------------------------------------
+        case CAL_Z_MIN_1:
+            if (limiteZabajo) {
+                detenerZ();
+                cambiarFase(CAL_Z_MIN_LIBERAR);
+            }
+            else {
+                moverZContinuo(-1, DIV_CAL_RAPIDA);
+            }
+            break;
+
+        case CAL_Z_MIN_LIBERAR:
+            if (!limiteZabajo) {
+                detenerZ();
+                moverZHasta(leerPasosZ() + PASOS_SEPARACION, DIV_CAL_RAPIDA);
+                cambiarFase(CAL_Z_MIN_SEPARAR);
+            }
+            else {
+                moverZContinuo(1, DIV_CAL_RAPIDA);
+            }
+            break;
+
+        case CAL_Z_MIN_SEPARAR:
+            if (!objetivoZEnCurso()) {
+                cambiarFase(CAL_Z_MIN_2);
+            }
+            break;
+
+        case CAL_Z_MIN_2:
+            if (limiteZabajo) {
+                detenerZ();
+                fijarPasosZ(0);
+
+                Serial.println(F("[CAL][Z] Z abajo verificado. Z temporal = 0 pasos"));
+
+                cambiarFase(CAL_Z_MAX_1);
+            }
+            else {
+                moverZContinuo(-1, DIV_CAL_LENTA);
+            }
+            break;
+
+        //----------------------------------------------------------------------------------------
+        // Z ARRIBA
+        //----------------------------------------------------------------------------------------
+        case CAL_Z_MAX_1:
+            if (limiteZarriba) {
+                detenerZ();
+                cambiarFase(CAL_Z_MAX_LIBERAR);
+            }
+            else {
+                moverZContinuo(1, DIV_CAL_RAPIDA);
+            }
+            break;
+
+        case CAL_Z_MAX_LIBERAR:
+            if (!limiteZarriba) {
+                detenerZ();
+                moverZHasta(leerPasosZ() - PASOS_SEPARACION, DIV_CAL_RAPIDA);
+                cambiarFase(CAL_Z_MAX_SEPARAR);
+            }
+            else {
+                moverZContinuo(-1, DIV_CAL_RAPIDA);
+            }
+            break;
+
+        case CAL_Z_MAX_SEPARAR:
+            if (!objetivoZEnCurso()) {
+                cambiarFase(CAL_Z_MAX_2);
+            }
+            break;
+
+        case CAL_Z_MAX_2:
+            if (limiteZarriba) {
+                detenerZ();
+
+                rangoZPasos = leerPasosZ();
+
+                if (rangoZPasos < RANGO_MINIMO_VALIDO) {
+                    detenerPorError("Rango Z invalido");
+                    return;
+                }
+
+                Serial.print(F("[CAL][Z] Rango = "));
+                Serial.print(rangoZPasos);
+                Serial.println(F(" pasos"));
+
                 homeIniciado = false;
 
                 cambiarFase(CAL_HOME);
             }
             else {
-                moverYContinuo(1, DIV_CAL_LENTA);
+                moverZContinuo(1, DIV_CAL_LENTA);
             }
             break;
 
@@ -1371,25 +1540,32 @@ void procesarCalibracion() {
 
                 long centroX = rangoXPasos / 2;
                 long centroY = rangoYPasos / 2;
+                long centroZ = rangoZPasos / 2;
 
                 Serial.print(F("[CAL] Centro X = "));
                 Serial.print(centroX);
                 Serial.print(F(" pasos | Centro Y = "));
                 Serial.print(centroY);
+                Serial.print(F(" pasos | Centro Z = "));
+                Serial.print(centroZ);
                 Serial.println(F(" pasos"));
 
                 moverXHasta(centroX, DIV_HOME);
                 moverYHasta(centroY, DIV_HOME);
+                moverZHasta(centroZ, DIV_HOME);
             }
 
             if (
                 !objetivoXEnCurso() &&
                 !objetivoYEnCurso() &&
+                !objetivoZEnCurso() &&
                 movX == 0 &&
-                movY == 0
+                movY == 0 &&
+                movZ == 0
             ) {
                 fijarPasosX(0);
                 fijarPasosY(0);
+                fijarPasosZ(0);
 
                 if (!calcularEscalaAutomatica()) {
                     calibracionXYValida = false;
@@ -1402,13 +1578,14 @@ void procesarCalibracion() {
                 }
 
                 calibracionXYValida = true;
+                calibracionZValida = true;
 
                 cambiarFase(
                     CAL_COMPLETA
                 );
 
                 Serial.println(F("[CAL] HOME alcanzado"));
-                Serial.println(F("[CAL] Centro fisico definido como X=0, Y=0"));
+                Serial.println(F("[CAL] Centro fisico definido como X=0, Y=0, Z=0"));
                 Serial.println(F("================================"));
                 Serial.println(F("CALIBRACION COMPLETA"));
                 Serial.println(F("================================"));
@@ -1473,7 +1650,7 @@ void mostrarAyudaTerminal() {
     );
 
     Serial.println(
-        F("Z se recibe, pero todavia no se mueve.")
+        F("Z esta protegido por finales en manual; en XYZ aun no se mueve.")
     );
 
     Serial.println(
@@ -1589,7 +1766,8 @@ uint8_t codigoErrorCalibracion() {
     if (strcmp(mensajeError, "Tiempo maximo excedido") == 0) return 1;
     if (strcmp(mensajeError, "Rango X invalido") == 0) return 2;
     if (strcmp(mensajeError, "Rango Y invalido") == 0) return 3;
-    if (strcmp(mensajeError, "No se pudo calcular la escala") == 0) return 4;
+    if (strcmp(mensajeError, "Rango Z invalido") == 0) return 4;
+    if (strcmp(mensajeError, "No se pudo calcular la escala") == 0) return 5;
 
     return 255;
 }
@@ -1604,6 +1782,7 @@ void construirPaquetePantalla(PaquetePantalla &p) {
     p.faseCal = (uint8_t)faseCal;
 
     if (calibracionXYValida) p.flags |= 0x01;
+    if (calibracionZValida) p.flags |= 0x20;
     if (movimientoCartesianoActivo) p.flags |= 0x02;
     if (escalaConfigurada()) p.flags |= 0x04;
     if (esp32Conectado) p.flags |= 0x08;
@@ -1613,6 +1792,8 @@ void construirPaquetePantalla(PaquetePantalla &p) {
     if (limiteXmenos) p.limites |= 0x02;
     if (limiteYmas) p.limites |= 0x04;
     if (limiteYmenos) p.limites |= 0x08;
+    if (limiteZarriba) p.limites |= 0x10;
+    if (limiteZabajo) p.limites |= 0x20;
 
     noInterrupts();
     p.movX = movX;
@@ -1747,6 +1928,10 @@ void procesarControlRecibido(
 
         if ((jY > 0 && limiteYmas) || (jY < 0 && limiteYmenos)) {
             jY = 0;
+        }
+
+        if ((jZ > 0 && limiteZarriba) || (jZ < 0 && limiteZabajo)) {
+            jZ = 0;
         }
 
         moverXContinuo(jX, DIV_MANUAL);
@@ -1890,6 +2075,7 @@ void setup() {
 
     Serial.println();
     Serial.println(F("Sistema listo"));
+    Serial.println(F("Finales Z: DIN04=arriba, DIN05=abajo"));
     Serial.println(F("Monitor serial: 115200 baudios"));
     Serial.println(F("Control I2C: 5 ms"));
     Serial.println(F("Estado de pantalla: 150 ms"));
