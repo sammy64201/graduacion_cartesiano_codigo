@@ -46,8 +46,8 @@ const float MARGEN_SEGURIDAD_MM = 2.0f;
 
 // Ajuste fisico camara -> brazo. Se aplica swap, luego signo y finalmente offset.
 constexpr bool CAMERA_SWAP_XY = false;
-constexpr int8_t CAMERA_SIGN_X = 1;
-constexpr int8_t CAMERA_SIGN_Y = 1;
+constexpr int8_t CAMERA_SIGN_X = -1;
+constexpr int8_t CAMERA_SIGN_Y = -1;
 constexpr float CAMERA_OFFSET_X_MM = 0.0f;
 constexpr float CAMERA_OFFSET_Y_MM = 0.0f;
 
