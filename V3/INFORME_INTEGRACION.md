@@ -135,6 +135,29 @@ flowchart LR
 Una pérdida de enlace durante la espera de 5 s reinicia esa espera. Una pérdida
 posterior detiene motores y entra al estado seguro de error.
 
+### Recuperación automática del arranque I2C
+
+La ESP32 ya no ejecuta un único `Wire.begin()` durante `setup()`. El primer
+intento como esclava `0x40` se realiza 1.5 s después del arranque y, si SDA/SCL
+todavía no están en reposo o el driver rechaza el inicio, se repite cada 500 ms
+sin detener Bluetooth, cámara, servos ni OLED. Cada intento informa por Serial
+su número, los niveles observados en SDA/SCL y el resultado del driver; la OLED
+distingue `I2C INICIANDO`, `I2C REINTENTANDO` e `I2C LISTO`.
+
+Si transcurren 15 s sin recibir ningún paquete válido de la Portenta, la ESP32
+ejecuta un único `ESP.restart()`. Un contador con firma en la sección RTC
+`noinit` impide un ciclo infinito: después de ese reinicio siguen los reintentos
+de `Wire`, pero no se vuelve a reiniciar automáticamente. El contador se borra
+al recibir el primer paquete válido o en el siguiente encendido físico. Esta
+recuperación solo actúa durante el arranque; una pérdida posterior conserva la
+parada segura y el manejo de errores existente.
+
+La Portenta mantiene su retención inicial de 3 s. Antes de recibir el primer
+paquete válido sondea a la ESP32 cada 100 ms, dejando ventanas libres para los
+reintentos del esclavo. Después del primer paquete válido recupera el periodo
+normal de control de 5 ms. Los estados Portenta->ESP continúan enviándose cada
+100 ms en ambas fases.
+
 ## 5. Máquina de cámara
 
 Estados publicados:
@@ -316,6 +339,15 @@ La opción 3 repite X/Y/Z y HOME sin depender del control durante el movimiento.
 La opción 4 invalida la calibración de cámara anterior, vuelve a capturar tags,
 recalcula la homografía y reabre el modelo.
 
+Desde el estado de error, el botón X y el comando `REINTENTAR` distinguen el
+subsistema que falló. Los errores de cámara, timeout de cámara y fallos de
+checklist asociados a cámara, homografía o modelo reinician únicamente la
+calibración de cámara cuando X/Y/Z siguen válidos; se conservan rangos, escalas,
+posición y HOME del brazo. Si el error ocurrió durante el arranque antes de que
+el brazo llegara a calibrarse, al terminar la cámara se continúa con la primera
+calibración pendiente del brazo. Los errores no relacionados con cámara
+conservan el reinicio completo de seguridad.
+
 ## 11. Transformación cámara a brazo
 
 Los parámetros están concentrados al inicio de `PORTENTA.ino`:
@@ -409,8 +441,13 @@ Además:
 - ambos headers tienen el mismo contenido;
 - `static_assert` exige 28 y 32 bytes y confirma que el CRC es el último byte;
 - se verificó el vector canónico CRC-8/ATM `"123456789" -> 0xF4`;
-- no existen esperas largas `delay()` en el flujo principal de la ESP32; solo
-  `delay(1)` para ceder CPU;
+- la recuperación de arranque I2C compila sin advertencias propias en ambos
+  sketches; el modo estricto solo reporta advertencias preexistentes de
+  `ESP32Servo`, `DFRobot_HuskylensV2`, `Arduino_MachineControl` y la sobrecarga
+  antigua de `Ticker.attach(float)`;
+- no existen esperas largas `delay()` durante la operación normal de la ESP32;
+  se conserva `delay(1)` para ceder CPU y solo se usan 50 ms inmediatamente
+  antes del reinicio excepcional de recuperación I2C;
 - los originales no fueron sobrescritos.
 
 ## 15. Pruebas físicas pendientes
@@ -430,6 +467,9 @@ movimientos a velocidad normal se debe verificar:
 10. rechazo de objetivos en bordes y fuera de rango;
 11. no repetición de una pieza que permanezca bajo la cámara;
 12. cancelación con triángulo y `STOP` durante movimiento.
+13. diez encendidos simultáneos Portenta-ESP32 sin pulsar RESET;
+14. encendido en ambos órdenes y ESP32 sin Portenta, comprobando que exista como
+    máximo un reinicio automático y luego reintentos indefinidos.
 
 Hasta completar estas pruebas, el sistema debe ensayarse con drivers limitados,
 zona despejada y posibilidad de cortar energía inmediatamente.

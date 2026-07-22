@@ -268,6 +268,7 @@ uint16_t secuenciaObjetivoRecibida = 0;
 uint8_t comandoCamaraActual = 0;
 uint8_t secuenciaComandoCamara = 0;
 bool inicioCalibracionCamaraObservado = false;
+bool volverChecklistTrasCalibracionCamara = false;
 
 uint16_t ackSecuenciaObjetivo = 0;
 uint8_t codigoAckObjetivo = 0;
@@ -1461,6 +1462,10 @@ void cambiarEstadoGeneral(EstadoGeneral nuevoEstado) {
 
     switch (nuevoEstado) {
         case EST_CAMERA_CALIBRATION:
+            volverChecklistTrasCalibracionCamara = false;
+            detenerTodos();
+            solicitarComandoCamara(CAM_CMD_CALIBRAR);
+            break;
         case EST_USER_CAMERA_CALIBRATION:
             detenerTodos();
             solicitarComandoCamara(CAM_CMD_CALIBRAR);
@@ -1598,6 +1603,7 @@ void procesarMenuPrincipal() {
             cambiarEstadoGeneral(EST_USER_ARM_CALIBRATION);
             break;
         case MENU_CALIBRACION_CAMARA:
+            volverChecklistTrasCalibracionCamara = false;
             cambiarEstadoGeneral(EST_USER_CAMERA_CALIBRATION);
             break;
         default:
@@ -1733,6 +1739,11 @@ void procesarCalibracionCamaraEnCurso(bool iniciadaDesdeArranque) {
         Serial.println(F("[CAM] Homografia valida y modelo listo"));
         if (iniciadaDesdeArranque) {
             cambiarEstadoGeneral(EST_ARM_CALIBRATION);
+        } else if (volverChecklistTrasCalibracionCamara) {
+            volverChecklistTrasCalibracionCamara = false;
+            cambiarEstadoGeneral(btConectado
+                                     ? EST_FINAL_CHECKLIST
+                                     : EST_WAIT_CONTROLLER);
         } else {
             cambiarEstadoGeneral(btConectado ? EST_MAIN_MENU : EST_WAIT_CONTROLLER);
         }
@@ -1741,6 +1752,7 @@ void procesarCalibracionCamaraEnCurso(bool iniciadaDesdeArranque) {
 
     if (!iniciadaDesdeArranque && eventoBotonTriangulo && btConectado) {
         eventoBotonTriangulo = false;
+        volverChecklistTrasCalibracionCamara = false;
         solicitarComandoCamara(CAM_CMD_STANDBY);
         cambiarEstadoGeneral(EST_MAIN_MENU);
     }
@@ -1810,6 +1822,19 @@ void vigilarSeguridadComunicacion() {
     }
 }
 
+bool resultadoChecklistRelacionadoConCamara() {
+    return ultimoResultadoChecklist == CHECK_CAMARA ||
+           ultimoResultadoChecklist == CHECK_HOMOGRAFIA ||
+           ultimoResultadoChecklist == CHECK_MODELO;
+}
+
+bool errorActualRelacionadoConCamara() {
+    return errorSistema == ERROR_TIMEOUT_CAMARA ||
+           errorSistema == ERROR_CAMARA ||
+           (errorSistema == ERROR_CHECKLIST &&
+            resultadoChecklistRelacionadoConCamara());
+}
+
 void reiniciarSecuenciaCompleta() {
     detenerTodos();
     calibracionXYValida = false;
@@ -1825,8 +1850,50 @@ void reiniciarSecuenciaCompleta() {
     ackSecuenciaObjetivo = 0;
     codigoAckObjetivo = ACK_OBJ_NINGUNO;
     secuenciaObjetivoEnMovimiento = 0;
+    volverChecklistTrasCalibracionCamara = false;
     if (enlaceI2CVigente()) solicitarComandoCamara(CAM_CMD_REINICIAR_ERROR);
     cambiarEstadoGeneral(EST_BOOT_SAFE);
+}
+
+void reintentarDesdeEstadoError() {
+    if (!errorActualRelacionadoConCamara()) {
+        Serial.println(F("[ERROR] Reintento completo por error no relacionado con camara"));
+        reiniciarSecuenciaCompleta();
+        return;
+    }
+
+    if (!enlaceI2CVigente()) {
+        Serial.println(F("[ERROR] Sin enlace I2C; no es posible reintentar solo la camara"));
+        reiniciarSecuenciaCompleta();
+        return;
+    }
+
+    const bool brazoCalibrado = calibracionXYValida &&
+                                calibracionZValida &&
+                                escalaConfigurada();
+    const bool regresarAlChecklist =
+        brazoCalibrado &&
+        (volverChecklistTrasCalibracionCamara ||
+         errorSistema == ERROR_CHECKLIST);
+
+    detenerTodos();
+    movimientoPosicionadoActivo = false;
+    propietarioMovimiento = MOV_SIN_PROPIETARIO;
+    secuenciaObjetivoEnMovimiento = 0;
+    errorSistema = ERROR_NINGUNO;
+    mensajeErrorSistema = "";
+    ultimoResultadoChecklist = CHECK_OK;
+    eventoBotonX = false;
+    eventoBotonTriangulo = false;
+    volverChecklistTrasCalibracionCamara = regresarAlChecklist;
+
+    if (brazoCalibrado) {
+        Serial.println(F("[CAM] Reintento selectivo; calibracion del brazo conservada"));
+        cambiarEstadoGeneral(EST_USER_CAMERA_CALIBRATION);
+    } else {
+        Serial.println(F("[CAM] Reintento de camara; el brazo aun requiere calibracion"));
+        cambiarEstadoGeneral(EST_CAMERA_CALIBRATION);
+    }
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1913,7 +1980,7 @@ void procesarMaquinaGeneral() {
             if (btConectado && eventoBotonX) {
                 eventoBotonX = false;
                 Serial.println(F("[ERROR] Reintento seguro solicitado"));
-                reiniciarSecuenciaCompleta();
+                reintentarDesdeEstadoError();
             }
             break;
     }
@@ -2051,7 +2118,7 @@ void procesarComandoTerminal(String comando) {
             return;
         }
         Serial.println(F("[ERROR] Reintento seguro solicitado por terminal"));
-        reiniciarSecuenciaCompleta();
+        reintentarDesdeEstadoError();
         return;
     }
     if (mayuscula == "HOME") {
