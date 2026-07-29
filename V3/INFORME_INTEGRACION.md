@@ -387,6 +387,8 @@ Medidas adicionales:
 - reiniciar la ESP32 cambia su sesión, detiene movimiento y descarta objetivos;
 - timeout de cámara de 240 s;
 - timeout de movimiento posicionado de 180 s;
+- un objetivo de cámara fuera del rango seguro se rechaza con una advertencia y
+  un ACK de fuera de rango, sin mover el brazo ni entrar al estado de error;
 - un final encontrado durante movimiento posicionado cancela e invalida XY;
 - dos finales opuestos activos simultáneamente generan error inmediato;
 - `STOP` detiene los tres ejes;

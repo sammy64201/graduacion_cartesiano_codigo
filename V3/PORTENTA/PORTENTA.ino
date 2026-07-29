@@ -707,7 +707,7 @@ bool cinematicaInversaCartesiana(float xMm, float yMm, float zMm,
 
     if (xPasosDestino < xMin || xPasosDestino > xMax ||
         yPasosDestino < yMin || yPasosDestino > yMax) {
-        Serial.print(F("[ERROR] Objetivo fuera de rango seguro X="));
+        Serial.print(F("[WARN] Objetivo fuera de rango seguro X="));
         Serial.print(xMm, 2);
         Serial.print(F(" Y="));
         Serial.println(yMm, 2);
@@ -1640,8 +1640,8 @@ void rechazarObjetivoFueraDeRango(uint16_t secuencia) {
     ackSecuenciaObjetivo = secuencia;
     codigoAckObjetivo = ACK_OBJ_RECHAZADO_RANGO;
     secuenciaObjetivoEnMovimiento = 0;
-    entrarErrorSistema(ERROR_OBJETIVO_INVALIDO,
-                       "Objetivo de camara fuera del espacio seguro");
+    Serial.print(F("[AUTO][WARN] Objetivo descartado sin movimiento; secuencia="));
+    Serial.println(secuencia);
 }
 
 void procesarModoAutomatico() {
