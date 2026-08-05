@@ -32,21 +32,27 @@ static void probarPaqueteESPAPortenta() {
     paquete.servoRotacion = 90;
     paquete.servoPinza = 45;
     paquete.estadoCamara = CAMARA_LISTA;
-    paquete.muestrasTag[0] = 25;
-    paquete.muestrasTag[1] = 25;
-    paquete.muestrasTag[2] = 25;
-    paquete.muestrasTag[3] = 25;
+    const uint8_t muestras[4] = {25, 24, 23, 22};
+    empacarMuestrasTags(muestras, paquete.muestrasTagEmpacadas);
+    paquete.estadoEncoder = ENC_FLAG_HW_LISTO |
+                            ENC_FLAG_ESCALA_VALIDA |
+                            ENC_FLAG_PULSOS_VISTOS;
     paquete.claseObjetivo = 6;
     paquete.objetivoX10 = 234;
     paquete.objetivoY10 = -158;
     paquete.secuenciaObjetivo = 42;
+    paquete.conteoEncoder = 123456;
 
     prepararPaquete(paquete);
 
     assert(paquete.magic == MAGIC_ESP_A_PORTENTA);
     assert(paquete.version == VERSION_PROTOCOLO);
-    assert(paquete.longitud == 28);
+    assert(paquete.longitud == 32);
     assert(validarPaquete(paquete));
+
+    uint8_t recuperadas[4] = {};
+    desempacarMuestrasTags(paquete.muestrasTagEmpacadas, recuperadas);
+    assert(std::memcmp(muestras, recuperadas, sizeof(muestras)) == 0);
 
     paquete.objetivoX10 ^= 1;
     assert(!validarPaquete(paquete));
@@ -84,10 +90,25 @@ static void probarPaquetePortentaAESP() {
     assert(!validarPaquete(paquete));
 }
 
+static void probarCompatibilidadAutomaticoV2() {
+    static_assert(MENU_MODO_MANUAL == 0, "menu manual preservado");
+    static_assert(MENU_MODO_AUTOMATICO == 1, "menu automatico preservado");
+    static_assert(MENU_CALIBRACION_BRAZO == 2, "menu brazo preservado");
+    static_assert(MENU_CALIBRACION_CAMARA == 3, "menu camara preservado");
+    static_assert(MENU_MODO_AUTOMATICO_V2 == 4, "V2 se agrega al final");
+    static_assert(SISTEMA_ERROR == 10, "codigo de error preservado");
+    static_assert(SISTEMA_MODO_AUTOMATICO_V2 == 11, "estado V2 nuevo");
+
+    assert(diferenciaConteosConWrap(120, 100) == 20);
+    assert(diferenciaConteosConWrap(-100, -120) == 20);
+    assert(diferenciaConteosConWrap(INT32_MIN, INT32_MAX) == 1);
+    assert(diferenciaConteosConWrap(INT32_MAX, INT32_MIN) == -1);
+}
+
 int main() {
-    static_assert(sizeof(PaqueteESPAPortenta) == 28, "layout ESP->Portenta");
+    static_assert(sizeof(PaqueteESPAPortenta) == 32, "layout ESP->Portenta");
     static_assert(sizeof(PaquetePortentaAESP) == 32, "layout Portenta->ESP");
-    static_assert(offsetof(PaqueteESPAPortenta, checksum) == 27,
+    static_assert(offsetof(PaqueteESPAPortenta, checksum) == 31,
                   "checksum final ESP->Portenta");
     static_assert(offsetof(PaquetePortentaAESP, checksum) == 31,
                   "checksum final Portenta->ESP");
@@ -95,6 +116,6 @@ int main() {
     probarVectorCRCConocido();
     probarPaqueteESPAPortenta();
     probarPaquetePortentaAESP();
+    probarCompatibilidadAutomaticoV2();
     return 0;
 }
-

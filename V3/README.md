@@ -206,12 +206,14 @@ El checklist debe reportar claramente qué elemento falla.
 
 ## 7. Menú principal requerido
 
-El menú final debe tener cuatro opciones:
+El menú final tiene cinco opciones; los valores de las primeras cuatro se
+conservan para compatibilidad:
 
 1. **Modo manual**
 2. **Modo automático**
 3. **Calibración de brazo**
 4. **Calibración de cámara**
+5. **Automático V2 para banda en movimiento**
 
 ### Opción 1: modo manual
 
@@ -241,6 +243,13 @@ Debe iniciar nuevamente la calibración X/Y/Z y regresar al menú cuando termine
 ### Opción 4: calibración de cámara
 
 Debe ordenar a la ESP32 borrar la calibración anterior, repetir la captura de tags, recalcular la homografía, abrir de nuevo el modelo y regresar al menú cuando quede lista.
+
+### Opción 5: Automático V2
+
+Es un modo independiente del automático original. Usa un encoder A/B para
+compensar el movimiento de la banda, preposiciona X/Y, sigue la pieza con Y,
+desciende Z y genera un cierre virtual. Su cableado, parámetros y orden de
+puesta en marcha se documentan en `AUTOMATICO_V2.md`.
 
 ---
 
@@ -374,7 +383,8 @@ Todos estos parámetros deben quedar concentrados en constantes fáciles de modi
 - No usar un objetivo viejo después de reconectar la ESP32.
 - No aceptar coordenadas con checksum incorrecto.
 - No aceptar coordenadas fuera del espacio de trabajo.
-- No mover Z en modo automático.
+- No mover Z en el automático original. Automático V2 solo puede moverlo
+  entre posiciones absolutas calibradas y con retirada segura.
 - No ejecutar movimientos mientras la cámara se está calibrando.
 - Un error de cámara no debe congelar Bluetooth, OLED o I²C.
 - Un error de OLED no debe detener cámara, Bluetooth o comunicación con Portenta.
@@ -385,9 +395,10 @@ Todos estos parámetros deben quedar concentrados en constantes fáciles de modi
 
 ## 13. Restricciones actuales del prototipo
 
-- El eje Z existe y se calibra, pero **no debe moverse automáticamente** hacia la pieza.
+- El automático original no mueve Z; V2 lo mantiene deshabilitado mientras
+  `V2_Z_AGARRE_PASOS` sea igual a la posición segura.
 - Todavía no está instalada la herramienta o garra final.
-- No implementar secuencia de agarre.
+- La pinza física sigue fuera de alcance; V2 genera solamente un cierre virtual.
 - No implementar retorno automático a HOME después de detectar una pieza, salvo que se solicite posteriormente.
 - No cambiar la cámara de UART a I²C.
 - No reemplazar la arquitectura Portenta maestra / ESP32 esclava.
@@ -408,7 +419,7 @@ La integración se considera correcta cuando:
 6. La Portenta inicia automáticamente la calibración X/Y/Z sin requerir control conectado.
 7. El brazo llega a HOME.
 8. El sistema espera el control Bluetooth.
-9. El checklist final permite entrar al menú de cuatro opciones.
+9. El checklist final permite entrar al menú de cinco opciones.
 10. El modo manual conserva su funcionamiento actual.
 11. La calibración de brazo puede ejecutarse desde la opción 3.
 12. La calibración de cámara puede ejecutarse desde la opción 4.
@@ -417,6 +428,8 @@ La integración se considera correcta cuando:
 15. Cualquier timeout o error crítico detiene los motores y muestra un diagnóstico.
 16. Ambos firmwares usan exactamente la misma versión del protocolo I²C.
 17. No existen esperas bloqueantes prolongadas en el flujo principal de la ESP32.
+18. Automático V2 no se habilita sin escala y pulsos válidos del encoder.
+19. V2 sigue la pieza, ejecuta el descenso Z configurado y registra el cierre virtual.
 
 ---
 

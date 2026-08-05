@@ -13,8 +13,9 @@ También se creó `tests/protocol_layout_test.cpp` como tercer programa auxiliar
 verificación del protocolo. Los tres sketches funcionales originales permanecen
 sin modificaciones y sirven como referencia.
 
-La integración no implementa agarre, descenso automático de Z ni retorno
-automático después de una detección.
+El automático original no implementa agarre ni descenso de Z. La opción
+Automático V2 agrega seguimiento de banda, descenso Z configurable y cierre
+virtual; todavía no acciona una pinza física.
 
 ## 2. Conexiones
 
@@ -122,7 +123,7 @@ flowchart LR
 1. Las salidas STEP quedan en LOW antes de habilitar el ticker.
 2. Se concede a la ESP32 un margen inicial de 3 s antes del sondeo.
 3. La Portenta no considera establecido el enlace por un ACK de dirección. Exige
-   un paquete de 28 bytes con magic, versión, longitud, semántica y CRC válidos.
+   un paquete de 32 bytes con magic, versión, longitud, semántica y CRC válidos.
 4. La espera de 5 s comienza exactamente al entrar ese primer paquete válido.
 5. La Portenta emite `CAM_CMD_CALIBRAR` con una secuencia y lo retransmite hasta
    observar el acuse correspondiente.
@@ -240,7 +241,7 @@ Una lectura aislada nunca genera movimiento.
 - Salir del automático, perder I2C o reiniciar una sesión invalida objetivos
   antiguos.
 
-## 8. Protocolo I2C versión 2
+## 8. Protocolo I2C versión 3
 
 Las copias `ESP/ProtocoloI2C.h` y `PORTENTA/ProtocoloI2C.h` son idénticas. Todos
 los campos son enteros de tamaño fijo, estructuras `packed` y little-endian. No
@@ -249,15 +250,16 @@ se envían `float`, `bool`, enums ni punteros.
 El checksum es CRC-8/ATM, polinomio `0x07`, inicio `0x00`, sobre todos los bytes
 excepto el último campo de CRC.
 
-### ESP32 a Portenta: 28 bytes
+### ESP32 a Portenta: 32 bytes
 
 | Grupo | Contenido |
 |---|---|
-| Cabecera | magic `0xE3`, versión 2, longitud 28, secuencia de paquete |
+| Cabecera | magic `0xE3`, versión 3, longitud 32, secuencia de paquete |
 | Sesión | identificador aleatorio de arranque ESP32 |
 | Control | flags, joystick X/Y/Z, botones y dos ángulos de servo |
-| Cámara | estado, error, acuse de comando y muestras de cuatro tags |
+| Cámara | estado, error, acuse de comando y muestras de tags compactadas |
 | Objetivo | clase, X10, Y10, secuencia |
+| Banda | estado y conteo firmado del encoder A/B |
 | Integridad | CRC-8/ATM |
 
 La secuencia de paquete debe avanzar. Aunque el callback siga respondiendo, una
@@ -267,7 +269,7 @@ instantánea congelada durante 150 ms se considera pérdida del enlace.
 
 | Grupo | Contenido |
 |---|---|
-| Cabecera | magic `0xA7`, versión 2, longitud 32 |
+| Cabecera | magic `0xA7`, versión 3, longitud 32 |
 | Sistema | estado, opción, fase de brazo, flags, límites y movimientos compactados |
 | Órdenes | error, comando de cámara y secuencia del comando |
 | Objetivo | secuencia confirmada y código de aceptación/rechazo/cancelación |
@@ -307,19 +309,20 @@ recibe para compatibilidad, pero no se convierte ni se mueve en posicionamiento.
 
 ## 10. Menú y modos
 
-El menú lógico contiene exactamente cuatro opciones:
+El menú lógico contiene cinco opciones y preserva los códigos originales:
 
 1. Modo manual.
 2. Modo automático.
 3. Calibración de brazo.
 4. Calibración de cámara.
+5. Automático V2 para banda en movimiento.
 
 ### Manual
 
 Conserva joystick X/Y, joystick derecho para Z, límites direccionales, ambos
 servos y retorno con triángulo. Una desconexión Bluetooth neutraliza y detiene.
 
-### Automático
+### Automático original
 
 Requiere cámara lista y brazo calibrado. Para cada objetivo estable:
 
@@ -332,6 +335,14 @@ Requiere cámara lista y brazo calibrado. Para cada objetivo estable:
 
 No mueve Z, no acciona pinza, no regresa a HOME y no inicia otra pieza mientras
 el brazo está ocupado. Triángulo cancela y regresa al menú.
+
+### Automático V2
+
+Mantiene un filtro de visión separado que compensa cada detección con el
+encoder. Después de preposicionar X/Y, el eje Y sigue la pieza, Z desciende a
+una posición absoluta configurable y se registra un cierre virtual. El modo se
+bloquea si la escala del encoder no fue calibrada y no altera el comportamiento
+del automático original.
 
 ### Recalibraciones
 
@@ -397,9 +408,10 @@ Medidas adicionales:
   caído, el sistema permanece esperando sin mover.
 
 Los finales son NC y el hardware no permite distinguir por software entre un
-final realmente pulsado y un cable abierto. Tampoco existen encoders: la posición
-es una estimación por pulsos ordenados. Estas limitaciones deben considerarse en
-la evaluación de riesgo de la máquina.
+final realmente pulsado y un cable abierto. Los ejes del brazo no tienen
+encoders: su posición es una estimación por pulsos ordenados. El encoder nuevo
+mide exclusivamente el avance de la banda. Estas limitaciones deben
+considerarse en la evaluación de riesgo de la máquina.
 
 ## 13. Terminal conservada
 

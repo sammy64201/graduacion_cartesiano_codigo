@@ -16,17 +16,10 @@
 namespace ProtocoloI2C {
 
 constexpr uint8_t DIRECCION_ESP32 = 0x40;
-constexpr uint8_t VERSION_PROTOCOLO = 3;
+constexpr uint8_t VERSION_PROTOCOLO = 4;
 constexpr uint8_t MAGIC_ESP_A_PORTENTA = 0xE3;
 constexpr uint8_t MAGIC_PORTENTA_A_ESP = 0xA7;
 constexpr size_t MAX_BYTES_WIRE = 32;
-
-// Debe calibrarse midiendo una distancia real de banda. El valor cero mantiene
-// Automatico V2 bloqueado de forma segura hasta terminar la puesta en marcha.
-constexpr float ENCODER_MM_POR_CUENTA = 0.0f;
-constexpr int8_t ENCODER_SIGNO_CAMARA_Y = 1;
-static_assert(ENCODER_SIGNO_CAMARA_Y == 1 || ENCODER_SIGNO_CAMARA_Y == -1,
-              "ENCODER_SIGNO_CAMARA_Y debe ser +/-1");
 
 enum EstadoSistemaWire : uint8_t {
     SISTEMA_ARRANQUE_SEGURO = 0,
@@ -147,7 +140,8 @@ enum FlagsESP : uint8_t {
 
 enum FlagsBotones : uint8_t {
     BOTON_X = 1U << 0,
-    BOTON_TRIANGULO = 1U << 1
+    BOTON_TRIANGULO = 1U << 1,
+    BOTON_CIRCULO = 1U << 2
 };
 
 enum FlagsSistema : uint8_t {
@@ -175,7 +169,8 @@ enum CodigoAckObjetivo : uint8_t {
     ACK_OBJ_NINGUNO = 0,
     ACK_OBJ_ACEPTADO = 1,
     ACK_OBJ_RECHAZADO_RANGO = 2,
-    ACK_OBJ_CANCELADO = 3
+    ACK_OBJ_CANCELADO = 3,
+    ACK_OBJ_COMPLETADO = 4
 };
 
 enum CodigoMovimientoEje : uint8_t {
@@ -207,12 +202,12 @@ struct __attribute__((packed)) PaqueteESPAPortenta {
     uint8_t errorCamara;
     uint8_t ackSecuenciaComandoCamara;
     uint8_t muestrasTagEmpacadas[3];
-    uint8_t estadoEncoder;
+    uint8_t reservadoV2;
     uint8_t claseObjetivo;
     int16_t objetivoX10;
     int16_t objetivoY10;
     uint16_t secuenciaObjetivo;
-    int32_t conteoEncoder;
+    int32_t conteoReferenciaObjetivo;
     uint8_t checksum;
 };
 
@@ -231,10 +226,12 @@ struct __attribute__((packed)) PaquetePortentaAESP {
     uint8_t secuenciaComandoCamara;
     uint16_t ackSecuenciaObjetivo;
     uint8_t codigoAckObjetivo;
-    int32_t valorPantalla1;
-    int32_t valorPantalla2;
-    int32_t valorPantalla3;
-    int32_t valorPantalla4;
+    int32_t conteoEncoder;
+    int32_t velocidadEncoderUmS;
+    uint32_t nmPorCuentaEncoder;
+    uint16_t secuenciaEncoder;
+    uint8_t estadoEncoder;
+    int8_t signoEncoder;
     uint8_t checksum;
 };
 
