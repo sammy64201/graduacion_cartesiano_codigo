@@ -25,7 +25,6 @@
 #include <math.h>
 #include <stdlib.h>
 #include <esp_system.h>
-#include "driver/pcnt.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -38,7 +37,6 @@ using namespace ProtocoloI2C;
 // estructuras aparezcan en el archivo.
 struct Point2D;
 struct FiltroDeteccion;
-struct FiltroDeteccionV2;
 struct ContextoCamara;
 
 // =============================================================================
@@ -62,13 +60,6 @@ constexpr int PIN_SERVO_PINZA = 26;
 constexpr int HUSKY_RX_PIN = 32;
 constexpr int HUSKY_TX_PIN = 33;
 constexpr uint32_t HUSKY_BAUDRATE = 115200;
-
-// E6B*-CWZ6C: A/B son salidas NPN open-collector. GPIO34/35 no tienen pull-up
-// interno: se requieren pull-ups externos a 3.3 V y acondicionamiento adecuado.
-// Nunca conectar 24 V directamente a estos GPIO.
-constexpr int PIN_ENCODER_A = 34;
-constexpr int PIN_ENCODER_B = 35;
-constexpr pcnt_unit_t UNIDAD_PCNT_BANDA = PCNT_UNIT_0;
 
 TwoWire I2C_Pantalla(1);
 Adafruit_SH1106G pantalla(128, 64, &I2C_Pantalla, -1);
@@ -100,13 +91,8 @@ constexpr uint32_t CAM_CALIBRATION_TIMEOUT_MS = 120000;
 
 constexpr uint8_t DETECCIONES_ESTABLES = 4;
 constexpr double TOLERANCIA_ESTABLE_MM = 4.0;
-constexpr uint8_t DETECCIONES_ESTABLES_V2 = 3;
-constexpr double TOLERANCIA_TRAYECTORIA_V2_MM = 6.0;
-constexpr double DESPLAZAMIENTO_MINIMO_V2_MM = 2.0;
 constexpr double TOLERANCIA_REARME_MM = 8.0;
 constexpr uint32_t TIEMPO_DESAPARICION_MS = 1000;
-constexpr uint32_t PERIODO_ENCODER_MS = 2;
-constexpr uint32_t TIMEOUT_MOVIMIENTO_ENCODER_MS = 500;
 
 constexpr int ANGULO_SERVO_INICIAL = 90;
 constexpr uint32_t CAMERA_TASK_STACK_BYTES = 12288;
@@ -174,7 +160,6 @@ uint16_t sesionArranque = 0;
 struct ControlCamaraCompartido {
   bool portentaActiva;
   bool automaticoActivo;
-  bool automaticoV2Activo;
   bool brazoOcupado;
   uint8_t comando;
   uint8_t secuenciaComando;
@@ -199,29 +184,15 @@ struct EstadoCamaraPublicado {
   int16_t objetivoX10;
   int16_t objetivoY10;
   uint16_t secuenciaObjetivo;
-  bool objetivoV2;
-  int32_t conteoReferenciaObjetivo;
 };
 
 portMUX_TYPE estadoCamaraMux = portMUX_INITIALIZER_UNLOCKED;
 EstadoCamaraPublicado estadoCamaraPublicado = {
   CAMARA_OFFLINE, CAM_ERROR_NINGUNO, 0, {0, 0, 0, 0},
-  false, false, false, false, false, 0, 0, 0, 0, false, 0
+  false, false, false, false, false, 0, 0, 0, 0
 };
 
 TaskHandle_t tareaCamaraHandle = nullptr;
-
-struct EstadoEncoderCompartido {
-  int32_t conteo;
-  float velocidadCuentasPorSegundo;
-  uint8_t flags;
-};
-
-portMUX_TYPE encoderMux = portMUX_INITIALIZER_UNLOCKED;
-EstadoEncoderCompartido estadoEncoder = {};
-bool encoderHardwareIniciado = false;
-uint32_t ultimaLecturaEncoder = 0;
-uint32_t ultimoPulsoEncoder = 0;
 
 // =============================================================================
 // Utilidades generales.
@@ -245,111 +216,6 @@ ControlCamaraCompartido copiarControlCamara() {
   copia = controlCamara;
   portEXIT_CRITICAL(&controlCamaraMux);
   return copia;
-}
-
-EstadoEncoderCompartido copiarEstadoEncoder() {
-  EstadoEncoderCompartido copia;
-  portENTER_CRITICAL(&encoderMux);
-  copia = estadoEncoder;
-  portEXIT_CRITICAL(&encoderMux);
-  return copia;
-}
-
-bool inicializarEncoderBanda() {
-  pinMode(PIN_ENCODER_A, INPUT);
-  pinMode(PIN_ENCODER_B, INPUT);
-
-  pcnt_config_t canalA = {};
-  canalA.pulse_gpio_num = PIN_ENCODER_A;
-  canalA.ctrl_gpio_num = PIN_ENCODER_B;
-  canalA.lctrl_mode = PCNT_MODE_KEEP;
-  canalA.hctrl_mode = PCNT_MODE_REVERSE;
-  canalA.pos_mode = PCNT_COUNT_INC;
-  canalA.neg_mode = PCNT_COUNT_DEC;
-  canalA.counter_h_lim = INT16_MAX;
-  canalA.counter_l_lim = INT16_MIN;
-  canalA.unit = UNIDAD_PCNT_BANDA;
-  canalA.channel = PCNT_CHANNEL_0;
-
-  pcnt_config_t canalB = canalA;
-  canalB.pulse_gpio_num = PIN_ENCODER_B;
-  canalB.ctrl_gpio_num = PIN_ENCODER_A;
-  canalB.pos_mode = PCNT_COUNT_DEC;
-  canalB.neg_mode = PCNT_COUNT_INC;
-  canalB.channel = PCNT_CHANNEL_1;
-
-  if (pcnt_unit_config(&canalA) != ESP_OK ||
-      pcnt_unit_config(&canalB) != ESP_OK ||
-      pcnt_set_filter_value(UNIDAD_PCNT_BANDA, 100) != ESP_OK ||
-      pcnt_filter_enable(UNIDAD_PCNT_BANDA) != ESP_OK ||
-      pcnt_counter_pause(UNIDAD_PCNT_BANDA) != ESP_OK ||
-      pcnt_counter_clear(UNIDAD_PCNT_BANDA) != ESP_OK ||
-      pcnt_counter_resume(UNIDAD_PCNT_BANDA) != ESP_OK) {
-    Serial.println(F("[ENC][ERROR] No se pudo configurar PCNT"));
-    return false;
-  }
-
-  EstadoEncoderCompartido inicial = {};
-  inicial.flags = ENC_FLAG_HW_LISTO;
-  if (ENCODER_MM_POR_CUENTA > 0.0f) {
-    inicial.flags |= ENC_FLAG_ESCALA_VALIDA;
-  }
-  portENTER_CRITICAL(&encoderMux);
-  estadoEncoder = inicial;
-  portEXIT_CRITICAL(&encoderMux);
-  ultimaLecturaEncoder = millis();
-  Serial.print(F("[ENC] PCNT A=GPIO34 B=GPIO35 escala="));
-  Serial.print(ENCODER_MM_POR_CUENTA, 8);
-  Serial.println(F(" mm/cuenta"));
-  if (ENCODER_MM_POR_CUENTA <= 0.0f) {
-    Serial.println(F("[ENC][WARN] Automatico V2 bloqueado hasta calibrar ENCODER_MM_POR_CUENTA"));
-  }
-  encoderHardwareIniciado = true;
-  return true;
-}
-
-void actualizarEncoderBanda() {
-  if (!encoderHardwareIniciado) return;
-  const uint32_t ahora = millis();
-  if (ahora - ultimaLecturaEncoder < PERIODO_ENCODER_MS) return;
-  const uint32_t dt = ahora - ultimaLecturaEncoder;
-  ultimaLecturaEncoder = ahora;
-
-  int16_t parcial = 0;
-  if (pcnt_counter_pause(UNIDAD_PCNT_BANDA) != ESP_OK ||
-      pcnt_get_counter_value(UNIDAD_PCNT_BANDA, &parcial) != ESP_OK ||
-      pcnt_counter_clear(UNIDAD_PCNT_BANDA) != ESP_OK ||
-      pcnt_counter_resume(UNIDAD_PCNT_BANDA) != ESP_OK) {
-    portENTER_CRITICAL(&encoderMux);
-    estadoEncoder.flags |= ENC_FLAG_SATURADO;
-    portEXIT_CRITICAL(&encoderMux);
-    return;
-  }
-
-  EstadoEncoderCompartido nuevo = copiarEstadoEncoder();
-  if (parcial >= 32000 || parcial <= -32000) {
-    nuevo.flags |= ENC_FLAG_SATURADO;
-  }
-  if (parcial != 0) {
-    nuevo.conteo = static_cast<int32_t>(
-      static_cast<uint32_t>(nuevo.conteo) + static_cast<int32_t>(parcial)
-    );
-    const float instantanea = static_cast<float>(parcial) * 1000.0f / dt;
-    nuevo.velocidadCuentasPorSegundo =
-      0.8f * nuevo.velocidadCuentasPorSegundo + 0.2f * instantanea;
-    nuevo.flags |= ENC_FLAG_PULSOS_VISTOS | ENC_FLAG_EN_MOVIMIENTO;
-    if (parcial > 0) nuevo.flags |= ENC_FLAG_DIRECCION_POSITIVA;
-    else nuevo.flags &= static_cast<uint8_t>(~ENC_FLAG_DIRECCION_POSITIVA);
-    ultimoPulsoEncoder = ahora;
-  } else if (ultimoPulsoEncoder == 0 ||
-             ahora - ultimoPulsoEncoder > TIMEOUT_MOVIMIENTO_ENCODER_MS) {
-    nuevo.velocidadCuentasPorSegundo = 0.0f;
-    nuevo.flags &= static_cast<uint8_t>(~ENC_FLAG_EN_MOVIMIENTO);
-  }
-
-  portENTER_CRITICAL(&encoderMux);
-  estadoEncoder = nuevo;
-  portEXIT_CRITICAL(&encoderMux);
 }
 
 void ponerControlEnNeutro() {
@@ -563,8 +429,6 @@ void publicarControlCamaraDesdePortenta(const PaquetePortentaAESP &paquete) {
   ControlCamaraCompartido nuevo = {};
   nuevo.portentaActiva = true;
   nuevo.automaticoActivo = (paquete.flagsSistema & SIS_FLAG_AUTO_ACTIVO) != 0;
-  nuevo.automaticoV2Activo = nuevo.automaticoActivo &&
-                             paquete.opcionMenu == MENU_MODO_AUTOMATICO_V2;
   nuevo.brazoOcupado = (paquete.flagsSistema & SIS_FLAG_BRAZO_OCUPADO) != 0;
   nuevo.comando = paquete.comandoCamara;
   nuevo.secuenciaComando = paquete.secuenciaComandoCamara;
@@ -580,7 +444,6 @@ void invalidarControlCamaraPorTimeout() {
   portENTER_CRITICAL(&controlCamaraMux);
   controlCamara.portentaActiva = false;
   controlCamara.automaticoActivo = false;
-  controlCamara.automaticoV2Activo = false;
   controlCamara.brazoOcupado = false;
   controlCamara.comando = CAM_CMD_NINGUNO;
   controlCamara.codigoAckObjetivo = ACK_OBJ_NINGUNO;
@@ -634,7 +497,6 @@ void prepararSnapshotI2C() {
   ultimaPublicacionI2C = ahora;
 
   const EstadoCamaraPublicado camara = copiarEstadoCamara();
-  const EstadoEncoderCompartido encoder = copiarEstadoEncoder();
   PaqueteESPAPortenta paquete = {};
   paquete.secuenciaPaquete = ++secuenciaPaqueteI2C;
   paquete.sesionArranque = sesionArranque;
@@ -657,30 +519,11 @@ void prepararSnapshotI2C() {
   paquete.estadoCamara = camara.estado;
   paquete.errorCamara = camara.error;
   paquete.ackSecuenciaComandoCamara = camara.ackComando;
-  empacarMuestrasTags(camara.muestras, paquete.muestrasTagEmpacadas);
-  paquete.estadoEncoder = encoder.flags;
+  memcpy(paquete.muestrasTag, camara.muestras, sizeof(paquete.muestrasTag));
   paquete.claseObjetivo = camara.claseObjetivo;
   paquete.objetivoX10 = camara.objetivoX10;
-  if (camara.objetivoValido && camara.objetivoV2 &&
-      ENCODER_MM_POR_CUENTA > 0.0f) {
-    const int32_t delta = diferenciaConteosConWrap(
-      encoder.conteo,
-      camara.conteoReferenciaObjetivo
-    );
-    const long yActual10 = lround(
-      static_cast<double>(camara.objetivoY10) +
-      static_cast<double>(ENCODER_SIGNO_CAMARA_Y) *
-      static_cast<double>(delta) *
-      static_cast<double>(ENCODER_MM_POR_CUENTA) * 10.0
-    );
-    paquete.objetivoY10 = static_cast<int16_t>(
-      constrain(yActual10, static_cast<long>(INT16_MIN), static_cast<long>(INT16_MAX))
-    );
-  } else {
-    paquete.objetivoY10 = camara.objetivoY10;
-  }
+  paquete.objetivoY10 = camara.objetivoY10;
   paquete.secuenciaObjetivo = camara.secuenciaObjetivo;
-  paquete.conteoEncoder = encoder.conteo;
   prepararPaquete(paquete);
 
   portENTER_CRITICAL(&txI2CMux);
@@ -998,21 +841,6 @@ struct FiltroDeteccion {
   double maximoY;
 };
 
-struct FiltroDeteccionV2 {
-  uint8_t clase;
-  uint8_t consecutivas;
-  int32_t conteoReferencia;
-  int32_t ultimoConteo;
-  double sumaX;
-  double sumaYCompensada;
-  double promedioX;
-  double promedioYCompensada;
-  double minimoX;
-  double maximoX;
-  double minimoYCompensada;
-  double maximoYCompensada;
-};
-
 struct ContextoCamara {
   uint8_t estado;
   uint8_t error;
@@ -1035,8 +863,6 @@ struct ContextoCamara {
   uint32_t ultimoEstadoSerial;
 
   FiltroDeteccion filtro;
-  FiltroDeteccionV2 filtroV2;
-  uint8_t ausenciasFiltroV2;
   bool rearmada;
   bool esperandoDesaparicion;
   uint32_t inicioAusencia;
@@ -1049,8 +875,6 @@ struct ContextoCamara {
   int16_t objetivoX10;
   int16_t objetivoY10;
   uint16_t secuenciaObjetivo;
-  bool objetivoV2;
-  int32_t conteoReferenciaObjetivo;
 };
 
 ContextoCamara camaraCtx = {};
@@ -1083,8 +907,6 @@ void publicarEstadoCamara(const ContextoCamara &ctx) {
   publicado.objetivoX10 = ctx.objetivoX10;
   publicado.objetivoY10 = ctx.objetivoY10;
   publicado.secuenciaObjetivo = ctx.secuenciaObjetivo;
-  publicado.objetivoV2 = ctx.objetivoV2;
-  publicado.conteoReferenciaObjetivo = ctx.conteoReferenciaObjetivo;
 
   portENTER_CRITICAL(&estadoCamaraMux);
   estadoCamaraPublicado = publicado;
@@ -1102,16 +924,6 @@ void cambiarEstadoCamara(ContextoCamara &ctx, uint8_t nuevoEstado) {
 void reiniciarFiltro(ContextoCamara &ctx) {
   ctx.filtro = {
     0, 0,
-    0.0, 0.0,
-    0.0, 0.0,
-    0.0, 0.0,
-    0.0, 0.0
-  };
-}
-
-void reiniciarFiltroV2(ContextoCamara &ctx) {
-  ctx.filtroV2 = {
-    0, 0, 0, 0,
     0.0, 0.0,
     0.0, 0.0,
     0.0, 0.0,
@@ -1143,10 +955,7 @@ void limpiarObjetivo(ContextoCamara &ctx, bool exigirDesaparicion) {
   ctx.claseObjetivo = 0;
   ctx.objetivoX10 = 0;
   ctx.objetivoY10 = 0;
-  ctx.objetivoV2 = false;
-  ctx.conteoReferenciaObjetivo = 0;
   reiniciarFiltro(ctx);
-  reiniciarFiltroV2(ctx);
   if (exigirDesaparicion && habiaObjetivo) {
     iniciarEsperaDesaparicion(
       ctx,
@@ -1335,8 +1144,6 @@ void publicarObjetivoEstable(ContextoCamara &ctx) {
   ctx.claseObjetivo = ctx.filtro.clase;
   ctx.objetivoX10 = static_cast<int16_t>(x10);
   ctx.objetivoY10 = static_cast<int16_t>(y10);
-  ctx.objetivoV2 = false;
-  ctx.conteoReferenciaObjetivo = 0;
   ctx.rearmada = false;
   reiniciarFiltro(ctx);
 
@@ -1350,220 +1157,11 @@ void publicarObjetivoEstable(ContextoCamara &ctx) {
   Serial.println(ctx.objetivoY10 / 10.0f, 1);
 }
 
-double compensarYConEncoder(
-  double y,
-  int32_t conteo,
-  int32_t referencia
-) {
-  return y - static_cast<double>(ENCODER_SIGNO_CAMARA_Y) *
-             static_cast<double>(diferenciaConteosConWrap(conteo, referencia)) *
-             static_cast<double>(ENCODER_MM_POR_CUENTA);
-}
-
-bool mismaTrayectoriaV2(
-  const FiltroDeteccionV2 &filtro,
-  uint8_t clase,
-  const Point2D &posicion,
-  int32_t conteo
-) {
-  if (filtro.consecutivas == 0 || filtro.clase != clase) return false;
-  const double yCompensada = compensarYConEncoder(
-    posicion.y,
-    conteo,
-    filtro.conteoReferencia
-  );
-  const double nuevoMinX = fmin(filtro.minimoX, posicion.x);
-  const double nuevoMaxX = fmax(filtro.maximoX, posicion.x);
-  const double nuevoMinY = fmin(filtro.minimoYCompensada, yCompensada);
-  const double nuevoMaxY = fmax(filtro.maximoYCompensada, yCompensada);
-  return nuevoMaxX - nuevoMinX <= TOLERANCIA_TRAYECTORIA_V2_MM &&
-         nuevoMaxY - nuevoMinY <= TOLERANCIA_TRAYECTORIA_V2_MM;
-}
-
-void incorporarDeteccionV2(
-  ContextoCamara &ctx,
-  uint8_t clase,
-  const Point2D &posicion,
-  int32_t conteo
-) {
-  FiltroDeteccionV2 &filtro = ctx.filtroV2;
-  if (!mismaTrayectoriaV2(filtro, clase, posicion, conteo)) {
-    filtro = {
-      clase, 1, conteo, conteo,
-      posicion.x, posicion.y,
-      posicion.x, posicion.y,
-      posicion.x, posicion.x,
-      posicion.y, posicion.y
-    };
-    ctx.ausenciasFiltroV2 = 0;
-    return;
-  }
-
-  const double yCompensada = compensarYConEncoder(
-    posicion.y,
-    conteo,
-    filtro.conteoReferencia
-  );
-  if (filtro.consecutivas < UINT8_MAX) ++filtro.consecutivas;
-  filtro.ultimoConteo = conteo;
-  filtro.sumaX += posicion.x;
-  filtro.sumaYCompensada += yCompensada;
-  filtro.promedioX = filtro.sumaX / filtro.consecutivas;
-  filtro.promedioYCompensada = filtro.sumaYCompensada / filtro.consecutivas;
-  filtro.minimoX = fmin(filtro.minimoX, posicion.x);
-  filtro.maximoX = fmax(filtro.maximoX, posicion.x);
-  filtro.minimoYCompensada = fmin(filtro.minimoYCompensada, yCompensada);
-  filtro.maximoYCompensada = fmax(filtro.maximoYCompensada, yCompensada);
-  ctx.ausenciasFiltroV2 = 0;
-}
-
-void publicarObjetivoV2(ContextoCamara &ctx, int32_t conteoActual) {
-  FiltroDeteccionV2 &filtro = ctx.filtroV2;
-  if (filtro.consecutivas < DETECCIONES_ESTABLES_V2) return;
-  const double desplazamiento = fabs(
-    static_cast<double>(diferenciaConteosConWrap(
-      conteoActual,
-      filtro.conteoReferencia
-    )) * static_cast<double>(ENCODER_MM_POR_CUENTA)
-  );
-  if (desplazamiento < DESPLAZAMIENTO_MINIMO_V2_MM) return;
-
-  const double yActual = filtro.promedioYCompensada +
-    static_cast<double>(ENCODER_SIGNO_CAMARA_Y) *
-    static_cast<double>(diferenciaConteosConWrap(
-      conteoActual,
-      filtro.conteoReferencia
-    )) * static_cast<double>(ENCODER_MM_POR_CUENTA);
-  const long x10 = lround(filtro.promedioX * 10.0);
-  const long y10 = lround(yActual * 10.0);
-  if (x10 < INT16_MIN || x10 > INT16_MAX ||
-      y10 < INT16_MIN || y10 > INT16_MAX) {
-    reiniciarFiltroV2(ctx);
-    return;
-  }
-
-  ++ctx.secuenciaObjetivo;
-  if (ctx.secuenciaObjetivo == 0) ++ctx.secuenciaObjetivo;
-  ctx.objetivoValido = true;
-  ctx.objetivoV2 = true;
-  ctx.claseObjetivo = filtro.clase;
-  ctx.objetivoX10 = static_cast<int16_t>(x10);
-  ctx.objetivoY10 = static_cast<int16_t>(y10);
-  ctx.conteoReferenciaObjetivo = conteoActual;
-  ctx.rearmada = false;
-  reiniciarFiltroV2(ctx);
-
-  Serial.print(F("[AUTO V2] Objetivo movil seq="));
-  Serial.print(ctx.secuenciaObjetivo);
-  Serial.print(F(" clase="));
-  Serial.print(ctx.claseObjetivo);
-  Serial.print(F(" X="));
-  Serial.print(ctx.objetivoX10 / 10.0f, 1);
-  Serial.print(F(" Y="));
-  Serial.print(ctx.objetivoY10 / 10.0f, 1);
-  Serial.print(F(" encoder="));
-  Serial.println(ctx.conteoReferenciaObjetivo);
-}
-
-bool leerPiezasV2UnaVez(
-  ContextoCamara &ctx,
-  const ControlCamaraCompartido &control,
-  uint32_t ahora
-) {
-  const int8_t resultCount = huskylens.getResult(PIECE_MODEL);
-  if (resultCount < 0) return false;
-
-  const EstadoEncoderCompartido encoder = copiarEstadoEncoder();
-  const uint8_t requeridos = ENC_FLAG_HW_LISTO |
-                             ENC_FLAG_ESCALA_VALIDA |
-                             ENC_FLAG_PULSOS_VISTOS;
-  const bool encoderValido =
-    (encoder.flags & requeridos) == requeridos &&
-    (encoder.flags & ENC_FLAG_SATURADO) == 0;
-
-  bool hayPrimera = false;
-  uint8_t clasePrimera = 0;
-  Point2D posicionPrimera = {};
-  bool hayCoincidente = false;
-  uint8_t claseCoincidente = 0;
-  Point2D posicionCoincidente = {};
-  double distanciaCoincidente = HUGE_VAL;
-
-  while (huskylens.available(PIECE_MODEL)) {
-    Result *result = huskylens.popCachedResult(PIECE_MODEL);
-    if (result == nullptr) continue;
-    Point2D posicion;
-    if (!pixelToMillimeters(result->xCenter, result->yCenter,
-                            ctx.homografiaValida, posicion) ||
-        !isOverWhiteBelt(posicion)) {
-      continue;
-    }
-
-    if (!hayPrimera) {
-      hayPrimera = true;
-      clasePrimera = result->ID;
-      posicionPrimera = posicion;
-    }
-
-    if (mismaTrayectoriaV2(ctx.filtroV2, result->ID,
-                           posicion, encoder.conteo)) {
-      const double yCompensada = compensarYConEncoder(
-        posicion.y,
-        encoder.conteo,
-        ctx.filtroV2.conteoReferencia
-      );
-      const double dx = posicion.x - ctx.filtroV2.promedioX;
-      const double dy = yCompensada - ctx.filtroV2.promedioYCompensada;
-      const double distancia2 = dx * dx + dy * dy;
-      if (distancia2 < distanciaCoincidente) {
-        distanciaCoincidente = distancia2;
-        hayCoincidente = true;
-        claseCoincidente = result->ID;
-        posicionCoincidente = posicion;
-      }
-    }
-  }
-
-  // En V2 la pieza procesada ya viajo aguas abajo. Se rearma un segundo
-  // despues de que el brazo quede libre, sin exigir que reaparezca en la
-  // posicion antigua de la imagen.
-  actualizarEsperaDesaparicion(ctx, false, ahora, control.brazoOcupado);
-
-  if (!control.portentaActiva || !control.automaticoV2Activo ||
-      control.brazoOcupado || ctx.objetivoValido || !ctx.rearmada ||
-      ctx.esperandoDesaparicion || !encoderValido) {
-    reiniciarFiltroV2(ctx);
-    ctx.ausenciasFiltroV2 = 0;
-    return true;
-  }
-
-  if (!hayPrimera) {
-    if (ctx.ausenciasFiltroV2 < UINT8_MAX) ++ctx.ausenciasFiltroV2;
-    if (ctx.ausenciasFiltroV2 > 2) reiniciarFiltroV2(ctx);
-    return true;
-  }
-
-  if (hayCoincidente) {
-    incorporarDeteccionV2(
-      ctx, claseCoincidente, posicionCoincidente, encoder.conteo
-    );
-  } else {
-    incorporarDeteccionV2(
-      ctx, clasePrimera, posicionPrimera, encoder.conteo
-    );
-  }
-  publicarObjetivoV2(ctx, encoder.conteo);
-  return true;
-}
-
 bool leerPiezasUnaVez(
   ContextoCamara &ctx,
   const ControlCamaraCompartido &control,
   uint32_t ahora
 ) {
-  if (control.automaticoV2Activo) {
-    return leerPiezasV2UnaVez(ctx, control, ahora);
-  }
   const int8_t resultCount = huskylens.getResult(PIECE_MODEL);
   if (resultCount < 0) {
     return false;
@@ -2183,21 +1781,23 @@ void mostrarCalibracionCamara() {
 
 void mostrarMenuPrincipal(const PaquetePortentaAESP &p) {
   dibujarTitulo(F("MENU PRINCIPAL"));
-  const char *opciones[5] = {
-    "MANUAL",
-    "AUTOMATICO",
-    "CALIBRAR BRAZO",
-    "CALIBRAR CAMARA",
-    "AUTOMATICO V2"
+  const char *opciones[4] = {
+    "MODO MANUAL",
+    "MODO AUTOMATICO",
+    "CALIBRACION DE BRAZO",
+    "CALIBRACION DE CAMARA"
   };
 
-  for (uint8_t i = 0; i < 5; ++i) {
-    pantalla.setCursor(0, 11 + i * 9);
+  for (uint8_t i = 0; i < 4; ++i) {
+    pantalla.setCursor(0, 13 + i * 11);
     pantalla.println(opciones[i]);
     if (p.opcionMenu == i) {
-      pantalla.drawFastVLine(127, 11 + i * 9, 7, SH110X_WHITE);
+      pantalla.drawFastVLine(127, 13 + i * 11, 8, SH110X_WHITE);
     }
   }
+
+  pantalla.setCursor(0, 57);
+  pantalla.print(F("X:OK TRI:SALIR"));
 }
 
 void mostrarModoManual(const PaquetePortentaAESP &p) {
@@ -2260,29 +1860,6 @@ void mostrarModoAutomatico(const PaquetePortentaAESP &p) {
   pantalla.setCursor(0, 56);
   pantalla.print(F("TRI:CANCELAR ACK:"));
   pantalla.print(p.ackSecuenciaObjetivo);
-}
-
-void mostrarModoAutomaticoV2(const PaquetePortentaAESP &p) {
-  dibujarTitulo(F("AUTOMATICO V2"));
-  pantalla.setCursor(0, 12);
-  pantalla.print(F("FASE: "));
-  pantalla.println(p.valorPantalla4);
-  pantalla.setCursor(0, 23);
-  pantalla.print(F("Y: "));
-  pantalla.print(p.valorPantalla1 / 10.0f, 1);
-  pantalla.print(F(" T:"));
-  pantalla.println(p.valorPantalla2 / 10.0f, 1);
-  pantalla.setCursor(0, 35);
-  pantalla.print(F("BANDA: "));
-  pantalla.print(p.valorPantalla3 / 10.0f, 1);
-  pantalla.println(F(" mm/s"));
-  pantalla.setCursor(0, 47);
-  pantalla.print(F("ENC:"));
-  pantalla.print((copiarEstadoCamara().objetivoValido) ? F("OBJ ") : F("--- "));
-  pantalla.print(F("ACK:"));
-  pantalla.println(p.ackSecuenciaObjetivo);
-  pantalla.setCursor(0, 57);
-  pantalla.print(F("TRI:CANCELAR"));
 }
 
 void actualizarPantallaESP32(const PaquetePortentaAESP &p) {
@@ -2380,10 +1957,6 @@ void actualizarPantallaESP32(const PaquetePortentaAESP &p) {
       mostrarModoAutomatico(p);
       break;
 
-    case SISTEMA_MODO_AUTOMATICO_V2:
-      mostrarModoAutomaticoV2(p);
-      break;
-
     case SISTEMA_ERROR:
       dibujarTitulo(F("ERROR DEL SISTEMA"));
       pantalla.setCursor(0, 17);
@@ -2453,8 +2026,6 @@ void setup() {
     sesionArranque = 1;
   }
   inicializarSnapshotSeguro();
-
-  inicializarEncoderBanda();
 
   // Bluetooth es independiente de OLED, Portenta y camara.
   BP32.setup(&onConnectedController, &onDisconnectedController);
@@ -2537,7 +2108,6 @@ void loop() {
   // Bluepad32 conserva prioridad funcional en cada iteracion.
   BP32.update();
   processControllers();
-  actualizarEncoderBanda();
 
   procesarRecepcionI2C();
   intentarInicializarOLEDNoBloqueante();

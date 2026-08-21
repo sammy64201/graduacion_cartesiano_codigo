@@ -16,7 +16,7 @@
 namespace ProtocoloI2C {
 
 constexpr uint8_t DIRECCION_ESP32 = 0x40;
-constexpr uint8_t VERSION_PROTOCOLO = 4;
+constexpr uint8_t VERSION_PROTOCOLO = 5;
 constexpr uint8_t MAGIC_ESP_A_PORTENTA = 0xE3;
 constexpr uint8_t MAGIC_PORTENTA_A_ESP = 0xA7;
 constexpr size_t MAX_BYTES_WIRE = 32;
@@ -33,7 +33,8 @@ enum EstadoSistemaWire : uint8_t {
     SISTEMA_MODO_MANUAL = 8,
     SISTEMA_MODO_AUTOMATICO = 9,
     SISTEMA_ERROR = 10,
-    SISTEMA_MODO_AUTOMATICO_V2 = 11
+    SISTEMA_MODO_AUTOMATICO_V2 = 11,
+    SISTEMA_CALIBRANDO_ENCODER = 12
 };
 
 enum OpcionMenuWire : uint8_t {

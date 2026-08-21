@@ -88,6 +88,8 @@ constexpr uint32_t PERIODO_PUBLICACION_I2C_MS = 10;
 constexpr uint32_t PERIODO_PANTALLA_MS = 100;
 constexpr uint32_t PERIODO_REPORTE_I2C_MS = 1000;
 constexpr uint32_t TIMEOUT_PORTENTA_MS = 1000;
+constexpr uint32_t PERIODO_REINTENTO_I2C_MS = 1000;
+constexpr uint32_t TIMEOUT_ACTIVIDAD_I2C_MS = 5000;
 constexpr uint32_t PERIODO_REINTENTO_OLED_MS = 1000;
 constexpr uint32_t RETARDO_INICIAL_OLED_MS = 1500;
 
@@ -137,6 +139,9 @@ bool sistemaBaseListo = false;
 bool busPantallaIniciado = false;
 bool pantallaInicializada = false;
 bool i2cEsclavoIniciado = false;
+uint32_t ultimoIntentoI2C = 0;
+uint32_t inicioInstanciaI2C = 0;
+uint32_t reiniciosI2CEsclavo = 0;
 uint32_t proximoIntentoOLED = 0;
 uint32_t intentosInicioOLED = 0;
 uint32_t ultimoUpdateServo = 0;
@@ -168,6 +173,8 @@ volatile uint32_t rxI2COk = 0;
 volatile uint32_t rxI2CLongitudIncorrecta = 0;
 volatile uint32_t rxI2CProtocoloIncorrecto = 0;
 volatile int ultimoTamanoRecibido = -1;
+volatile uint32_t solicitudesLecturaI2C = 0;
+volatile uint32_t ultimaActividadI2C = 0;
 
 uint8_t secuenciaPaqueteI2C = 0;
 uint16_t sesionArranque = 0;
@@ -311,6 +318,8 @@ void ponerControlEnNeutro() {
 // =============================================================================
 
 void requestEvent() {
+  ++solicitudesLecturaI2C;
+  ultimaActividadI2C = millis();
   PaqueteESPAPortenta copia;
   portENTER_CRITICAL(&txI2CMux);
   copia = paqueteTxSnapshot;
@@ -319,6 +328,7 @@ void requestEvent() {
 }
 
 void receiveEvent(int cantidadBytes) {
+  ultimaActividadI2C = millis();
   // Un sondeo de direccion puede disparar el callback sin carga util.
   if (cantidadBytes <= 0) {
     while (Wire.available()) {
@@ -347,6 +357,52 @@ void receiveEvent(int cantidadBytes) {
   rxPendiente = temporal;
   hayRxPendiente = true;
   portEXIT_CRITICAL(&rxI2CMux);
+}
+
+bool iniciarI2CEsclavo(bool reinicio) {
+  if (i2cEsclavoIniciado) {
+    Wire.end();
+    i2cEsclavoIniciado = false;
+  }
+
+  Wire.onReceive(receiveEvent);
+  Wire.onRequest(requestEvent);
+  Wire.setBufferSize(64);
+  i2cEsclavoIniciado = Wire.begin(
+    static_cast<uint8_t>(DIRECCION_ESP32),
+    I2C_PORTENTA_SDA,
+    I2C_PORTENTA_SCL,
+    I2C_PORTENTA_HZ
+  );
+  ultimoIntentoI2C = millis();
+  inicioInstanciaI2C = ultimoIntentoI2C;
+  ultimaActividadI2C = 0;
+  if (reinicio) ++reiniciosI2CEsclavo;
+
+  Serial.print(reinicio ? F("[I2C][RECUPERACION] Esclavo reiniciado: ")
+                        : F("[BOOT] I2C esclavo 0x40 GPIO27/GPIO14: "));
+  Serial.println(i2cEsclavoIniciado ? F("OK") : F("ERROR"));
+  return i2cEsclavoIniciado;
+}
+
+void mantenerI2CEsclavoRecuperable() {
+  const uint32_t ahora = millis();
+  if (!i2cEsclavoIniciado) {
+    if (ahora - ultimoIntentoI2C >= PERIODO_REINTENTO_I2C_MS) {
+      iniciarI2CEsclavo(true);
+    }
+    return;
+  }
+
+  const uint32_t ultima = ultimaActividadI2C;
+  const bool nuncaHuboActividad = ultima == 0;
+  const uint32_t referencia = nuncaHuboActividad ? inicioInstanciaI2C : ultima;
+  if (sistemaBaseListo && ahora - referencia >= TIMEOUT_ACTIVIDAD_I2C_MS &&
+      ahora - ultimoIntentoI2C >= PERIODO_REINTENTO_I2C_MS) {
+    estadoPortentaValido = false;
+    invalidarControlCamaraPorTimeout();
+    iniciarI2CEsclavo(true);
+  }
 }
 
 // =============================================================================
@@ -2247,6 +2303,53 @@ void mostrarModoAutomaticoV2(const PaquetePortentaAESP &p) {
   }
 }
 
+void mostrarCalibracionEncoder(const PaquetePortentaAESP &p) {
+  dibujarTitulo(F("CAL ENCODER 3/3"));
+  pantalla.setCursor(0, 13);
+  switch (p.faseCalibracionBrazo) {
+    case 0:
+      pantalla.println(F("PONGA BANDA AL 50%"));
+      pantalla.setCursor(0, 25);
+      pantalla.println(F("AVANCE CAMARA->BRAZO"));
+      pantalla.setCursor(0, 38);
+      pantalla.println(F("X: INICIAR MEDICION"));
+      break;
+    case 1:
+      pantalla.println(F("ESTABILIZANDO 2 S"));
+      pantalla.setCursor(0, 28);
+      pantalla.println(F("MANTENGA EL 50%"));
+      break;
+    case 2:
+      pantalla.println(F("MIDIENDO 5 S"));
+      pantalla.setCursor(0, 28);
+      pantalla.println(F("NO CAMBIE VELOCIDAD"));
+      break;
+    case 3:
+      pantalla.println(F("MEDICION TERMINADA"));
+      pantalla.setCursor(0, 28);
+      pantalla.println(F("DETENGA LA BANDA"));
+      break;
+    case 4:
+      pantalla.println(F("CALIBRACION OK"));
+      pantalla.setCursor(0, 28);
+      pantalla.println(F("BANDA DETENIDA"));
+      break;
+    case 5:
+      pantalla.println(F("MEDICION INVALIDA"));
+      pantalla.setCursor(0, 28);
+      pantalla.println(F("X: REINTENTAR"));
+      break;
+    default:
+      pantalla.println(F("FASE DESCONOCIDA"));
+      break;
+  }
+  pantalla.setCursor(0, 51);
+  pantalla.print(F("V:"));
+  pantalla.print(fabsf(p.velocidadEncoderUmS / 1000000.0f), 1);
+  pantalla.print(F(" mm/s C:"));
+  pantalla.print(p.conteoEncoder);
+}
+
 void actualizarPantallaESP32(const PaquetePortentaAESP &p) {
   if (p.estadoSistema != estadoRemotoAnterior) {
     estadoRemotoAnterior = p.estadoSistema;
@@ -2300,6 +2403,10 @@ void actualizarPantallaESP32(const PaquetePortentaAESP &p) {
       pantalla.print(F("TRI: CANCELAR"));
       break;
 
+    case SISTEMA_CALIBRANDO_ENCODER:
+      mostrarCalibracionEncoder(p);
+      break;
+
     case SISTEMA_ESPERANDO_CONTROL:
       dibujarTitulo(F("BRAZO EN HOME"));
       pantalla.setCursor(0, 19);
@@ -2323,8 +2430,8 @@ void actualizarPantallaESP32(const PaquetePortentaAESP &p) {
       pantalla.setCursor(0, 42);
       pantalla.print(F("BT:"));
       pantalla.print(bluetoothConectado ? F("OK ") : F("-- "));
-      pantalla.print(F("LIM:"));
-      pantalla.println((p.flagsLimites & LIM_FLAG_COHERENTES) ? F("OK") : F("--"));
+      pantalla.print(F("ENC:"));
+      pantalla.println((p.estadoEncoder & ENC_FLAG_PULSOS_VISTOS) ? F("OK") : F("--"));
       pantalla.setCursor(0, 56);
       pantalla.print((p.flagsSistema & SIS_FLAG_CHECKLIST_OK) ? F("TODO CORRECTO") : F("VERIFICANDO..."));
       break;
@@ -2473,22 +2580,12 @@ void setup() {
   }
 
   // El bus de control se activa al final para que los callbacks nunca observen
-  // perifericos a medio inicializar.
-  Wire.onReceive(receiveEvent);
-  Wire.onRequest(requestEvent);
-  Wire.setBufferSize(64);
-  i2cEsclavoIniciado = Wire.begin(
-    static_cast<uint8_t>(DIRECCION_ESP32),
-    I2C_PORTENTA_SDA,
-    I2C_PORTENTA_SCL,
-    I2C_PORTENTA_HZ
-  );
-
+  // perifericos a medio inicializar. Si el primer begin coincide con el
+  // arranque de la Portenta, loop() vuelve a levantarlo automaticamente.
+  iniciarI2CEsclavo(false);
   sistemaBaseListo = true;
   prepararSnapshotI2C();
 
-  Serial.print(F("[BOOT] I2C esclavo 0x40 GPIO27/GPIO14: "));
-  Serial.println(i2cEsclavoIniciado ? F("OK") : F("ERROR"));
   Serial.print(F("[BOOT] Sesion ESP: "));
   Serial.println(sesionArranque);
   Serial.println(F("[BOOT] Sistema base listo"));
@@ -2499,6 +2596,7 @@ void loop() {
   BP32.update();
   processControllers();
   vigilarEncoderRemoto();
+  mantenerI2CEsclavoRecuperable();
 
   procesarRecepcionI2C();
   intentarInicializarOLEDNoBloqueante();
@@ -2517,7 +2615,11 @@ void loop() {
     Serial.print(F(" errLen="));
     Serial.print(rxI2CLongitudIncorrecta);
     Serial.print(F(" errCRC="));
-    Serial.println(rxI2CProtocoloIncorrecto);
+    Serial.print(rxI2CProtocoloIncorrecto);
+    Serial.print(F(" requests="));
+    Serial.print(solicitudesLecturaI2C);
+    Serial.print(F(" reinicios="));
+    Serial.println(reiniciosI2CEsclavo);
   }
 
   if (

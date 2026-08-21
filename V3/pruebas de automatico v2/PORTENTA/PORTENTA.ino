@@ -40,8 +40,8 @@ const long RANGO_MINIMO_VALIDO = 100;
 const unsigned long TIMEOUT_FASE_MS = 180000UL;
 const unsigned long TIMEOUT_MOVIMIENTO_MS = 180000UL;
 
-const float RANGO_FISICO_X_MM = 496.0f;
-const float RANGO_FISICO_Y_MM = 337.0f;
+const float RANGO_FISICO_X_MM = 446.0f;
+const float RANGO_FISICO_Y_MM = 336.0f;
 const float MARGEN_SEGURIDAD_MM = 2.0f;
 
 // Ajuste fisico camara -> brazo. Se aplica swap, luego signo y finalmente offset.
@@ -52,23 +52,40 @@ constexpr float CAMERA_OFFSET_X_MM = 0.0f;
 constexpr float CAMERA_OFFSET_Y_MM = 0.0f;
 constexpr float CAMARA_A_HOME_Y_MM = 510.0f;
 
-// Copiar aqui el valor que imprime `ENC FIN <mm>` para conservarlo entre
-// reinicios. Hasta calibrarlo, Automatico V2 permanece bloqueado.
-constexpr float ENCODER_MM_POR_CUENTA = 0.0f;
-constexpr int8_t ENCODER_SIGNO_AVANCE = 1;
+// E6B2-CWZ6C de 1024 P/R, lectura X2 y rueda de 65 mm acoplada 1:1.
+// La geometria fija la distancia por cuenta; la tercera calibracion de arranque
+// mide automaticamente el sentido y la velocidad real con la banda al 50 %.
+constexpr float ENCODER_DIAMETRO_RUEDA_MM = 65.0f;
+constexpr float ENCODER_RELACION_ENCODER_RUEDA = 1.0f;
 constexpr int ENCODER_CUENTAS_X2_POR_VUELTA = 2048;
+constexpr float ENCODER_PI = 3.14159265358979323846f;
+constexpr float ENCODER_MM_POR_CUENTA =
+    ENCODER_PI * ENCODER_DIAMETRO_RUEDA_MM /
+    (static_cast<float>(ENCODER_CUENTAS_X2_POR_VUELTA) *
+     ENCODER_RELACION_ENCODER_RUEDA);
+
+constexpr unsigned long ENC_TIEMPO_ESTABILIZACION_MS = 2000UL;
+constexpr unsigned long ENC_TIEMPO_MEDICION_MS = 5000UL;
+constexpr unsigned long ENC_PERIODO_VENTANA_MS = 200UL;
+constexpr unsigned long ENC_TIMEOUT_PARO_MS = 30000UL;
+constexpr int32_t ENC_CUENTAS_MINIMAS_MEDICION = 100;
+constexpr uint8_t ENC_VENTANAS_MINIMAS = 20;
+constexpr float ENC_VARIACION_MAXIMA = 0.10f;
 
 static_assert(CAMERA_SIGN_X == 1 || CAMERA_SIGN_X == -1, "CAMERA_SIGN_X debe ser +/-1");
 static_assert(CAMERA_SIGN_Y == 1 || CAMERA_SIGN_Y == -1, "CAMERA_SIGN_Y debe ser +/-1");
-static_assert(ENCODER_SIGNO_AVANCE == 1 || ENCODER_SIGNO_AVANCE == -1,
-              "ENCODER_SIGNO_AVANCE debe ser +/-1");
+static_assert(ENCODER_RELACION_ENCODER_RUEDA > 0.0f,
+              "La relacion encoder/rueda debe ser positiva");
 
 //-------------------------------------------------------------------------------------------------
 // PERIODOS Y TIMEOUTS DEL COORDINADOR
 //-------------------------------------------------------------------------------------------------
 const unsigned long RETARDO_ARRANQUE_ESP32_MS = 3000UL;
-const unsigned long PERIODO_CONTROL_MS = 5UL;
-const unsigned long PERIODO_ESTADO_ESP_MS = 10UL;
+// Cada paquete ocupa aproximadamente 3 ms a 100 kHz. La combinacion anterior
+// 5 ms/10 ms consumia cerca del 90 % del bus y las interrupciones X2 del
+// encoder agotaban el margen restante. 10 ms/20 ms reduce la carga a ~45 %.
+const unsigned long PERIODO_CONTROL_MS = 10UL;
+const unsigned long PERIODO_ESTADO_ESP_MS = 20UL;
 const unsigned long PERIODO_ENCODER_MS = 10UL;
 const unsigned long TIMEOUT_MOVIMIENTO_ENCODER_MS = 500UL;
 const unsigned long TIMEOUT_I2C_MS = 150UL;
@@ -96,7 +113,8 @@ enum EstadoGeneral : uint8_t {
     EST_USER_ARM_CALIBRATION,
     EST_USER_CAMERA_CALIBRATION,
     EST_SYSTEM_ERROR,
-    EST_AUTOMATICO_V2
+    EST_AUTOMATICO_V2,
+    EST_ENCODER_CALIBRATION
 };
 
 enum FaseCalibracion : uint8_t {
@@ -149,6 +167,15 @@ enum FaseAutomaticoV2 : uint8_t {
     V2_CANCELANDO = 8
 };
 
+enum FaseCalibracionEncoder : uint8_t {
+    ENC_CAL_ESPERA_50 = 0,
+    ENC_CAL_ESTABILIZANDO = 1,
+    ENC_CAL_MIDIENDO = 2,
+    ENC_CAL_ESPERA_PARO = 3,
+    ENC_CAL_COMPLETA = 4,
+    ENC_CAL_ERROR = 5
+};
+
 enum CodigoErrorLocal : uint8_t {
     ERROR_NINGUNO = 0,
     ERROR_TIMEOUT_I2C = 1,
@@ -177,6 +204,7 @@ enum ResultadoChecklist : uint8_t {
     CHECK_HOME,
     CHECK_MOTORES,
     CHECK_BT,
+    CHECK_ENCODER,
     CHECK_CAL_ERROR,
     CHECK_FINALES
 };
@@ -313,10 +341,30 @@ uint16_t secuenciaEncoder = 0;
 unsigned long ultimaMuestraEncoder = 0;
 unsigned long ultimoPulsoEncoder = 0;
 float velocidadBandaMmS = 0.0f;
+float frecuenciaEncoderCuentasS = 0.0f;
 float escalaEncoderMmPorCuenta = ENCODER_MM_POR_CUENTA;
-bool capturaCalibracionEncoderActiva = false;
-int32_t conteoInicioCalibracionEncoder = 0;
 int32_t conteoCeroUsuario = 0;
+int8_t signoEncoderAvance = 1;
+bool calibracionEncoderValida = false;
+float velocidadReferencia50MmS = 0.0f;
+float velocidadMaximaEstimadaMmS = 0.0f;
+
+struct ContextoCalibracionEncoder {
+    FaseCalibracionEncoder fase;
+    unsigned long inicioFase;
+    unsigned long inicioVentana;
+    int32_t conteoInicioFase;
+    int32_t conteoInicioVentana;
+    float sumaCuentasS;
+    float minimoCuentasS;
+    float maximoCuentasS;
+    uint8_t ventanasValidas;
+    uint8_t ventanasInvalidas;
+    int8_t signoObservado;
+    const char *mensajeError;
+};
+
+ContextoCalibracionEncoder calibracionEncoder = {};
 
 // Parametros de puesta en marcha de Automatico V2. Z se expresa en pasos
 // absolutos porque el firmware actual no dispone de una escala Z en mm.
@@ -366,8 +414,16 @@ unsigned long tAnteriorEstadoESP = 0;
 bool comunicacionI2CHabilitada = false;
 uint32_t lecturasI2COk = 0;
 uint32_t lecturasI2CError = 0;
+uint32_t erroresI2CLongitud = 0;
+uint32_t erroresI2CCRC = 0;
+uint32_t erroresI2CSemantica = 0;
 uint32_t enviosI2COk = 0;
 uint32_t enviosI2CError = 0;
+uint8_t ultimoCodigoErrorEnvioI2C = 0;
+uint32_t reiniciosBusI2CMaestro = 0;
+unsigned long ultimoReinicioBusI2CMs = 0;
+unsigned long ultimaEntradaLoopMs = 0;
+unsigned long maximaPausaLoopMs = 0;
 unsigned long ultimoReporteI2C = 0;
 
 String lineaTerminal = "";
@@ -379,6 +435,8 @@ void cancelarMovimientoPosicionado(const char *motivo, bool posicionPerdida);
 void reiniciarAutomaticoV2();
 void iniciarCancelacionAutomaticoV2(const char *motivo, bool esperarControl);
 long posicionCapturaZV2();
+void iniciarCalibracionEncoder();
+void procesarCalibracionEncoder();
 
 //-------------------------------------------------------------------------------------------------
 // ACCESO ATOMICO A CONTADORES Y OBJETIVOS
@@ -1257,6 +1315,7 @@ uint8_t estadoGeneralWire() {
         case EST_MANUAL: return SISTEMA_MODO_MANUAL;
         case EST_AUTOMATICO: return SISTEMA_MODO_AUTOMATICO;
         case EST_AUTOMATICO_V2: return SISTEMA_MODO_AUTOMATICO_V2;
+        case EST_ENCODER_CALIBRATION: return SISTEMA_CALIBRANDO_ENCODER;
         case EST_SYSTEM_ERROR: return SISTEMA_ERROR;
         default: return SISTEMA_ERROR;
     }
@@ -1347,9 +1406,15 @@ void actualizarEncoderBanda() {
     if (ultimoPulsoEncoder != 0) estadoEncoderBanda |= ENC_FLAG_PULSOS_VISTOS;
 
     if (delta != 0) {
-        const float instantanea = static_cast<float>(delta) *
-            escalaEncoderMmPorCuenta * static_cast<float>(ENCODER_SIGNO_AVANCE) *
+        const float cuentasInstantaneas = static_cast<float>(delta) *
             1000.0f / static_cast<float>(dt);
+        const float instantanea = static_cast<float>(delta) *
+            escalaEncoderMmPorCuenta * static_cast<float>(signoEncoderAvance) *
+            1000.0f / static_cast<float>(dt);
+        frecuenciaEncoderCuentasS = ultimoPulsoEncoder == 0
+            ? cuentasInstantaneas
+            : 0.8f * frecuenciaEncoderCuentasS +
+              0.2f * cuentasInstantaneas;
         velocidadBandaMmS = ultimaMuestraEncoder == ahora && ultimoPulsoEncoder == 0
             ? instantanea
             : 0.8f * velocidadBandaMmS + 0.2f * instantanea;
@@ -1363,6 +1428,7 @@ void actualizarEncoderBanda() {
             estadoEncoderBanda |= ENC_FLAG_DIRECCION_POSITIVA;
     } else {
         velocidadBandaMmS = 0.0f;
+        frecuenciaEncoderCuentasS = 0.0f;
     }
 
     conteoEncoderBanda = conteo;
@@ -1381,11 +1447,199 @@ void actualizarEncoderBanda() {
 
 bool encoderListoAutomaticoV2() {
     const uint8_t requeridos = ENC_FLAG_HW_LISTO |
-                               ENC_FLAG_ESCALA_VALIDA |
-                               ENC_FLAG_PULSOS_VISTOS;
-    return escalaEncoderMmPorCuenta > 0.0f &&
+                               ENC_FLAG_ESCALA_VALIDA;
+    return calibracionEncoderValida && velocidadReferencia50MmS > 0.0f &&
+           escalaEncoderMmPorCuenta > 0.0f &&
            (estadoEncoderBanda & requeridos) == requeridos &&
            (estadoEncoderBanda & ENC_FLAG_SATURADO) == 0;
+}
+
+void cambiarFaseCalibracionEncoder(FaseCalibracionEncoder nueva) {
+    calibracionEncoder.fase = nueva;
+    calibracionEncoder.inicioFase = millis();
+    calibracionEncoder.inicioVentana = millis();
+    calibracionEncoder.conteoInicioFase = conteoEncoderBanda;
+    calibracionEncoder.conteoInicioVentana = conteoEncoderBanda;
+    Serial.print(F("[ENC][CAL] Fase -> "));
+    Serial.println(static_cast<uint8_t>(nueva));
+}
+
+void fallarCalibracionEncoder(const char *mensaje) {
+    calibracionEncoderValida = false;
+    velocidadReferencia50MmS = 0.0f;
+    velocidadMaximaEstimadaMmS = 0.0f;
+    calibracionEncoder.mensajeError = mensaje;
+    cambiarFaseCalibracionEncoder(ENC_CAL_ERROR);
+    Serial.print(F("[ENC][CAL][ERROR] "));
+    Serial.println(mensaje);
+    Serial.println(F("[ENC][CAL] Corrija la banda y presione X para reintentar"));
+}
+
+void iniciarCalibracionEncoder() {
+    calibracionEncoder = {};
+    calibracionEncoder.fase = ENC_CAL_ESPERA_50;
+    calibracionEncoder.inicioFase = millis();
+    calibracionEncoder.inicioVentana = millis();
+    calibracionEncoder.conteoInicioFase = conteoEncoderBanda;
+    calibracionEncoder.conteoInicioVentana = conteoEncoderBanda;
+    calibracionEncoder.minimoCuentasS = INFINITY;
+    calibracionEncoder.mensajeError = "";
+    calibracionEncoderValida = false;
+    velocidadReferencia50MmS = 0.0f;
+    velocidadMaximaEstimadaMmS = 0.0f;
+    signoEncoderAvance = 1;
+    Serial.println(F("[ENC][CAL] ETAPA 3/3: coloque manualmente la banda al 50 %"));
+    Serial.println(F("[ENC][CAL] Cuando la banda avance estable camara->brazo, presione X"));
+    Serial.print(F("[ENC][CAL] Geometria: rueda="));
+    Serial.print(ENCODER_DIAMETRO_RUEDA_MM, 1);
+    Serial.print(F(" mm, 1:1, escala="));
+    Serial.print(escalaEncoderMmPorCuenta, 9);
+    Serial.println(F(" mm/cuenta"));
+}
+
+void procesarCalibracionEncoder() {
+    detenerTodos();
+    if (!btConectado) {
+        Serial.println(F("[ENC][CAL] Control desconectado; calibracion reiniciada"));
+        cambiarEstadoGeneral(EST_WAIT_CONTROLLER);
+        return;
+    }
+
+    const unsigned long ahora = millis();
+    switch (calibracionEncoder.fase) {
+        case ENC_CAL_ESPERA_50:
+            if (eventoBotonX) {
+                eventoBotonX = false;
+                if ((estadoEncoderBanda & ENC_FLAG_EN_MOVIMIENTO) == 0) {
+                    Serial.println(F("[ENC][CAL] La banda no se mueve; pongala al 50 % antes de X"));
+                    return;
+                }
+                calibracionEncoder.mensajeError = "";
+                cambiarFaseCalibracionEncoder(ENC_CAL_ESTABILIZANDO);
+                Serial.println(F("[ENC][CAL] Estabilizando durante 2 s..."));
+            }
+            break;
+
+        case ENC_CAL_ESTABILIZANDO:
+            if (ahora - calibracionEncoder.inicioFase >=
+                ENC_TIEMPO_ESTABILIZACION_MS) {
+                const int32_t delta = diferenciaConteosConWrap(
+                    conteoEncoderBanda, calibracionEncoder.conteoInicioFase);
+                if (labs(static_cast<long>(delta)) < 20L) {
+                    fallarCalibracionEncoder("No se detecto movimiento continuo al 50 %");
+                    return;
+                }
+                calibracionEncoder.sumaCuentasS = 0.0f;
+                calibracionEncoder.minimoCuentasS = INFINITY;
+                calibracionEncoder.maximoCuentasS = 0.0f;
+                calibracionEncoder.ventanasValidas = 0;
+                calibracionEncoder.ventanasInvalidas = 0;
+                calibracionEncoder.signoObservado = delta > 0 ? 1 : -1;
+                cambiarFaseCalibracionEncoder(ENC_CAL_MIDIENDO);
+                Serial.println(F("[ENC][CAL] Midiendo velocidad durante 5 s..."));
+            }
+            break;
+
+        case ENC_CAL_MIDIENDO: {
+            if (ahora - calibracionEncoder.inicioVentana >=
+                ENC_PERIODO_VENTANA_MS) {
+                const unsigned long dt = ahora - calibracionEncoder.inicioVentana;
+                const int32_t deltaVentana = diferenciaConteosConWrap(
+                    conteoEncoderBanda, calibracionEncoder.conteoInicioVentana);
+                const int8_t signoVentana = deltaVentana > 0 ? 1 :
+                                            (deltaVentana < 0 ? -1 : 0);
+                if (signoVentana == 0 ||
+                    signoVentana != calibracionEncoder.signoObservado) {
+                    if (calibracionEncoder.ventanasInvalidas < 255)
+                        ++calibracionEncoder.ventanasInvalidas;
+                } else {
+                    const float cuentasS = fabsf(static_cast<float>(deltaVentana)) *
+                        1000.0f / static_cast<float>(dt);
+                    calibracionEncoder.sumaCuentasS += cuentasS;
+                    if (cuentasS < calibracionEncoder.minimoCuentasS)
+                        calibracionEncoder.minimoCuentasS = cuentasS;
+                    if (cuentasS > calibracionEncoder.maximoCuentasS)
+                        calibracionEncoder.maximoCuentasS = cuentasS;
+                    if (calibracionEncoder.ventanasValidas < 255)
+                        ++calibracionEncoder.ventanasValidas;
+                }
+                calibracionEncoder.inicioVentana = ahora;
+                calibracionEncoder.conteoInicioVentana = conteoEncoderBanda;
+            }
+
+            if (ahora - calibracionEncoder.inicioFase >= ENC_TIEMPO_MEDICION_MS) {
+                const unsigned long dtTotal = ahora - calibracionEncoder.inicioFase;
+                const int32_t deltaTotal = diferenciaConteosConWrap(
+                    conteoEncoderBanda, calibracionEncoder.conteoInicioFase);
+                if (labs(static_cast<long>(deltaTotal)) <
+                        static_cast<long>(ENC_CUENTAS_MINIMAS_MEDICION) ||
+                    calibracionEncoder.ventanasValidas < ENC_VENTANAS_MINIMAS ||
+                    calibracionEncoder.ventanasInvalidas > 1) {
+                    fallarCalibracionEncoder("Pulsos insuficientes, paro o inversion durante la medicion");
+                    return;
+                }
+
+                const float mediaCuentasS = fabsf(static_cast<float>(deltaTotal)) *
+                    1000.0f / static_cast<float>(dtTotal);
+                const float limiteInferior = mediaCuentasS *
+                    (1.0f - ENC_VARIACION_MAXIMA);
+                const float limiteSuperior = mediaCuentasS *
+                    (1.0f + ENC_VARIACION_MAXIMA);
+                if (!isfinite(mediaCuentasS) || mediaCuentasS <= 0.0f ||
+                    calibracionEncoder.minimoCuentasS < limiteInferior ||
+                    calibracionEncoder.maximoCuentasS > limiteSuperior) {
+                    fallarCalibracionEncoder("Velocidad inestable: variacion mayor al 10 %");
+                    return;
+                }
+
+                signoEncoderAvance = deltaTotal > 0 ? 1 : -1;
+                velocidadReferencia50MmS = mediaCuentasS *
+                    escalaEncoderMmPorCuenta;
+                velocidadMaximaEstimadaMmS = 2.0f * velocidadReferencia50MmS;
+                velocidadBandaMmS = 0.0f;
+                frecuenciaEncoderCuentasS = 0.0f;
+                ultimoConteoEncoderVelocidad = conteoEncoderBanda;
+
+                Serial.print(F("[ENC][CAL] 50 %="));
+                Serial.print(velocidadReferencia50MmS, 2);
+                Serial.print(F(" mm/s; maxima estimada="));
+                Serial.print(velocidadMaximaEstimadaMmS, 2);
+                Serial.print(F(" mm/s; signo="));
+                Serial.println(signoEncoderAvance);
+                Serial.print(F("[ENC][CAL] ventanas min/media/max="));
+                Serial.print(calibracionEncoder.minimoCuentasS, 1);
+                Serial.print('/');
+                Serial.print(mediaCuentasS, 1);
+                Serial.print('/');
+                Serial.print(calibracionEncoder.maximoCuentasS, 1);
+                Serial.println(F(" cuentas/s"));
+                cambiarFaseCalibracionEncoder(ENC_CAL_ESPERA_PARO);
+                Serial.println(F("[ENC][CAL] Detenga ahora la banda"));
+            }
+            break;
+        }
+
+        case ENC_CAL_ESPERA_PARO:
+            if ((estadoEncoderBanda & ENC_FLAG_EN_MOVIMIENTO) == 0) {
+                calibracionEncoderValida = true;
+                cambiarFaseCalibracionEncoder(ENC_CAL_COMPLETA);
+                Serial.println(F("[ENC][CAL] Calibracion automatica completa"));
+                cambiarEstadoGeneral(EST_FINAL_CHECKLIST);
+            } else if (ahora - calibracionEncoder.inicioFase > ENC_TIMEOUT_PARO_MS) {
+                fallarCalibracionEncoder("Timeout esperando que el tecnico detenga la banda");
+            }
+            break;
+
+        case ENC_CAL_ERROR:
+            if (eventoBotonX) {
+                eventoBotonX = false;
+                iniciarCalibracionEncoder();
+            }
+            break;
+
+        case ENC_CAL_COMPLETA:
+            break;
+    }
 }
 
 bool bandaEnMovimientoAutomaticoV2() {
@@ -1487,6 +1741,7 @@ bool leerPaqueteESP32() {
         Wire.available() < static_cast<int>(sizeof(PaqueteESPAPortenta))) {
         while (Wire.available()) Wire.read();
         lecturasI2CError++;
+        erroresI2CLongitud++;
         if (fallosPaqueteConsecutivos < 255) fallosPaqueteConsecutivos++;
         return false;
     }
@@ -1498,8 +1753,15 @@ bool leerPaqueteESP32() {
     }
     while (Wire.available()) Wire.read();
 
-    if (!validarPaquete(recibido) || !paqueteSemanticamenteValido(recibido)) {
+    if (!validarPaquete(recibido)) {
         lecturasI2CError++;
+        erroresI2CCRC++;
+        if (fallosPaqueteConsecutivos < 255) fallosPaqueteConsecutivos++;
+        return false;
+    }
+    if (!paqueteSemanticamenteValido(recibido)) {
+        lecturasI2CError++;
+        erroresI2CSemantica++;
         if (fallosPaqueteConsecutivos < 255) fallosPaqueteConsecutivos++;
         return false;
     }
@@ -1558,7 +1820,9 @@ void construirPaquetePortenta(PaquetePortentaAESP &p) {
     p.opcionMenu = opcionMenu;
     p.faseCalibracionBrazo = estadoGeneral == EST_AUTOMATICO_V2
         ? static_cast<uint8_t>(automaticoV2.fase)
-        : static_cast<uint8_t>(faseCal);
+        : (estadoGeneral == EST_ENCODER_CALIBRATION
+            ? static_cast<uint8_t>(calibracionEncoder.fase)
+            : static_cast<uint8_t>(faseCal));
     p.flagsSistema = construirFlagsSistema();
     p.flagsLimites = construirFlagsLimites();
     noInterrupts();
@@ -1579,7 +1843,7 @@ void construirPaquetePortenta(PaquetePortentaAESP &p) {
         : 0U;
     p.secuenciaEncoder = secuenciaEncoder;
     p.estadoEncoder = estadoEncoderBanda;
-    p.signoEncoder = ENCODER_SIGNO_AVANCE;
+    p.signoEncoder = signoEncoderAvance;
     prepararPaquete(p);
 }
 
@@ -1593,10 +1857,39 @@ bool enviarPaquetePortenta() {
     const uint8_t error = Wire.endTransmission(true);
     if (escritos == sizeof(salida) && error == 0) {
         enviosI2COk++;
+        ultimoCodigoErrorEnvioI2C = 0;
         return true;
     }
     enviosI2CError++;
+    ultimoCodigoErrorEnvioI2C = error;
     return false;
+}
+
+void mantenerBusI2CMaestroRecuperable() {
+    if (!comunicacionI2CHabilitada || enlaceI2CVigente()) return;
+
+    // Nunca se reinicia el periferico durante movimiento. Ante una perdida en
+    // automatico, la maquina de seguridad detiene primero todos los ejes y
+    // entra en error; la recuperacion queda disponible en la siguiente vuelta.
+    const bool estadoSeguro =
+        estadoGeneral == EST_BOOT_SAFE ||
+        estadoGeneral == EST_WAIT_I2C ||
+        estadoGeneral == EST_I2C_SETTLE ||
+        estadoGeneral == EST_SYSTEM_ERROR;
+    if (!estadoSeguro || motoresEnMovimiento() || movimientoPosicionadoActivo)
+        return;
+
+    const unsigned long ahora = millis();
+    if (ahora - ultimoReinicioBusI2CMs < 1000UL) return;
+    ultimoReinicioBusI2CMs = ahora;
+
+    Wire.end();
+    Wire.begin();
+    Wire.setClock(100000);
+    fallosPaqueteConsecutivos = 0;
+    ++reiniciosBusI2CMaestro;
+    Serial.print(F("[I2C][RECUPERACION] Maestro reiniciado, intento="));
+    Serial.println(reiniciosBusI2CMaestro);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1636,6 +1929,12 @@ void cambiarEstadoGeneral(EstadoGeneral nuevoEstado) {
         case EST_USER_ARM_CALIBRATION:
             detenerTodos();
             iniciarCalibracionBrazo();
+            break;
+        case EST_ENCODER_CALIBRATION:
+            detenerTodos();
+            movimientoPosicionadoActivo = false;
+            propietarioMovimiento = MOV_SIN_PROPIETARIO;
+            iniciarCalibracionEncoder();
             break;
         case EST_MAIN_MENU:
         case EST_WAIT_CONTROLLER:
@@ -1712,6 +2011,8 @@ ResultadoChecklist evaluarChecklistFinal() {
     if (!brazoEnHome()) return CHECK_HOME;
     if (motoresEnMovimiento() || movimientoPosicionadoActivo) return CHECK_MOTORES;
     if (!btConectado) return CHECK_BT;
+    if (!calibracionEncoderValida || velocidadReferencia50MmS <= 0.0f)
+        return CHECK_ENCODER;
     if (faseCal == CAL_ERROR || mensajeErrorCalibracion[0] != '\0') return CHECK_CAL_ERROR;
     if (!finalesCoherentes() || algunFinalActivo()) return CHECK_FINALES;
     return CHECK_OK;
@@ -1730,6 +2031,7 @@ const char *textoChecklist(ResultadoChecklist resultado) {
         case CHECK_HOME: return "Brazo fuera de HOME";
         case CHECK_MOTORES: return "Motores no detenidos";
         case CHECK_BT: return "Control Bluetooth desconectado";
+        case CHECK_ENCODER: return "Calibracion del encoder invalida";
         case CHECK_CAL_ERROR: return "Error de calibracion pendiente";
         case CHECK_FINALES: return "Finales de carrera incoherentes";
         default: return "Fallo de checklist desconocido";
@@ -1785,11 +2087,11 @@ void procesarMenuPrincipal() {
                 return;
             }
             if (!encoderListoAutomaticoV2()) {
-                Serial.println(F("[AUTO V2] No disponible: calibre encoder y mueva la banda"));
-                return;
-            }
-            if (!bandaEnMovimientoAutomaticoV2()) {
-                Serial.println(F("[AUTO V2] No disponible: la banda esta detenida"));
+                Serial.print(F("[AUTO V2] No disponible: encoder invalido. escala="));
+                Serial.print(escalaEncoderMmPorCuenta, 9);
+                Serial.print(F(" flags=0x"));
+                Serial.println(estadoEncoderBanda, HEX);
+                Serial.println(F("[AUTO V2] Reinicie y complete la etapa 3/3 con la banda al 50 %"));
                 return;
             }
             if (leerPasosZ() != V2_Z_SEGURO_PASOS) {
@@ -1802,6 +2104,9 @@ void procesarMenuPrincipal() {
                 return;
             }
             cambiarEstadoGeneral(EST_AUTOMATICO_V2);
+            if (!bandaEnMovimientoAutomaticoV2()) {
+                Serial.println(F("[AUTO V2] Modo activo; esperando que la banda avance camara->brazo"));
+            }
             break;
         default:
             opcionMenu = MENU_MODO_MANUAL;
@@ -1995,7 +2300,7 @@ bool actualizarObjetivoMovilV2() {
     const float yLocalCamara = static_cast<float>(CAMERA_SIGN_Y) * baseY +
                                CAMERA_OFFSET_Y_MM;
     const float brazoY = -CAMARA_A_HOME_Y_MM + yLocalCamara +
-        static_cast<float>(ENCODER_SIGNO_AVANCE) *
+        static_cast<float>(signoEncoderAvance) *
         static_cast<float>(delta) * escalaEncoderMmPorCuenta;
     if (!isfinite(brazoX) || !isfinite(brazoY)) {
         return false;
@@ -2074,6 +2379,10 @@ bool velocidadBandaPermitidaV2() {
         (1.0f / (2.0f * velocidadMotores)) / pasosPorMmY;
     if (velocidadBandaMmS <= 0.0f ||
         fabsf(automaticoV2.velocidadObjetivoY) * 1.3f > maximaY) {
+        return false;
+    }
+    if (calibracionEncoderValida && velocidadMaximaEstimadaMmS > 0.0f &&
+        velocidadBandaMmS > velocidadMaximaEstimadaMmS * 1.10f) {
         return false;
     }
     if (automaticoV2.velocidadInicialY > 0.0f) {
@@ -2526,6 +2835,11 @@ void reiniciarSecuenciaCompleta() {
     mensajeErrorSistema = "";
     ultimoResultadoChecklist = CHECK_OK;
     checklistInicialCompletado = false;
+    calibracionEncoderValida = false;
+    velocidadReferencia50MmS = 0.0f;
+    velocidadMaximaEstimadaMmS = 0.0f;
+    signoEncoderAvance = 1;
+    calibracionEncoder = {};
     ackSecuenciaObjetivo = 0;
     codigoAckObjetivo = ACK_OBJ_NINGUNO;
     secuenciaObjetivoEnMovimiento = 0;
@@ -2614,10 +2928,18 @@ void procesarMaquinaGeneral() {
         case EST_WAIT_CONTROLLER:
             detenerTodos();
             if (btConectado) {
-                cambiarEstadoGeneral(checklistInicialCompletado
-                                         ? EST_MAIN_MENU
-                                         : EST_FINAL_CHECKLIST);
+                if (checklistInicialCompletado) {
+                    cambiarEstadoGeneral(EST_MAIN_MENU);
+                } else if (!calibracionEncoderValida) {
+                    cambiarEstadoGeneral(EST_ENCODER_CALIBRATION);
+                } else {
+                    cambiarEstadoGeneral(EST_FINAL_CHECKLIST);
+                }
             }
+            break;
+
+        case EST_ENCODER_CALIBRATION:
+            procesarCalibracionEncoder();
             break;
 
         case EST_FINAL_CHECKLIST:
@@ -2740,14 +3062,13 @@ void mostrarAyudaTerminal() {
     Serial.println(F("POS         -> posicion actual"));
     Serial.println(F("RANGO       -> espacio de trabajo"));
     Serial.println(F("ENC ESTADO  -> A/B/Z, conteo, distancia y velocidad"));
-    Serial.println(F("ENC INICIO  -> captura inicio de calibracion lineal"));
-    Serial.println(F("ENC FIN mm  -> calcula mm/cuenta y constante a copiar"));
+    Serial.println(F("La calibracion del encoder se realiza en el arranque con la banda al 50 %"));
     Serial.println(F("ENC VUELTA  -> diagnostico de indice y 2048 cuentas/vuelta"));
     Serial.println(F("ENC CERO    -> reinicia conteo e indice manualmente"));
     Serial.println(F("STOP        -> parada inmediata"));
     Serial.println(F("REINTENTAR  -> reinicio seguro desde estado de error"));
     Serial.println(F("AYUDA       -> esta ayuda"));
-    Serial.println(F("Escala automatica: X=496 mm, Y=337 mm"));
+    Serial.println(F("Escala automatica: X=446 mm, Y=336 mm"));
 }
 
 bool movimientoTerminalPermitido() {
@@ -2812,61 +3133,24 @@ void procesarComandoTerminal(String comando) {
         Serial.print(revolucionesIndiceEncoder);
         Serial.print(F(" flags=0x"));
         Serial.print(estadoEncoderBanda, HEX);
+        Serial.print(F(" cuentas/s="));
+        Serial.print(frecuenciaEncoderCuentasS, 1);
         Serial.print(F(" velocidad="));
         Serial.print(velocidadBandaMmS, 3);
         Serial.print(F(" mm/s distancia="));
         Serial.print(static_cast<float>(diferenciaConteosConWrap(
             conteoEncoderBanda, conteoCeroUsuario
-        )) * escalaEncoderMmPorCuenta * ENCODER_SIGNO_AVANCE, 3);
+        )) * escalaEncoderMmPorCuenta * signoEncoderAvance, 3);
         Serial.print(F(" mm escala="));
         Serial.print(escalaEncoderMmPorCuenta, 9);
         Serial.print(F(" mm/cuenta signo="));
-        Serial.println(ENCODER_SIGNO_AVANCE);
-        return;
-    }
-    if (mayuscula == "ENC INICIO") {
-        if (estadoGeneral == EST_AUTOMATICO_V2 || motoresEnMovimiento() ||
-            movimientoPosicionadoActivo) {
-            Serial.println(F("[ENC][ERROR] Detenga el brazo antes de calibrar el encoder"));
-            return;
-        }
-        conteoInicioCalibracionEncoder = conteoEncoderBanda;
-        capturaCalibracionEncoderActiva = true;
-        Serial.print(F("[ENC][CAL] Inicio capturado en "));
-        Serial.println(conteoInicioCalibracionEncoder);
-        return;
-    }
-    if (mayuscula.startsWith("ENC FIN ")) {
-        if (estadoGeneral == EST_AUTOMATICO_V2 || motoresEnMovimiento() ||
-            movimientoPosicionadoActivo) {
-            Serial.println(F("[ENC][ERROR] Detenga el brazo antes de cambiar la escala"));
-            return;
-        }
-        float distanciaMm = 0.0f;
-        char sobrante = '\0';
-        const int leidos = sscanf(
-            comando.substring(8).c_str(), "%f %c", &distanciaMm, &sobrante
-        );
-        const int32_t delta = diferenciaConteosConWrap(
-            conteoEncoderBanda, conteoInicioCalibracionEncoder
-        );
-        if (!capturaCalibracionEncoderActiva || leidos != 1 ||
-            !isfinite(distanciaMm) || distanciaMm <= 0.0f || delta == 0) {
-            Serial.println(F("[ENC][ERROR] Use ENC INICIO, mueva una distancia positiva y ENC FIN <mm>"));
-            return;
-        }
-        escalaEncoderMmPorCuenta = distanciaMm / fabsf(static_cast<float>(delta));
-        capturaCalibracionEncoderActiva = false;
-        Serial.print(F("[ENC][CAL] delta="));
-        Serial.print(delta);
-        Serial.print(F(" distancia="));
-        Serial.print(distanciaMm, 3);
-        Serial.print(F(" mm; escala="));
-        Serial.print(escalaEncoderMmPorCuenta, 9);
-        Serial.println(F(" mm/cuenta"));
-        Serial.print(F("[ENC][COPIAR] constexpr float ENCODER_MM_POR_CUENTA = "));
-        Serial.print(escalaEncoderMmPorCuenta, 9);
-        Serial.println(F("f;"));
+        Serial.print(signoEncoderAvance);
+        Serial.print(F(" V50="));
+        Serial.print(velocidadReferencia50MmS, 2);
+        Serial.print(F(" mm/s Vmax_est="));
+        Serial.print(velocidadMaximaEstimadaMmS, 2);
+        Serial.print(F(" mm/s cal="));
+        Serial.println(calibracionEncoderValida ? F("OK") : F("PENDIENTE"));
         return;
     }
     if (mayuscula == "ENC VUELTA") {
@@ -2893,7 +3177,8 @@ void procesarComandoTerminal(String comando) {
         return;
     }
     if (mayuscula == "ENC CERO") {
-        if (estadoGeneral == EST_AUTOMATICO_V2 || motoresEnMovimiento() ||
+        if (estadoGeneral == EST_AUTOMATICO_V2 ||
+            estadoGeneral == EST_ENCODER_CALIBRATION || motoresEnMovimiento() ||
             movimientoPosicionadoActivo) {
             Serial.println(F("[ENC][ERROR] STOP antes de reiniciar el conteo"));
             return;
@@ -2906,7 +3191,7 @@ void procesarComandoTerminal(String comando) {
         ultimoIndiceReportado = 0;
         ultimoPulsoEncoder = 0;
         velocidadBandaMmS = 0.0f;
-        capturaCalibracionEncoderActiva = false;
+        frecuenciaEncoderCuentasS = 0.0f;
         Serial.println(F("[ENC] Conteo e indice reiniciados por orden explicita"));
         return;
     }
@@ -3004,6 +3289,7 @@ void setup() {
 
     Serial.println(F("[BOOT] Portenta coordinadora iniciada en estado seguro"));
     Serial.println(F("[BOOT] I2C maestro 0x40 a 100 kHz; retencion inicial 3000 ms"));
+    Serial.println(F("[BOOT] I2C: control 10 ms, telemetria encoder 20 ms (~45 % de bus)"));
     Serial.println(F("[BOOT] Finales Z: DIN04=arriba, DIN05=abajo"));
     Serial.println(F("[BOOT] Encoder 0: OUTA=A0 OUTB=B0 OUTC=Z0, decodificacion X2"));
     Serial.print(F("[BOOT] Escala encoder compilada="));
@@ -3014,6 +3300,13 @@ void setup() {
 }
 
 void loop() {
+    const unsigned long entradaLoop = millis();
+    if (ultimaEntradaLoopMs != 0) {
+        const unsigned long pausa = entradaLoop - ultimaEntradaLoopMs;
+        if (pausa > maximaPausaLoopMs) maximaPausaLoopMs = pausa;
+    }
+    ultimaEntradaLoopMs = entradaLoop;
+
     actualizarEncoderBanda();
     leerTerminal();
     leerFinalesCarrera();
@@ -3046,8 +3339,8 @@ void loop() {
     const bool tocaLeer =
         ahora - tAnteriorI2C >= PERIODO_CONTROL_MS;
 
-    // El envio de telemetria tiene prioridad cada 10 ms. Asi se evita que las
-    // lecturas de control cada 5 ms lo bloqueen indefinidamente.
+    // El envio de telemetria tiene prioridad cada 20 ms. La lectura de control
+    // pendiente se atiende en la siguiente vuelta del loop, cada 10 ms.
     if (tocaEnviar) {
         tAnteriorEstadoESP = ahora;
         enviarPaquetePortenta();
@@ -3067,6 +3360,7 @@ void loop() {
     vigilarSeguridadComunicacion();
     procesarMaquinaGeneral();
     aplicarBloqueoPorFinales();
+    mantenerBusI2CMaestroRecuperable();
 
     // Los clicks son eventos de una sola iteracion, nunca quedan latched al cambiar de estado.
     eventoBotonX = false;
@@ -3079,10 +3373,27 @@ void loop() {
         Serial.print(lecturasI2COk);
         Serial.print(F(" rxError="));
         Serial.print(lecturasI2CError);
+        Serial.print(F("(len="));
+        Serial.print(erroresI2CLongitud);
+        Serial.print(F(" crc="));
+        Serial.print(erroresI2CCRC);
+        Serial.print(F(" sem="));
+        Serial.print(erroresI2CSemantica);
+        Serial.print(')');
         Serial.print(F(" txOK="));
         Serial.print(enviosI2COk);
         Serial.print(F(" txError="));
         Serial.print(enviosI2CError);
+        Serial.print(F(" ultimoTx="));
+        Serial.print(ultimoCodigoErrorEnvioI2C);
+        Serial.print(F(" reinicios="));
+        Serial.print(reiniciosBusI2CMaestro);
+        Serial.print(F(" pausaLoopMax="));
+        Serial.print(maximaPausaLoopMs);
+        Serial.print(F("ms encVel="));
+        Serial.print(velocidadBandaMmS, 1);
+        Serial.print(F(" encCps="));
+        Serial.print(frecuenciaEncoderCuentasS, 0);
         Serial.print(F(" estado="));
         Serial.println(estadoGeneralWire());
     }

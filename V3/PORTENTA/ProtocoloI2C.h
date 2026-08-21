@@ -16,17 +16,10 @@
 namespace ProtocoloI2C {
 
 constexpr uint8_t DIRECCION_ESP32 = 0x40;
-constexpr uint8_t VERSION_PROTOCOLO = 3;
+constexpr uint8_t VERSION_PROTOCOLO = 2;
 constexpr uint8_t MAGIC_ESP_A_PORTENTA = 0xE3;
 constexpr uint8_t MAGIC_PORTENTA_A_ESP = 0xA7;
 constexpr size_t MAX_BYTES_WIRE = 32;
-
-// Debe calibrarse midiendo una distancia real de banda. El valor cero mantiene
-// Automatico V2 bloqueado de forma segura hasta terminar la puesta en marcha.
-constexpr float ENCODER_MM_POR_CUENTA = 0.0f;
-constexpr int8_t ENCODER_SIGNO_CAMARA_Y = 1;
-static_assert(ENCODER_SIGNO_CAMARA_Y == 1 || ENCODER_SIGNO_CAMARA_Y == -1,
-              "ENCODER_SIGNO_CAMARA_Y debe ser +/-1");
 
 enum EstadoSistemaWire : uint8_t {
     SISTEMA_ARRANQUE_SEGURO = 0,
@@ -39,25 +32,14 @@ enum EstadoSistemaWire : uint8_t {
     SISTEMA_MENU_PRINCIPAL = 7,
     SISTEMA_MODO_MANUAL = 8,
     SISTEMA_MODO_AUTOMATICO = 9,
-    SISTEMA_ERROR = 10,
-    SISTEMA_MODO_AUTOMATICO_V2 = 11
+    SISTEMA_ERROR = 10
 };
 
 enum OpcionMenuWire : uint8_t {
     MENU_MODO_MANUAL = 0,
     MENU_MODO_AUTOMATICO = 1,
     MENU_CALIBRACION_BRAZO = 2,
-    MENU_CALIBRACION_CAMARA = 3,
-    MENU_MODO_AUTOMATICO_V2 = 4
-};
-
-enum FlagsEncoder : uint8_t {
-    ENC_FLAG_HW_LISTO = 1U << 0,
-    ENC_FLAG_ESCALA_VALIDA = 1U << 1,
-    ENC_FLAG_PULSOS_VISTOS = 1U << 2,
-    ENC_FLAG_EN_MOVIMIENTO = 1U << 3,
-    ENC_FLAG_DIRECCION_POSITIVA = 1U << 4,
-    ENC_FLAG_SATURADO = 1U << 5
+    MENU_CALIBRACION_CAMARA = 3
 };
 
 enum EstadoCamara : uint8_t {
@@ -206,13 +188,11 @@ struct __attribute__((packed)) PaqueteESPAPortenta {
     uint8_t estadoCamara;
     uint8_t errorCamara;
     uint8_t ackSecuenciaComandoCamara;
-    uint8_t muestrasTagEmpacadas[3];
-    uint8_t estadoEncoder;
+    uint8_t muestrasTag[4];
     uint8_t claseObjetivo;
     int16_t objetivoX10;
     int16_t objetivoY10;
     uint16_t secuenciaObjetivo;
-    int32_t conteoEncoder;
     uint8_t checksum;
 };
 
@@ -245,15 +225,15 @@ static_assert(sizeof(uint8_t) == 1, "El protocolo requiere uint8_t de 1 byte");
 static_assert(sizeof(uint16_t) == 2, "El protocolo requiere uint16_t de 2 bytes");
 static_assert(sizeof(int16_t) == 2, "El protocolo requiere int16_t de 2 bytes");
 static_assert(sizeof(int32_t) == 4, "El protocolo requiere int32_t de 4 bytes");
-static_assert(sizeof(PaqueteESPAPortenta) == 32,
-              "PaqueteESPAPortenta debe medir exactamente 32 bytes");
+static_assert(sizeof(PaqueteESPAPortenta) == 28,
+              "PaqueteESPAPortenta debe medir exactamente 28 bytes");
 static_assert(sizeof(PaquetePortentaAESP) == 32,
               "PaquetePortentaAESP debe medir exactamente 32 bytes");
 static_assert(sizeof(PaqueteESPAPortenta) <= MAX_BYTES_WIRE,
               "PaqueteESPAPortenta excede el limite Wire");
 static_assert(sizeof(PaquetePortentaAESP) <= MAX_BYTES_WIRE,
               "PaquetePortentaAESP excede el limite Wire");
-static_assert(offsetof(PaqueteESPAPortenta, checksum) == 31,
+static_assert(offsetof(PaqueteESPAPortenta, checksum) == 27,
               "checksum ESP->Portenta debe ser el ultimo byte");
 static_assert(offsetof(PaquetePortentaAESP, checksum) == 31,
               "checksum Portenta->ESP debe ser el ultimo byte");
@@ -272,41 +252,6 @@ inline uint8_t calcularCRC8ATM(const uint8_t *datos, size_t longitud) {
     }
 
     return crc;
-}
-
-inline void empacarMuestrasTags(
-    const uint8_t muestras[4],
-    uint8_t destino[3]
-) {
-    uint32_t valor = 0;
-    for (uint8_t i = 0; i < 4; ++i) {
-        const uint8_t muestra = muestras[i] > 31U ? 31U : muestras[i];
-        valor |= static_cast<uint32_t>(muestra) << (i * 5U);
-    }
-    destino[0] = static_cast<uint8_t>(valor & 0xFFU);
-    destino[1] = static_cast<uint8_t>((valor >> 8U) & 0xFFU);
-    destino[2] = static_cast<uint8_t>((valor >> 16U) & 0x0FU);
-}
-
-inline void desempacarMuestrasTags(
-    const uint8_t origen[3],
-    uint8_t muestras[4]
-) {
-    const uint32_t valor = static_cast<uint32_t>(origen[0]) |
-        (static_cast<uint32_t>(origen[1]) << 8U) |
-        (static_cast<uint32_t>(origen[2] & 0x0FU) << 16U);
-    for (uint8_t i = 0; i < 4; ++i) {
-        muestras[i] = static_cast<uint8_t>((valor >> (i * 5U)) & 0x1FU);
-    }
-}
-
-inline int32_t diferenciaConteosConWrap(
-    int32_t actual,
-    int32_t referencia
-) {
-    return static_cast<int32_t>(
-        static_cast<uint32_t>(actual) - static_cast<uint32_t>(referencia)
-    );
 }
 
 template <typename Paquete>

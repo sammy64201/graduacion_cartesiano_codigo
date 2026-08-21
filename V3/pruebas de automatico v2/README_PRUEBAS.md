@@ -4,13 +4,16 @@ Esta carpeta es una maqueta independiente. Los sketches finales de `ESP/` y
 `PORTENTA/` no forman parte de estas pruebas ni deben sobrescribirse al cargar
 las placas.
 
+La escala cartesiana usada después de recorrer los finales es actualmente
+X=446 mm y Y=336 mm.
+
 ## Contenido
 
 - `ESP/ESP.ino`: HUSKYLENS, Bluepad32, OLED e I²C esclavo `0x40`.
 - `PORTENTA/PORTENTA.ino`: calibración X/Y/Z, encoder ABZ, motores y máquina
   de estados de interceptación.
 - Los dos archivos `ProtocoloI2C.h` son copias idénticas del protocolo de
-  prueba versión 4. Ambos paquetes miden exactamente 32 bytes y terminan con
+  prueba versión 5. Ambos paquetes miden exactamente 32 bytes y terminan con
   CRC-8/ATM.
 
 ## Conexión del encoder
@@ -31,38 +34,47 @@ La librería `Arduino_MachineControl` usa decodificación X2, por lo que un
 encoder de 1024 P/R debe entregar aproximadamente 2048 cuentas por vuelta.
 OUTC solo se usa como índice de diagnóstico: no pone la distancia en cero.
 
-## Calibrar la escala
+## Tercera calibración: encoder y banda
 
-La primera carga tiene esta constante en cero y bloquea Automático V2:
+No se introduce una distancia por terminal. La rueda mide 65 mm de diámetro,
+gira 1:1 con el encoder y la lectura es X2 (2048 cuentas/vuelta), por lo que la
+escala se obtiene directamente de la geometría:
 
-```cpp
-constexpr float ENCODER_MM_POR_CUENTA = 0.0f;
+```text
+mmPorCuenta = pi * 65 / 2048 = 0.0997088 mm/cuenta
 ```
 
-Desde el monitor serial de la Portenta a 115200 baudios:
+El arranque tiene tres etapas obligatorias: cámara, brazo X/Y/Z y encoder. Al
+terminar HOME y conectar el control, el OLED muestra `CAL ENCODER 3/3`:
 
-1. Ejecute `ENC CERO` si desea comenzar la medición en cero.
-2. Ejecute `ENC INICIO`.
-3. Mueva la banda una distancia larga y medida; se recomiendan 1000 mm.
-4. Ejecute `ENC FIN 1000`.
-5. Copie en `PORTENTA/PORTENTA.ino` la línea `constexpr` que se imprime.
-6. Recompile y cargue únicamente el sketch de prueba de Portenta.
-7. Compruebe ida y vuelta con `ENC ESTADO`. El error aceptable es
-   `max(2 mm, 1 %)`, y la distancia debe crecer en el sentido cámara→brazo.
+1. El técnico pone manualmente la banda al 50 % y en sentido cámara→brazo.
+2. Cuando ya esté avanzando, presiona X.
+3. El sistema descarta 2 s de estabilización.
+4. Mide durante 5 s y obtiene automáticamente sentido y velocidad al 50 %.
+5. Rechaza la medición si hay paro, inversión, pocos pulsos o variación mayor
+   al 10 % entre ventanas de 200 ms. X permite repetirla.
+6. El OLED pide detener la banda. Cuando el encoder confirma el paro, se
+   habilitan el checklist y el menú.
 
-La escala calculada funciona durante la sesión actual antes de recompilar. La
-constante compilada es lo que hace que sobreviva reinicios. Si la distancia
-decrece en el avance normal, cambie `ENCODER_SIGNO_AVANCE` de `1` a `-1`,
-recompile y vuelva a comprobarla.
+La velocidad máxima matemática se estima como `2 * velocidadAl50`. Esta
+referencia se recalibra en cada encendido porque el técnico ajusta físicamente
+el variador. Automático V2 sigue usando la velocidad instantánea real del
+encoder y rechaza una lectura superior en más de 10 % a la máxima estimada.
+
+El modo V2 puede abrirse con la banda detenida. Una vez dentro permanece en
+`V2_ESPERANDO_PIEZA`; la ESP no publica una pieza hasta que haya observado
+pulsos válidos. La banda debe avanzar en sentido cámara→brazo antes de aceptar
+el objetivo.
 
 Comandos disponibles:
 
 - `ENC ESTADO`: A/B, índice, conteo, distancia, velocidad, escala y signo.
-- `ENC INICIO`: captura el conteo inicial de calibración.
-- `ENC FIN <mm>`: calcula mm/cuenta y muestra la constante que debe copiarse.
 - `ENC VUELTA`: compara cuentas/índice con las 2048 cuentas/vuelta esperadas.
 - `ENC CERO`: único comando que reinicia manualmente conteo e índice.
 - `STOP`: detiene inmediatamente el movimiento.
+
+Estos comandos son solo de diagnóstico; la calibración no depende de la
+terminal.
 
 ## Lógica de interceptación
 
@@ -106,8 +118,8 @@ intentos, éxitos, fallos y sin respuesta.
 ## Orden de puesta en marcha
 
 1. Trabaje primero con los motores sin herramienta y a velocidad baja.
-2. Verifique A/B, el sentido, OUTC y unas 2048 cuentas por vuelta.
-3. Calibre sobre 1000 mm y compile la constante.
+2. Verifique A/B, OUTC y unas 2048 cuentas por vuelta.
+3. Complete en el arranque la medición automática con la banda al 50 %.
 4. Valide cámara+encoder observando el objetivo desde aproximadamente
    `Y=-510 mm` hasta que entra en el recorrido del brazo.
 5. Pruebe preposición y seguimiento X/Y con Z eléctricamente inhibido.
@@ -127,3 +139,38 @@ Portenta: arduino:mbed_portenta:envie_m7
 
 Los `static_assert` de ambos headers verifican en cada compilación el tamaño
 de 32 bytes y que el CRC esté en el byte 31.
+
+## Diagnóstico de comunicación con el encoder girando
+
+El enlace permanece a 100 kHz, pero la Portenta solicita el control cada 10 ms
+y publica la telemetría del encoder cada 20 ms. Dos paquetes completos de 32
+bytes ocupaban casi el 90 % del bus con los periodos anteriores de 5/10 ms;
+los nuevos periodos reducen la ocupación teórica aproximadamente al 45 % y
+dejan margen para las interrupciones X2 del encoder.
+
+Una vez por segundo la Portenta imprime:
+
+```text
+[I2C] rxOK=... rxError=...(len=... crc=... sem=...) txOK=...
+      txError=... ultimoTx=... pausaLoopMax=...ms encVel=...
+      encCps=... estado=...
+```
+
+- `len`: lectura incompleta o sin respuesta de la ESP.
+- `crc`: paquete recibido con bytes alterados.
+- `sem`: paquete íntegro pero con valores fuera del protocolo.
+- `ultimoTx`: código devuelto por `Wire.endTransmission()`; cero es correcto.
+- `pausaLoopMax`: mayor tiempo observado sin ejecutar el `loop()`.
+- `encCps`: cuentas X2 por segundo; permite relacionar el fallo con la carga
+  real de interrupciones incluso antes de calibrar los mm por cuenta.
+
+Si todavía se pierde el enlace, haga dos pruebas separadas: girar el encoder a
+mano con el motor de la banda apagado, y luego hacerlo con el variador/motor
+encendido. Si solo falla con el motor, la causa es eléctrica (EMI, masas,
+blindaje o tendido de cables), no la frecuencia de paquetes.
+
+Tanto el maestro como el esclavo son recuperables. La Portenta reinicia su
+periférico I²C una vez por segundo mientras está detenida y esperando enlace;
+la ESP vuelve a iniciar su esclavo si `Wire.begin()` falla o si pasan cinco
+segundos sin ninguna solicitud ni escritura. Reiniciar el periférico no cambia
+la sesión de arranque de la ESP y nunca permite reanudar motores por sí solo.
