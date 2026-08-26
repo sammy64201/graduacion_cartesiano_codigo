@@ -50,12 +50,18 @@ constexpr int8_t CAMERA_SIGN_X = -1;
 constexpr int8_t CAMERA_SIGN_Y = -1;
 constexpr float CAMERA_OFFSET_X_MM = 0.0f;
 constexpr float CAMERA_OFFSET_Y_MM = 0.0f;
-constexpr float CAMARA_A_HOME_Y_MM = 510.0f;
+constexpr float CAMARA_A_HOME_Y_BASE_MM = 510.0f;
+// Ajuste iterativo del timing. La prueba con 0 mm quedo adelantada y la de
+// 420 mm quedo atrasada; 210 mm es el punto medio para la siguiente pasada.
+// Se conserva separado para afinarlo sin perder la medida geometrica base.
+constexpr float V2_AJUSTE_DISTANCIA_CATCH_MM = 210.0f;
+constexpr float CAMARA_A_HOME_Y_MM =
+    CAMARA_A_HOME_Y_BASE_MM + V2_AJUSTE_DISTANCIA_CATCH_MM;
 
 // E6B2-CWZ6C de 1024 P/R, lectura X2 y rueda de 65 mm acoplada 1:1.
 // La geometria fija la distancia por cuenta; la tercera calibracion de arranque
 // mide automaticamente el sentido y la velocidad real con la banda al 50 %.
-constexpr float ENCODER_DIAMETRO_RUEDA_MM = 65.0f;
+constexpr float ENCODER_DIAMETRO_RUEDA_MM = 15.0f;
 constexpr float ENCODER_RELACION_ENCODER_RUEDA = 1.0f;
 constexpr int ENCODER_CUENTAS_X2_POR_VUELTA = 2048;
 constexpr float ENCODER_PI = 3.14159265358979323846f;
@@ -159,9 +165,10 @@ enum FaseAutomaticoV2 : uint8_t {
     V2_ESPERANDO_PIEZA = 0,
     V2_PREPOSICIONANDO = 1,
     V2_ESPERANDO_LLEGADA = 2,
-    V2_SINCRONIZANDO = 3,
+    V2_DISPARANDO_CATCH = 3,
     V2_BAJANDO_Z = 4,
     V2_SUBIENDO_Z = 5,
+    // Valor 6 reservado para leer registros historicos sin renumerar fases.
     V2_ESPERANDO_CONFIRMACION = 6,
     V2_COMPLETADO = 7,
     V2_CANCELANDO = 8
@@ -337,6 +344,12 @@ int32_t ultimoConteoEncoderVelocidad = 0;
 int revolucionesIndiceEncoder = 0;
 int ultimoEstadoABEncoder = 0;
 int ultimoIndiceReportado = 0;
+bool referenciaIndiceDiagnosticoValida = false;
+int indiceReferenciaDiagnostico = 0;
+int32_t conteoReferenciaIndiceDiagnostico = 0;
+uint32_t intervalosIndiceCompletos = 0;
+uint64_t cuentasIndiceAcumuladas = 0;
+float ultimaMedicionCuentasPorVuelta = 0.0f;
 uint16_t secuenciaEncoder = 0;
 unsigned long ultimaMuestraEncoder = 0;
 unsigned long ultimoPulsoEncoder = 0;
@@ -368,23 +381,22 @@ ContextoCalibracionEncoder calibracionEncoder = {};
 
 // Parametros de puesta en marcha de Automatico V2. Z se expresa en pasos
 // absolutos porque el firmware actual no dispone de una escala Z en mm.
-constexpr float V2_MARGEN_AGUAS_ARRIBA_MM = 20.0f;
+constexpr float V2_POSICION_CATCH_Y_MM = 0.0f;
+constexpr float V2_AJUSTE_ANTICIPACION_Z_MM = 0.0f;
 constexpr long V2_Z_SEGURO_PASOS = 0;
-constexpr long V2_MARGEN_Z_PASOS = 300;
 constexpr float V2_ERROR_ESTABLE_MM = 5.0f;
-constexpr float V2_ERROR_MAXIMO_MM = 25.0f;
-constexpr float V2_KP_SEGUIMIENTO = 4.0f;
-constexpr unsigned long V2_TIEMPO_ESTABLE_MS = 300UL;
 constexpr unsigned long V2_TIEMPO_COMPLETADO_MS = 500UL;
 constexpr unsigned long V2_TIMEOUT_FASE_MS = 30000UL;
-constexpr unsigned long V2_TIMEOUT_CONFIRMACION_MS = 10000UL;
-constexpr float V2_CAMBIO_VELOCIDAD_MAXIMO = 0.10f;
+constexpr long V2_BUSQUEDA_FINAL_Z_EXTRA_PASOS = 2L * PASOS_SEPARACION;
+constexpr uint16_t V2_DIV_BUSQUEDA_FINAL_Z = DIV_CAL_LENTA;
+constexpr unsigned long V2_PERIODO_LOG_TELEMETRIA_MS = 50UL;
 
 struct ContextoAutomaticoV2 {
     FaseAutomaticoV2 fase;
     unsigned long inicioFase;
     unsigned long inicioEstable;
     bool salidaAEsperaControl;
+    bool salidaAlMenu;
     uint16_t secuencia;
     uint8_t clase;
     float camXReferencia;
@@ -397,16 +409,16 @@ struct ContextoAutomaticoV2 {
     unsigned long instanteObjetivoAnterior;
     float velocidadObjetivoY;
     float velocidadInicialY;
+    bool busquedaFinalZActiva;
+    float umbralDisparoY;
     float ultimoErrorY;
     float ultimoErrorX;
-    bool confirmacionArmada;
 };
 
 ContextoAutomaticoV2 automaticoV2 = {};
 uint32_t intentosV2 = 0;
 uint32_t exitosV2 = 0;
-uint32_t fallosV2 = 0;
-uint32_t sinRespuestaV2 = 0;
+unsigned long ultimoLogTelemetriaV2 = 0;
 
 unsigned long tiempoEncendidoSistema = 0;
 unsigned long tAnteriorI2C = 0;
@@ -433,7 +445,11 @@ void entrarErrorSistema(CodigoErrorLocal codigo, const char *mensaje);
 void cambiarEstadoGeneral(EstadoGeneral nuevoEstado);
 void cancelarMovimientoPosicionado(const char *motivo, bool posicionPerdida);
 void reiniciarAutomaticoV2();
-void iniciarCancelacionAutomaticoV2(const char *motivo, bool esperarControl);
+void iniciarCancelacionAutomaticoV2(
+    const char *motivo,
+    bool esperarControl,
+    bool salirDelModo = false
+);
 long posicionCapturaZV2();
 void iniciarCalibracionEncoder();
 void procesarCalibracionEncoder();
@@ -518,8 +534,9 @@ void leerFinalesCarrera() {
     limiteXmenos = !digital_inputs.read(DIN_READ_CH_PIN_00);
     limiteYmenos = !digital_inputs.read(DIN_READ_CH_PIN_02);
     limiteYmas = !digital_inputs.read(DIN_READ_CH_PIN_03);
-    limiteZarriba = !digital_inputs.read(DIN_READ_CH_PIN_04);
-    limiteZabajo = !digital_inputs.read(DIN_READ_CH_PIN_05);
+    // Cableado fisico de esta maquina: DIN04 esta abajo y DIN05 arriba.
+    limiteZabajo = !digital_inputs.read(DIN_READ_CH_PIN_04);
+    limiteZarriba = !digital_inputs.read(DIN_READ_CH_PIN_05);
 }
 
 bool finalesCoherentes() {
@@ -704,7 +721,8 @@ void moverZContinuo(int8_t direccion, uint16_t divisor) {
     if (igual) return;
     detenerZ();
     delayMicroseconds(150);
-    digital_outputs.set(pD_Z, direccion > 0 ? HIGH : LOW);
+    // El driver Z esta invertido respecto a X/Y: signo negativo baja.
+    digital_outputs.set(pD_Z, direccion > 0 ? LOW : HIGH);
     delayMicroseconds(10);
     noInterrupts();
     divisorZ = divisor;
@@ -766,7 +784,8 @@ void moverZHasta(long destino, uint16_t divisor) {
     int8_t direccion = destino > actual ? 1 : -1;
     detenerZ();
     delayMicroseconds(150);
-    digital_outputs.set(pD_Z, direccion > 0 ? HIGH : LOW);
+    // Mantiene la misma convencion logica: negativo=abajo, positivo=arriba.
+    digital_outputs.set(pD_Z, direccion > 0 ? LOW : HIGH);
     delayMicroseconds(10);
     noInterrupts();
     objetivoZ = destino;
@@ -818,11 +837,11 @@ long limiteMinimoZPasos() { return -(rangoZPasos / 2); }
 long limiteMaximoZPasos() { return rangoZPasos - rangoZPasos / 2; }
 
 bool posicionZSeguraV2(long destino) {
-    if (!calibracionZValida || rangoZPasos <= 2 * V2_MARGEN_Z_PASOS) {
+    if (!calibracionZValida || rangoZPasos <= 0) {
         return false;
     }
-    return destino >= limiteMinimoZPasos() + V2_MARGEN_Z_PASOS &&
-           destino <= limiteMaximoZPasos() - V2_MARGEN_Z_PASOS;
+    return destino >= limiteMinimoZPasos() &&
+           destino <= limiteMaximoZPasos();
 }
 
 bool calcularEscalaAutomatica() {
@@ -1437,10 +1456,40 @@ void actualizarEncoderBanda() {
     ++secuenciaEncoder;
 
     if (revoluciones != ultimoIndiceReportado) {
+        if (referenciaIndiceDiagnosticoValida) {
+            const int deltaIndices = revoluciones - indiceReferenciaDiagnostico;
+            if (deltaIndices != 0) {
+                const int32_t deltaCuentas = diferenciaConteosConWrap(
+                    conteo, conteoReferenciaIndiceDiagnostico
+                );
+                const uint32_t vueltasCompletas = static_cast<uint32_t>(
+                    deltaIndices < 0 ? -deltaIndices : deltaIndices
+                );
+                const uint64_t cuentasCompletas = static_cast<uint64_t>(
+                    deltaCuentas < 0
+                        ? -static_cast<int64_t>(deltaCuentas)
+                        : static_cast<int64_t>(deltaCuentas)
+                );
+                ultimaMedicionCuentasPorVuelta =
+                    static_cast<float>(cuentasCompletas) /
+                    static_cast<float>(vueltasCompletas);
+                intervalosIndiceCompletos += vueltasCompletas;
+                cuentasIndiceAcumuladas += cuentasCompletas;
+            }
+        }
+        referenciaIndiceDiagnosticoValida = true;
+        indiceReferenciaDiagnostico = revoluciones;
+        conteoReferenciaIndiceDiagnostico = conteo;
         Serial.print(F("[ENC][INDEX] vueltas="));
         Serial.print(revoluciones);
         Serial.print(F(" conteo="));
-        Serial.println(conteo);
+        Serial.print(conteo);
+        if (ultimaMedicionCuentasPorVuelta > 0.0f) {
+            Serial.print(F(" ultima="));
+            Serial.print(ultimaMedicionCuentasPorVuelta, 2);
+            Serial.print(F(" cuentas/vuelta"));
+        }
+        Serial.println();
         ultimoIndiceReportado = revoluciones;
     }
 }
@@ -1895,6 +1944,75 @@ void mantenerBusI2CMaestroRecuperable() {
 //-------------------------------------------------------------------------------------------------
 // CAMBIOS DE ESTADO, COMANDOS DE CAMARA Y ERRORES
 //-------------------------------------------------------------------------------------------------
+void registrarEventoPortentaV2(const char *evento, const char *mensaje) {
+    Serial.print(F("V2LOG|P|ms="));
+    Serial.print(millis());
+    Serial.print(F("|session="));
+    Serial.print(sesionESPConocida ? sesionArranqueESP : 0);
+    Serial.print(F("|event="));
+    Serial.print(evento);
+    Serial.print(F("|obj="));
+    Serial.print(automaticoV2.secuencia != 0
+        ? automaticoV2.secuencia : secuenciaObjetivoRecibida);
+    Serial.print(F("|encseq="));
+    Serial.print(secuenciaEncoder);
+    Serial.print(F("|enc="));
+    Serial.print(conteoEncoderBanda);
+    Serial.print(F("|ref_enc="));
+    Serial.print(automaticoV2.secuencia != 0
+        ? automaticoV2.conteoReferencia : conteoReferenciaObjetivoRecibido);
+    Serial.print(F("|phase="));
+    Serial.print(static_cast<uint8_t>(automaticoV2.fase));
+    Serial.print(F("|class="));
+    Serial.print(automaticoV2.clase != 0
+        ? automaticoV2.clase : claseObjetivo);
+    Serial.print(F("|arm_x="));
+    Serial.print(posicionXmm(), 3);
+    Serial.print(F("|arm_y="));
+    Serial.print(posicionYmm(), 3);
+    Serial.print(F("|z_steps="));
+    Serial.print(leerPasosZ());
+    Serial.print(F("|target_x="));
+    Serial.print(automaticoV2.objetivoBrazoX, 3);
+    Serial.print(F("|target_y="));
+    Serial.print(automaticoV2.objetivoBrazoY, 3);
+    Serial.print(F("|error_x="));
+    Serial.print(automaticoV2.ultimoErrorX, 3);
+    Serial.print(F("|error_y="));
+    Serial.print(automaticoV2.ultimoErrorY, 3);
+    Serial.print(F("|vel="));
+    Serial.print(velocidadBandaMmS, 3);
+    Serial.print(F("|mov_x="));
+    Serial.print(movX);
+    Serial.print(F("|mov_y="));
+    Serial.print(movY);
+    Serial.print(F("|mov_z="));
+    Serial.print(movZ);
+    Serial.print(F("|ack="));
+    Serial.print(ackSecuenciaObjetivo);
+    Serial.print(F("|ack_code="));
+    Serial.print(codigoAckObjetivo);
+    Serial.print(F("|error="));
+    Serial.print(static_cast<uint8_t>(errorSistema));
+    if (mensaje != nullptr && mensaje[0] != '\0') {
+        Serial.print(F("|message="));
+        Serial.print(mensaje);
+    }
+    Serial.println();
+}
+
+void registrarAckPortentaV2(const char *mensaje) {
+    registrarEventoPortentaV2("ACK", mensaje);
+}
+
+void registrarTelemetriaPortentaV2() {
+    if (estadoGeneral != EST_AUTOMATICO_V2) return;
+    const unsigned long ahora = millis();
+    if (ahora - ultimoLogTelemetriaV2 < V2_PERIODO_LOG_TELEMETRIA_MS) return;
+    ultimoLogTelemetriaV2 = ahora;
+    registrarEventoPortentaV2("TELEMETRY", "");
+}
+
 void solicitarComandoCamara(uint8_t comando) {
     comandoCamaraActual = comando;
     secuenciaComandoCamara++;
@@ -1908,6 +2026,11 @@ void solicitarComandoCamara(uint8_t comando) {
 
 void cambiarEstadoGeneral(EstadoGeneral nuevoEstado) {
     if (estadoGeneral == nuevoEstado) return;
+    const EstadoGeneral estadoAnterior = estadoGeneral;
+    if (estadoAnterior == EST_AUTOMATICO_V2 &&
+        nuevoEstado != EST_AUTOMATICO_V2) {
+        registrarEventoPortentaV2("SESSION_END", "salida de Automatico V2");
+    }
     estadoGeneral = nuevoEstado;
     inicioEstadoGeneral = millis();
     entradaMenuYAnterior = joystickY;
@@ -1960,6 +2083,11 @@ void cambiarEstadoGeneral(EstadoGeneral nuevoEstado) {
             reiniciarAutomaticoV2();
             break;
     }
+    if (estadoAnterior != EST_AUTOMATICO_V2 &&
+        nuevoEstado == EST_AUTOMATICO_V2) {
+        ultimoLogTelemetriaV2 = 0;
+        registrarEventoPortentaV2("SESSION_START", "entrada a Automatico V2");
+    }
 }
 
 void entrarErrorSistema(CodigoErrorLocal codigo, const char *mensaje) {
@@ -1986,6 +2114,9 @@ void entrarErrorSistema(CodigoErrorLocal codigo, const char *mensaje) {
 
     errorSistema = codigo;
     mensajeErrorSistema = mensaje;
+    if (estadoGeneral == EST_AUTOMATICO_V2) {
+        registrarEventoPortentaV2("ERROR", mensaje);
+    }
     eventoBotonX = false;
     eventoBotonCirculo = false;
     eventoBotonTriangulo = false;
@@ -2138,12 +2269,21 @@ void procesarModoManual() {
     moverZContinuo(z, DIV_MANUAL);
 }
 
-void rechazarObjetivoFueraDeRango(uint16_t secuencia) {
+void rechazarObjetivoFueraDeRango(
+    uint16_t secuencia,
+    const char *motivo = "objetivo fuera de rango"
+) {
     ackSecuenciaObjetivo = secuencia;
     codigoAckObjetivo = ACK_OBJ_RECHAZADO_RANGO;
     secuenciaObjetivoEnMovimiento = 0;
     Serial.print(F("[AUTO][WARN] Objetivo descartado sin movimiento; secuencia="));
-    Serial.println(secuencia);
+    Serial.print(secuencia);
+    Serial.print(F(" motivo="));
+    Serial.println(motivo);
+    if (estadoGeneral == EST_AUTOMATICO_V2) {
+        registrarEventoPortentaV2("REJECT", motivo);
+        registrarAckPortentaV2("objetivo rechazado");
+    }
 }
 
 void procesarModoAutomatico() {
@@ -2218,10 +2358,10 @@ const char *nombreFaseAutomaticoV2(FaseAutomaticoV2 fase) {
         case V2_ESPERANDO_PIEZA: return "ESPERANDO PIEZA";
         case V2_PREPOSICIONANDO: return "PREPOSICIONANDO";
         case V2_ESPERANDO_LLEGADA: return "ESPERANDO LLEGADA";
-        case V2_SINCRONIZANDO: return "SINCRONIZANDO";
+        case V2_DISPARANDO_CATCH: return "DISPARANDO CATCH";
         case V2_BAJANDO_Z: return "BAJANDO Z";
         case V2_SUBIENDO_Z: return "SUBIENDO Z";
-        case V2_ESPERANDO_CONFIRMACION: return "CONFIRMAR CATCH";
+        case V2_ESPERANDO_CONFIRMACION: return "FASE 6 RESERVADA";
         case V2_COMPLETADO: return "COMPLETADO";
         case V2_CANCELANDO: return "CANCELANDO";
         default: return "DESCONOCIDA";
@@ -2234,6 +2374,7 @@ void cambiarFaseAutomaticoV2(FaseAutomaticoV2 nueva) {
     automaticoV2.inicioEstable = 0;
     Serial.print(F("[AUTO V2] Fase -> "));
     Serial.println(nombreFaseAutomaticoV2(nueva));
+    registrarEventoPortentaV2("PHASE", nombreFaseAutomaticoV2(nueva));
 }
 
 void reiniciarAutomaticoV2() {
@@ -2251,24 +2392,40 @@ void finalizarCancelacionAutomaticoV2() {
     propietarioMovimiento = MOV_SIN_PROPIETARIO;
     secuenciaObjetivoEnMovimiento = 0;
     const bool esperarControl = automaticoV2.salidaAEsperaControl;
+    const bool salirAlMenu = automaticoV2.salidaAlMenu;
     reiniciarAutomaticoV2();
-    cambiarEstadoGeneral(
-        esperarControl || !btConectado ? EST_WAIT_CONTROLLER : EST_MAIN_MENU
-    );
+
+    if (esperarControl || !btConectado) {
+        cambiarEstadoGeneral(EST_WAIT_CONTROLLER);
+    } else if (salirAlMenu) {
+        cambiarEstadoGeneral(EST_MAIN_MENU);
+    } else {
+        // Una condicion transitoria cancela solamente la pieza actual. El modo
+        // V2 sigue activo y espera el rearme del detector para la siguiente.
+        Serial.println(F("[AUTO V2] Intento cancelado; modo V2 sigue activo"));
+        registrarEventoPortentaV2("REARM", "V2 permanece activo");
+    }
 }
 
-void iniciarCancelacionAutomaticoV2(const char *motivo, bool esperarControl) {
+void iniciarCancelacionAutomaticoV2(
+    const char *motivo,
+    bool esperarControl,
+    bool salirDelModo
+) {
     Serial.print(F("[AUTO V2] Cancelando: "));
     Serial.println(motivo);
     if (automaticoV2.secuencia != 0) {
         ackSecuenciaObjetivo = automaticoV2.secuencia;
         codigoAckObjetivo = ACK_OBJ_CANCELADO;
+        registrarAckPortentaV2("objetivo cancelado");
     }
+    registrarEventoPortentaV2("CANCEL", motivo);
     detenerX();
     detenerY();
     movimientoPosicionadoActivo = false;
     propietarioMovimiento = MOV_SIN_PROPIETARIO;
     automaticoV2.salidaAEsperaControl = esperarControl;
+    automaticoV2.salidaAlMenu = salirDelModo;
     cambiarFaseAutomaticoV2(V2_CANCELANDO);
     if (leerPasosZ() == V2_Z_SEGURO_PASOS) {
         finalizarCancelacionAutomaticoV2();
@@ -2277,13 +2434,14 @@ void iniciarCancelacionAutomaticoV2(const char *motivo, bool esperarControl) {
     }
 }
 
-float posicionInicioSeguimientoYV2() {
-    return static_cast<float>(limiteMinimoYPasos()) / pasosPorMmY +
-           V2_MARGEN_AGUAS_ARRIBA_MM;
+float posicionCatchYV2() {
+    return V2_POSICION_CATCH_Y_MM;
 }
 
 long posicionCapturaZV2() {
-    return limiteMinimoZPasos() + V2_MARGEN_Z_PASOS;
+    // La calibracion fija Z abajo como limiteMinimoZPasos(). El catch debe
+    // recorrer todo el eje y confirmar fisicamente DIN04 antes de retirarse.
+    return limiteMinimoZPasos();
 }
 
 bool actualizarObjetivoMovilV2() {
@@ -2327,71 +2485,20 @@ bool actualizarObjetivoMovilV2() {
     return true;
 }
 
-void ordenarVelocidadYV2(float velocidadMmS) {
-    if (!isfinite(velocidadMmS) || fabsf(velocidadMmS) < 0.25f ||
-        pasosPorMmY <= 0.0f) {
-        detenerY();
-        return;
-    }
-    const float pasosPorSegundo = fabsf(velocidadMmS) * pasosPorMmY;
-    const float pasosMaximosSegundo = 1.0f / (2.0f * velocidadMotores);
-    const uint16_t divisor = static_cast<uint16_t>(constrain(
-        lroundf(pasosMaximosSegundo / pasosPorSegundo),
-        1L,
-        static_cast<long>(UINT16_MAX)
-    ));
-    const int8_t direccion = velocidadMmS > 0.0f ? 1 : -1;
-
-    noInterrupts();
-    const bool mismaDireccion = movY == direccion && !objetivoYActivo;
-    if (mismaDireccion) {
-        divisorY = divisor;
-        interrupts();
-        return;
-    }
-    interrupts();
-    moverYContinuo(direccion, divisor);
+float tiempoDescensoZV2Segundos() {
+    const float pasosZPorSegundo = 1.0f / (2.0f * velocidadMotores);
+    if (pasosZPorSegundo <= 0.0f) return 0.0f;
+    return fabsf(static_cast<float>(
+        posicionCapturaZV2() - V2_Z_SEGURO_PASOS
+    )) / pasosZPorSegundo;
 }
 
-bool seguirPiezaEnYV2(bool exigirErrorLimitado) {
-    if (!actualizarObjetivoMovilV2()) return false;
-    long pruebaX = 0;
-    long pruebaY = 0;
-    if (!cinematicaInversaCartesiana(
-            automaticoV2.objetivoBrazoX,
-            automaticoV2.objetivoBrazoY,
-            0.0f,
-            pruebaX,
-            pruebaY)) {
-        return false;
-    }
-    const float error = automaticoV2.objetivoBrazoY - posicionYmm();
-    automaticoV2.ultimoErrorY = error;
-    const float comando = automaticoV2.velocidadObjetivoY +
-                          V2_KP_SEGUIMIENTO * error;
-    ordenarVelocidadYV2(comando);
-    return !exigirErrorLimitado || fabsf(error) <= V2_ERROR_MAXIMO_MM;
-}
-
-bool velocidadBandaPermitidaV2() {
-    if (pasosPorMmY <= 0.0f) return false;
-    const float maximaY =
-        (1.0f / (2.0f * velocidadMotores)) / pasosPorMmY;
-    if (velocidadBandaMmS <= 0.0f ||
-        fabsf(automaticoV2.velocidadObjetivoY) * 1.3f > maximaY) {
-        return false;
-    }
-    if (calibracionEncoderValida && velocidadMaximaEstimadaMmS > 0.0f &&
-        velocidadBandaMmS > velocidadMaximaEstimadaMmS * 1.10f) {
-        return false;
-    }
-    if (automaticoV2.velocidadInicialY > 0.0f) {
-        const float cambio = fabsf(
-            velocidadBandaMmS - automaticoV2.velocidadInicialY
-        ) / automaticoV2.velocidadInicialY;
-        if (cambio > V2_CAMBIO_VELOCIDAD_MAXIMO) return false;
-    }
-    return true;
+float calcularUmbralDisparoYV2() {
+    // El brazo permanece quieto en Y. La velocidad solo convierte el tiempo
+    // mecanico de descenso en una distancia de anticipacion; no gobierna Y.
+    const float anticipacion = fmaxf(0.0f, velocidadBandaMmS) *
+        tiempoDescensoZV2Segundos() + V2_AJUSTE_ANTICIPACION_Z_MM;
+    return posicionCatchYV2() - anticipacion;
 }
 
 void aceptarObjetivoAutomaticoV2() {
@@ -2400,44 +2507,35 @@ void aceptarObjetivoAutomaticoV2() {
     const float baseX = CAMERA_SWAP_XY ? camY : camX;
     const float brazoX = static_cast<float>(CAMERA_SIGN_X) * baseX +
                          CAMERA_OFFSET_X_MM;
-    const float yInicio = posicionInicioSeguimientoYV2();
+    const float yCatch = posicionCatchYV2();
 
     long pruebaX = 0;
     long pruebaY = 0;
     if (!cinematicaInversaCartesiana(
-            brazoX, yInicio, 0.0f,
+            brazoX, yCatch, 0.0f,
             pruebaX, pruebaY)) {
-        rechazarObjetivoFueraDeRango(secuenciaObjetivoRecibida);
+        rechazarObjetivoFueraDeRango(
+            secuenciaObjetivoRecibida,
+            "coordenada inicial fuera del espacio de trabajo"
+        );
         return;
     }
-    const float yMaxSeguro = static_cast<float>(limiteMaximoYPasos()) /
-        pasosPorMmY - MARGEN_SEGURIDAD_MM;
-    const float pasosZPorSegundo = 1.0f / (2.0f * velocidadMotores);
-    const float tiempoZIdaVuelta = 2.0f *
-        fabsf(static_cast<float>(posicionCapturaZV2() - V2_Z_SEGURO_PASOS)) /
-        pasosZPorSegundo;
-    const float recorridoNecesario = velocidadBandaMmS *
-        (static_cast<float>(V2_TIEMPO_ESTABLE_MS) / 1000.0f +
-         tiempoZIdaVuelta) + 10.0f;
-    if (yInicio + recorridoNecesario > yMaxSeguro) {
-        Serial.print(F("[AUTO V2] Recorrido Y insuficiente; requiere="));
-        Serial.print(recorridoNecesario, 1);
-        Serial.println(F(" mm"));
-        rechazarObjetivoFueraDeRango(secuenciaObjetivoRecibida);
-        return;
-    }
-
     automaticoV2.secuencia = secuenciaObjetivoRecibida;
     automaticoV2.clase = claseObjetivo;
     automaticoV2.camXReferencia = camX;
     automaticoV2.camYReferencia = camY;
     automaticoV2.conteoReferencia = conteoReferenciaObjetivoRecibido;
+    // Esta instantanea queda inmutable durante el catch. Los paquetes I2C
+    // posteriores no sustituyen camX/camY/secuencia; solo el delta del encoder
+    // actualiza objetivoBrazoY en actualizarObjetivoMovilV2().
     automaticoV2.objetivoBrazoX = brazoX;
-    automaticoV2.objetivoBrazoY = yInicio;
-    automaticoV2.objetivoBrazoYAnterior = yInicio;
+    automaticoV2.objetivoBrazoY = yCatch;
+    automaticoV2.objetivoBrazoYAnterior = yCatch;
     automaticoV2.ultimoConteoProcesado = conteoEncoderBanda;
     automaticoV2.instanteObjetivoAnterior = millis();
     automaticoV2.velocidadInicialY = velocidadBandaMmS;
+    automaticoV2.busquedaFinalZActiva = false;
+    automaticoV2.umbralDisparoY = 0.0f;
     secuenciaObjetivoEnMovimiento = secuenciaObjetivoRecibida;
     ackSecuenciaObjetivo = secuenciaObjetivoRecibida;
     codigoAckObjetivo = ACK_OBJ_ACEPTADO;
@@ -2446,28 +2544,29 @@ void aceptarObjetivoAutomaticoV2() {
     Serial.print(automaticoV2.secuencia);
     Serial.print(F(" encoder="));
     Serial.print(automaticoV2.conteoReferencia);
-    Serial.print(F(" yInicio="));
-    Serial.println(yInicio, 2);
+    Serial.print(F(" yCatch="));
+    Serial.println(yCatch, 2);
 
     if (!iniciarMovimientoXY(
-            brazoX, yInicio, 0.0f,
+            brazoX, yCatch, 0.0f,
             MOV_AUTOMATICO_V2)) {
-        rechazarObjetivoFueraDeRango(secuenciaObjetivoRecibida);
+        rechazarObjetivoFueraDeRango(
+            secuenciaObjetivoRecibida,
+            "no se pudo iniciar la preposicion XY"
+        );
         reiniciarAutomaticoV2();
         return;
     }
+    registrarEventoPortentaV2("ACCEPT", "objetivo aceptado");
+    registrarAckPortentaV2("objetivo aceptado");
     cambiarFaseAutomaticoV2(V2_PREPOSICIONANDO);
 }
 
 void imprimirContadoresV2() {
     Serial.print(F("[AUTO V2] intentos="));
     Serial.print(intentosV2);
-    Serial.print(F(" exitos="));
-    Serial.print(exitosV2);
-    Serial.print(F(" fallos="));
-    Serial.print(fallosV2);
-    Serial.print(F(" sin_respuesta="));
-    Serial.println(sinRespuestaV2);
+    Serial.print(F(" catch_automaticos="));
+    Serial.println(exitosV2);
 }
 
 void completarResultadoV2(const char *resultado) {
@@ -2477,6 +2576,8 @@ void completarResultadoV2(const char *resultado) {
     secuenciaObjetivoEnMovimiento = 0;
     Serial.print(F("[AUTO V2] "));
     Serial.println(resultado);
+    registrarEventoPortentaV2("RESULT", resultado);
+    registrarAckPortentaV2("objetivo completado");
     imprimirContadoresV2();
     cambiarFaseAutomaticoV2(V2_COMPLETADO);
 }
@@ -2501,34 +2602,46 @@ void procesarModoAutomaticoV2() {
         iniciarCancelacionAutomaticoV2("control Bluetooth desconectado", true);
         return;
     }
-    if (eventoBotonTriangulo &&
-        automaticoV2.fase != V2_ESPERANDO_CONFIRMACION) {
+    if (eventoBotonTriangulo) {
         eventoBotonTriangulo = false;
-        iniciarCancelacionAutomaticoV2("cancelado por usuario", false);
+        iniciarCancelacionAutomaticoV2("cancelado por usuario", false, true);
         return;
     }
+    const bool finalZAbajoEsperado =
+        automaticoV2.fase == V2_BAJANDO_Z && movZ < 0 && limiteZabajo;
     const bool finalInesperado =
         (movX > 0 && limiteXmas) || (movX < 0 && limiteXmenos) ||
         (movY > 0 && limiteYmas) || (movY < 0 && limiteYmenos) ||
-        (movZ > 0 && limiteZarriba) || (movZ < 0 && limiteZabajo);
+        (movZ > 0 && limiteZarriba) ||
+        (movZ < 0 && limiteZabajo && !finalZAbajoEsperado);
     if (finalInesperado) {
         detenerTodos();
         entrarErrorSistema(ERROR_FINAL_INESPERADO,
                            "Final de carrera durante Automatico V2");
         return;
     }
+    const bool prediccionLlegadaActivaV2 =
+        automaticoV2.fase >= V2_PREPOSICIONANDO &&
+        automaticoV2.fase <= V2_DISPARANDO_CATCH;
     if (!camaraListaCompleta()) {
-        iniciarCancelacionAutomaticoV2("camara no disponible", false);
-        return;
+        if (automaticoV2.fase == V2_ESPERANDO_PIEZA) {
+            detenerTodos();
+            return;
+        }
+        // Despues de publicar, las coordenadas de camara estan congeladas.
+        // La llegada depende solo del conteo del encoder.
     }
     if (!encoderListoAutomaticoV2()) {
-        iniciarCancelacionAutomaticoV2("encoder no valido", false);
-        return;
+        if (automaticoV2.fase == V2_ESPERANDO_PIEZA) {
+            detenerTodos();
+            return;
+        }
+        if (prediccionLlegadaActivaV2) {
+            iniciarCancelacionAutomaticoV2("encoder no valido", false);
+            return;
+        }
     }
-    if (automaticoV2.fase != V2_ESPERANDO_PIEZA &&
-        automaticoV2.fase != V2_ESPERANDO_CONFIRMACION &&
-        automaticoV2.fase != V2_COMPLETADO &&
-        !bandaEnMovimientoAutomaticoV2()) {
+    if (prediccionLlegadaActivaV2 && !bandaEnMovimientoAutomaticoV2()) {
         iniciarCancelacionAutomaticoV2("la banda se detuvo", false);
         return;
     }
@@ -2542,6 +2655,9 @@ void procesarModoAutomaticoV2() {
     switch (automaticoV2.fase) {
         case V2_ESPERANDO_PIEZA:
             detenerTodos();
+            // La igualdad solo bloquea la repeticion del mismo mensaje I2C.
+            // Una deteccion posterior, incluso de la misma pieza o clase,
+            // genera otra secuencia y se acepta normalmente.
             if (!objetivoCamaraValido() || secuenciaObjetivoRecibida == 0 ||
                 secuenciaObjetivoRecibida == ackSecuenciaObjetivo) {
                 return;
@@ -2552,18 +2668,13 @@ void procesarModoAutomaticoV2() {
         case V2_PREPOSICIONANDO:
             if (!actualizarObjetivoMovilV2()) {
                 iniciarCancelacionAutomaticoV2(
-                    "pieza salio del espacio de trabajo", false);
-                return;
-            }
-            if (!velocidadBandaPermitidaV2()) {
-                iniciarCancelacionAutomaticoV2(
-                    "banda invertida o cambio de velocidad >10%", false);
+                    "prediccion de pieza no valida", false);
                 return;
             }
             if (automaticoV2.objetivoBrazoY >
-                posicionInicioSeguimientoYV2() + V2_ERROR_ESTABLE_MM) {
+                posicionCatchYV2() + V2_ERROR_ESTABLE_MM) {
                 iniciarCancelacionAutomaticoV2(
-                    "pieza llego antes de terminar la preposicion", false);
+                    "pieza rebaso el catch antes de terminar la preposicion", false);
                 return;
             }
             if (!movimientoPosicionadoActivo && !objetivoXEnCurso() &&
@@ -2574,52 +2685,78 @@ void procesarModoAutomaticoV2() {
 
         case V2_ESPERANDO_LLEGADA:
             detenerY();
-            if (!actualizarObjetivoMovilV2() || !velocidadBandaPermitidaV2()) {
+            if (!actualizarObjetivoMovilV2()) {
                 iniciarCancelacionAutomaticoV2(
-                    "trayectoria o velocidad invalida esperando llegada", false);
+                    "prediccion de pieza no valida esperando llegada", false);
                 return;
             }
-            if (automaticoV2.objetivoBrazoY >=
-                posicionInicioSeguimientoYV2() - V2_ERROR_ESTABLE_MM) {
-                automaticoV2.inicioEstable = 0;
-                cambiarFaseAutomaticoV2(V2_SINCRONIZANDO);
+            automaticoV2.ultimoErrorY =
+                automaticoV2.objetivoBrazoY - posicionCatchYV2();
+            automaticoV2.umbralDisparoY = calcularUmbralDisparoYV2();
+            if (automaticoV2.objetivoBrazoY >
+                posicionCatchYV2() + V2_ERROR_ESTABLE_MM) {
+                iniciarCancelacionAutomaticoV2(
+                    "pieza rebaso la estacion de catch", false);
+                return;
+            }
+            if (automaticoV2.objetivoBrazoY >= automaticoV2.umbralDisparoY) {
+                Serial.print(F("[AUTO V2] Disparo Z piezaY="));
+                Serial.print(automaticoV2.objetivoBrazoY, 2);
+                Serial.print(F(" umbral="));
+                Serial.print(automaticoV2.umbralDisparoY, 2);
+                Serial.print(F(" vel="));
+                Serial.print(velocidadBandaMmS, 2);
+                Serial.print(F(" tZ="));
+                Serial.println(tiempoDescensoZV2Segundos(), 3);
+                registrarEventoPortentaV2(
+                    "TRIGGER", "pieza entro al umbral de descenso Z"
+                );
+                cambiarFaseAutomaticoV2(V2_DISPARANDO_CATCH);
             }
             break;
 
-        case V2_SINCRONIZANDO: {
-            if (!seguirPiezaEnYV2(false) || !velocidadBandaPermitidaV2()) {
+        case V2_DISPARANDO_CATCH: {
+            detenerY();
+            const long capturaZ = posicionCapturaZV2();
+            if (!posicionZSeguraV2(capturaZ)) {
                 iniciarCancelacionAutomaticoV2(
-                    "seguimiento o velocidad fuera de limite", false);
+                    "altura Z de captura fuera de rango", false);
                 return;
             }
-            const float errorX = automaticoV2.objetivoBrazoX - posicionXmm();
-            if (fabsf(automaticoV2.ultimoErrorY) <= V2_ERROR_ESTABLE_MM &&
-                fabsf(errorX) <= V2_ERROR_ESTABLE_MM) {
-                if (automaticoV2.inicioEstable == 0)
-                    automaticoV2.inicioEstable = millis();
-                if (millis() - automaticoV2.inicioEstable >= V2_TIEMPO_ESTABLE_MS) {
-                    const long capturaZ = posicionCapturaZV2();
-                    if (!posicionZSeguraV2(capturaZ)) {
-                        iniciarCancelacionAutomaticoV2(
-                            "altura Z de captura fuera de rango", false);
-                        return;
-                    }
-                    moverZHasta(capturaZ, DIV_POSICION);
-                    cambiarFaseAutomaticoV2(V2_BAJANDO_Z);
-                }
-            } else {
-                automaticoV2.inicioEstable = 0;
-            }
+            automaticoV2.busquedaFinalZActiva = false;
+            moverZHasta(capturaZ, DIV_POSICION);
+            cambiarFaseAutomaticoV2(V2_BAJANDO_Z);
             break;
         }
 
         case V2_BAJANDO_Z:
-            if (!seguirPiezaEnYV2(true)) {
-                iniciarCancelacionAutomaticoV2(
-                    "error excesivo durante descenso", false);
-                return;
+            detenerY();
+            if (limiteZabajo) {
+                detenerZ();
+                fijarPasosZ(limiteMinimoZPasos());
+                automaticoV2.busquedaFinalZActiva = false;
             }
             if (!objetivoZEnCurso() && movZ == 0) {
+                if (!limiteZabajo) {
+                    if (!automaticoV2.busquedaFinalZActiva) {
+                        automaticoV2.busquedaFinalZActiva = true;
+                        Serial.println(F(
+                            "[AUTO V2] Buscando DIN04 debajo del conteo calibrado"
+                        ));
+                        registrarEventoPortentaV2(
+                            "Z_SEARCH", "busqueda lenta del final inferior DIN04"
+                        );
+                        moverZHasta(
+                            limiteMinimoZPasos() -
+                                V2_BUSQUEDA_FINAL_Z_EXTRA_PASOS,
+                            V2_DIV_BUSQUEDA_FINAL_Z
+                        );
+                        return;
+                    }
+                    iniciarCancelacionAutomaticoV2(
+                        "DIN04 no aparecio dentro del margen de busqueda Z", false);
+                    return;
+                }
                 ++intentosV2;
                 automaticoV2.ultimoErrorX =
                     automaticoV2.objetivoBrazoX - posicionXmm();
@@ -2634,57 +2771,30 @@ void procesarModoAutomaticoV2() {
                 Serial.print(F(" velocidad="));
                 Serial.print(velocidadBandaMmS, 2);
                 Serial.print(F(" encoder="));
-                Serial.println(conteoEncoderBanda);
+                Serial.print(conteoEncoderBanda);
+                Serial.println(F(" final_z_abajo=1"));
+                registrarEventoPortentaV2(
+                    "CAPTURE", "captura virtual en final Z abajo");
+                // Desde el catch la pieza deja de pertenecer a la banda. Se
+                // congela Y y la retirada es vertical hasta la altura segura.
+                detenerY();
                 moverZHasta(V2_Z_SEGURO_PASOS, DIV_POSICION);
                 cambiarFaseAutomaticoV2(V2_SUBIENDO_Z);
             }
             break;
 
         case V2_SUBIENDO_Z:
-            if (!seguirPiezaEnYV2(true)) {
-                iniciarCancelacionAutomaticoV2(
-                    "error excesivo durante retirada", false);
-                return;
-            }
+            detenerY();
             if (!objetivoZEnCurso() && movZ == 0) {
-                detenerY();
-                secuenciaObjetivoEnMovimiento = 0;
-                eventoBotonX = false;
-                eventoBotonCirculo = false;
-                eventoBotonTriangulo = false;
-                automaticoV2.confirmacionArmada = !botonX && !botonCirculo;
-                cambiarFaseAutomaticoV2(V2_ESPERANDO_CONFIRMACION);
-                Serial.println(F("[AUTO V2] X = CATCH / CIRCULO = FALLO"));
+                ++exitosV2;
+                completarResultadoV2("CATCH_AUTOMATICO");
             }
             break;
 
         case V2_ESPERANDO_CONFIRMACION:
-            detenerTodos();
-            if (!automaticoV2.confirmacionArmada) {
-                if (!botonX && !botonCirculo) {
-                    automaticoV2.confirmacionArmada = true;
-                    eventoBotonX = false;
-                    eventoBotonCirculo = false;
-                }
-                break;
-            }
-            if (eventoBotonTriangulo) {
-                eventoBotonTriangulo = false;
-                iniciarCancelacionAutomaticoV2(
-                    "intento cancelado sin clasificar", false);
-            } else if (eventoBotonX) {
-                eventoBotonX = false;
-                ++exitosV2;
-                completarResultadoV2("CATCH_CONFIRMADO");
-            } else if (eventoBotonCirculo) {
-                eventoBotonCirculo = false;
-                ++fallosV2;
-                completarResultadoV2("CATCH_FALLIDO");
-            } else if (millis() - automaticoV2.inicioFase >=
-                       V2_TIMEOUT_CONFIRMACION_MS) {
-                ++sinRespuestaV2;
-                completarResultadoV2("CATCH_SIN_RESPUESTA");
-            }
+            // Recuperacion defensiva: el flujo nuevo nunca entra a fase 6.
+            ++exitosV2;
+            completarResultadoV2("CATCH_AUTOMATICO");
             break;
 
         case V2_COMPLETADO:
@@ -3156,13 +3266,14 @@ void procesarComandoTerminal(String comando) {
     if (mayuscula == "ENC VUELTA") {
         Serial.print(F("[ENC][VUELTA] indices="));
         Serial.print(revolucionesIndiceEncoder);
-        Serial.print(F(" cuentas="));
-        Serial.print(conteoEncoderBanda);
-        if (revolucionesIndiceEncoder != 0) {
-            const float porVuelta = fabsf(
-                static_cast<float>(conteoEncoderBanda) /
-                static_cast<float>(revolucionesIndiceEncoder)
-            );
+        Serial.print(F(" intervalos_completos="));
+        Serial.print(intervalosIndiceCompletos);
+        if (intervalosIndiceCompletos != 0) {
+            const float porVuelta =
+                static_cast<float>(cuentasIndiceAcumuladas) /
+                static_cast<float>(intervalosIndiceCompletos);
+            Serial.print(F(" ultima="));
+            Serial.print(ultimaMedicionCuentasPorVuelta, 2);
             Serial.print(F(" cuentas/vuelta="));
             Serial.print(porVuelta, 2);
             Serial.print(F(" esperado_X2="));
@@ -3189,6 +3300,12 @@ void procesarComandoTerminal(String comando) {
         conteoCeroUsuario = 0;
         revolucionesIndiceEncoder = 0;
         ultimoIndiceReportado = 0;
+        referenciaIndiceDiagnosticoValida = false;
+        indiceReferenciaDiagnostico = 0;
+        conteoReferenciaIndiceDiagnostico = 0;
+        intervalosIndiceCompletos = 0;
+        cuentasIndiceAcumuladas = 0;
+        ultimaMedicionCuentasPorVuelta = 0.0f;
         ultimoPulsoEncoder = 0;
         velocidadBandaMmS = 0.0f;
         frecuenciaEncoderCuentasS = 0.0f;
@@ -3290,11 +3407,16 @@ void setup() {
     Serial.println(F("[BOOT] Portenta coordinadora iniciada en estado seguro"));
     Serial.println(F("[BOOT] I2C maestro 0x40 a 100 kHz; retencion inicial 3000 ms"));
     Serial.println(F("[BOOT] I2C: control 10 ms, telemetria encoder 20 ms (~45 % de bus)"));
-    Serial.println(F("[BOOT] Finales Z: DIN04=arriba, DIN05=abajo"));
+    Serial.println(F("[BOOT] Finales Z: DIN04=abajo, DIN05=arriba"));
     Serial.println(F("[BOOT] Encoder 0: OUTA=A0 OUTB=B0 OUTC=Z0, decodificacion X2"));
     Serial.print(F("[BOOT] Escala encoder compilada="));
     Serial.print(escalaEncoderMmPorCuenta, 9);
     Serial.println(F(" mm/cuenta"));
+    Serial.print(F("[BOOT] Distancia efectiva camara-catch V2="));
+    Serial.print(CAMARA_A_HOME_Y_MM, 1);
+    Serial.print(F(" mm (ajuste="));
+    Serial.print(V2_AJUSTE_DISTANCIA_CATCH_MM, 1);
+    Serial.println(F(" mm)"));
     Serial.println(F("[BOOT] Monitor serial: 115200 baudios"));
     mostrarAyudaTerminal();
 }
@@ -3359,6 +3481,7 @@ void loop() {
     actualizarMovimientoPosicionado();
     vigilarSeguridadComunicacion();
     procesarMaquinaGeneral();
+    registrarTelemetriaPortentaV2();
     aplicarBloqueoPorFinales();
     mantenerBusI2CMaestroRecuperable();
 

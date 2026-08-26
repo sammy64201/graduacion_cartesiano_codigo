@@ -36,9 +36,11 @@ using namespace ProtocoloI2C;
 // ellas, el preprocesador de sketches puede insertar firmas antes de que estas
 // estructuras aparezcan en el archivo.
 struct Point2D;
+struct CandidatoPiezaV2;
 struct FiltroDeteccion;
 struct FiltroDeteccionV2;
 struct ContextoCamara;
+struct RegistroLogV2;
 
 // =============================================================================
 // Hardware fijo. Estos pines son parte del contrato electrico del prototipo.
@@ -98,18 +100,26 @@ constexpr uint32_t CAM_TAG_LOAD_MS = 3000;
 constexpr uint32_t CAM_POST_CALC_MS = 2000;
 constexpr uint32_t CAM_MODEL_LOAD_MS = 8000;
 constexpr uint32_t CAM_READ_PERIOD_MS = 200;
+constexpr uint32_t CAM_READ_PERIOD_V2_MS = 50;
 constexpr uint32_t CAM_HEALTH_PERIOD_MS = 1000;
 constexpr uint32_t CAM_STATUS_PERIOD_MS = 1000;
 constexpr uint32_t CAM_CALIBRATION_TIMEOUT_MS = 120000;
 
 constexpr uint8_t DETECCIONES_ESTABLES = 4;
-constexpr double TOLERANCIA_ESTABLE_MM = 4.0;
 constexpr uint8_t DETECCIONES_ESTABLES_V2 = 3;
+constexpr double TOLERANCIA_ESTABLE_MM = 4.0;
 constexpr double TOLERANCIA_TRAYECTORIA_V2_MM = 6.0;
 constexpr double DESPLAZAMIENTO_MINIMO_V2_MM = 2.0;
+constexpr double DESPLAZAMIENTO_CAMARA_REPETIDA_MM = 8.0;
+constexpr double TOLERANCIA_CAMARA_REPETIDA_MM = 2.0;
+constexpr double SOLAPE_MINIMO_DUPLICADO = 0.50;
+constexpr uint8_t MAX_CANDIDATOS_V2 = 10;
 constexpr double TOLERANCIA_REARME_MM = 8.0;
 constexpr uint32_t TIEMPO_DESAPARICION_MS = 1000;
+constexpr uint32_t TIEMPO_REARME_V2_MS = 500;
 constexpr uint32_t TIMEOUT_MUESTRA_ENCODER_MS = 50;
+constexpr uint32_t BAUD_LOG_ESP = 460800;
+constexpr uint16_t CAPACIDAD_COLA_LOG_V2 = 128;
 
 constexpr int ANGULO_SERVO_INICIAL = 90;
 constexpr uint32_t CAMERA_TASK_STACK_BYTES = 12288;
@@ -149,6 +159,9 @@ uint32_t ultimaPublicacionI2C = 0;
 uint32_t ultimaPantalla = 0;
 uint32_t ultimoReporteI2C = 0;
 uint32_t ultimoReporteStack = 0;
+uint32_t ultimoReporteDiagnosticoV2 = 0;
+uint32_t ultimoReporteCandidatosV2 = 0;
+uint8_t ultimaCausaDiagnosticoV2Reportada = 0xFF;
 uint8_t estadoRemotoAnterior = 0xFF;
 uint32_t inicioEstadoRemoto = 0;
 
@@ -232,6 +245,77 @@ struct EstadoEncoderCompartido {
 portMUX_TYPE encoderMux = portMUX_INITIALIZER_UNLOCKED;
 EstadoEncoderCompartido estadoEncoder = {};
 
+enum CausaDiagnosticoV2 : uint8_t {
+  V2_DIAG_SIN_BLOQUEO = 0,
+  V2_DIAG_INACTIVO,
+  V2_DIAG_BRAZO_OCUPADO,
+  V2_DIAG_OBJETIVO_ACTIVO,
+  V2_DIAG_NO_REARMADO,
+  V2_DIAG_ESPERANDO_DESAPARICION,
+  V2_DIAG_ENCODER_NO_RECIBIDO,
+  V2_DIAG_ENCODER_ANTIGUO,
+  V2_DIAG_ENCODER_HW,
+  V2_DIAG_ENCODER_ESCALA,
+  V2_DIAG_ENCODER_SIN_PULSOS,
+  V2_DIAG_ENCODER_SATURADO,
+  V2_DIAG_ENCODER_SIGNO,
+  V2_DIAG_HUSKY_ERROR,
+  V2_DIAG_SIN_RESULTADOS,
+  V2_DIAG_HOMOGRAFIA,
+  V2_DIAG_FUERA_BANDA,
+  V2_DIAG_SIN_PIEZA,
+  V2_DIAG_CAMARA_REPETIDA,
+  V2_DIAG_TRAYECTORIA,
+  V2_DIAG_DETECCIONES,
+  V2_DIAG_DESPLAZAMIENTO,
+  V2_DIAG_OBJETIVO_LISTO,
+  V2_DIAG_PUBLICADO
+};
+
+struct DiagnosticoDeteccionV2 {
+  uint8_t causa;
+  uint32_t actualizadoMs;
+  uint32_t edadEncoderMs;
+  int32_t conteoEncoder;
+  float velocidadEncoderMmS;
+  uint8_t flagsEncoder;
+  int8_t signoEncoder;
+  int8_t resultadosHusky;
+  uint8_t candidatosValidos;
+  uint8_t rechazadosHomografia;
+  uint8_t rechazadosFueraBanda;
+  uint8_t clase;
+  uint8_t deteccionesConsecutivas;
+  double xMm;
+  double yMm;
+  double yCompensadaMm;
+  double dispersionXmm;
+  double dispersionYCompensadaMm;
+  double desplazamientoMm;
+  uint16_t secuenciaPublicada;
+  uint8_t candidatosUnicos;
+  uint8_t duplicadosDescartados;
+  uint32_t duracionConsultaMs;
+  int32_t conteoAntesConsulta;
+  int32_t conteoDespuesConsulta;
+  int32_t conteoAsociadoCamara;
+  double recorridoDuranteConsultaMm;
+  int8_t relacionYEncoder;
+};
+
+void publicarCausaDiagnosticoV2(
+  DiagnosticoDeteccionV2 &diag,
+  uint8_t causa
+);
+
+portMUX_TYPE diagnosticoV2Mux = portMUX_INITIALIZER_UNLOCKED;
+DiagnosticoDeteccionV2 diagnosticoV2 = {
+  V2_DIAG_INACTIVO, 0, UINT32_MAX, 0, 0.0f, 0, 0, 0,
+  0, 0, 0, 0, 0,
+  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0,
+  0, 0, 0, 0, 0, 0, 0.0, 0
+};
+
 // =============================================================================
 // Utilidades generales.
 // =============================================================================
@@ -262,6 +346,95 @@ EstadoEncoderCompartido copiarEstadoEncoder() {
   copia = estadoEncoder;
   portEXIT_CRITICAL(&encoderMux);
   return copia;
+}
+
+DiagnosticoDeteccionV2 copiarDiagnosticoV2() {
+  DiagnosticoDeteccionV2 copia;
+  portENTER_CRITICAL(&diagnosticoV2Mux);
+  copia = diagnosticoV2;
+  portEXIT_CRITICAL(&diagnosticoV2Mux);
+  return copia;
+}
+
+void publicarDiagnosticoV2(const DiagnosticoDeteccionV2 &nuevo) {
+  portENTER_CRITICAL(&diagnosticoV2Mux);
+  diagnosticoV2 = nuevo;
+  portEXIT_CRITICAL(&diagnosticoV2Mux);
+}
+
+const char *nombreCausaDiagnosticoV2(uint8_t causa) {
+  switch (causa) {
+    case V2_DIAG_SIN_BLOQUEO: return "SIN_BLOQUEO";
+    case V2_DIAG_INACTIVO: return "V2_INACTIVO";
+    case V2_DIAG_BRAZO_OCUPADO: return "BRAZO_OCUPADO";
+    case V2_DIAG_OBJETIVO_ACTIVO: return "OBJETIVO_ACTIVO";
+    case V2_DIAG_NO_REARMADO: return "NO_REARMADO";
+    case V2_DIAG_ESPERANDO_DESAPARICION: return "ESPERA_DESAPARICION";
+    case V2_DIAG_ENCODER_NO_RECIBIDO: return "ENCODER_NO_RECIBIDO";
+    case V2_DIAG_ENCODER_ANTIGUO: return "ENCODER_ANTIGUO";
+    case V2_DIAG_ENCODER_HW: return "ENCODER_HW";
+    case V2_DIAG_ENCODER_ESCALA: return "ENCODER_ESCALA";
+    case V2_DIAG_ENCODER_SIN_PULSOS: return "ENCODER_SIN_PULSOS";
+    case V2_DIAG_ENCODER_SATURADO: return "ENCODER_SATURADO";
+    case V2_DIAG_ENCODER_SIGNO: return "ENCODER_SIGNO";
+    case V2_DIAG_HUSKY_ERROR: return "HUSKY_ERROR";
+    case V2_DIAG_SIN_RESULTADOS: return "SIN_RESULTADOS";
+    case V2_DIAG_HOMOGRAFIA: return "HOMOGRAFIA";
+    case V2_DIAG_FUERA_BANDA: return "FUERA_BANDA";
+    case V2_DIAG_SIN_PIEZA: return "SIN_PIEZA";
+    case V2_DIAG_CAMARA_REPETIDA: return "CAMARA_REPETIDA";
+    case V2_DIAG_TRAYECTORIA: return "TRAYECTORIA";
+    case V2_DIAG_DETECCIONES: return "DETECCIONES";
+    case V2_DIAG_DESPLAZAMIENTO: return "DESPLAZAMIENTO";
+    case V2_DIAG_OBJETIVO_LISTO: return "OBJETIVO_LISTO";
+    case V2_DIAG_PUBLICADO: return "PUBLICADO";
+    default: return "DESCONOCIDO";
+  }
+}
+
+const char *nombreCortoDiagnosticoV2(uint8_t causa) {
+  switch (causa) {
+    case V2_DIAG_INACTIVO: return "INACTIVO";
+    case V2_DIAG_BRAZO_OCUPADO: return "BRAZO OCUP.";
+    case V2_DIAG_OBJETIVO_ACTIVO: return "OBJ ACTIVO";
+    case V2_DIAG_NO_REARMADO: return "NO REARMADO";
+    case V2_DIAG_ESPERANDO_DESAPARICION: return "ESPERA DESAP.";
+    case V2_DIAG_ENCODER_NO_RECIBIDO: return "ENC SIN RX";
+    case V2_DIAG_ENCODER_ANTIGUO: return "ENC ANTIGUO";
+    case V2_DIAG_ENCODER_HW: return "ENC HW";
+    case V2_DIAG_ENCODER_ESCALA: return "ENC ESCALA";
+    case V2_DIAG_ENCODER_SIN_PULSOS: return "ENC SIN PULSO";
+    case V2_DIAG_ENCODER_SATURADO: return "ENC SATURADO";
+    case V2_DIAG_ENCODER_SIGNO: return "ENC SIGNO";
+    case V2_DIAG_HUSKY_ERROR: return "HUSKY ERROR";
+    case V2_DIAG_SIN_RESULTADOS: return "SIN RESULTADO";
+    case V2_DIAG_HOMOGRAFIA: return "HOMOGRAFIA";
+    case V2_DIAG_FUERA_BANDA: return "FUERA BANDA";
+    case V2_DIAG_SIN_PIEZA: return "SIN PIEZA";
+    case V2_DIAG_CAMARA_REPETIDA: return "CAM REPETIDA";
+    case V2_DIAG_TRAYECTORIA: return "TRAYECTORIA";
+    case V2_DIAG_DETECCIONES: return "DETECCIONES";
+    case V2_DIAG_DESPLAZAMIENTO: return "DESPLAZAM.";
+    case V2_DIAG_OBJETIVO_LISTO: return "OBJ LISTO";
+    case V2_DIAG_PUBLICADO: return "PUBLICADO";
+    default: return "---";
+  }
+}
+
+uint8_t diagnosticarEncoderV2(const EstadoEncoderCompartido &encoder) {
+  if (encoder.recibidoMs == 0) return V2_DIAG_ENCODER_NO_RECIBIDO;
+  if (millis() - encoder.recibidoMs > TIMEOUT_MUESTRA_ENCODER_MS)
+    return V2_DIAG_ENCODER_ANTIGUO;
+  if ((encoder.flags & ENC_FLAG_HW_LISTO) == 0) return V2_DIAG_ENCODER_HW;
+  if ((encoder.flags & ENC_FLAG_ESCALA_VALIDA) == 0 || encoder.nmPorCuenta == 0)
+    return V2_DIAG_ENCODER_ESCALA;
+  if ((encoder.flags & ENC_FLAG_PULSOS_VISTOS) == 0)
+    return V2_DIAG_ENCODER_SIN_PULSOS;
+  if ((encoder.flags & ENC_FLAG_SATURADO) != 0)
+    return V2_DIAG_ENCODER_SATURADO;
+  if (encoder.signo != 1 && encoder.signo != -1)
+    return V2_DIAG_ENCODER_SIGNO;
+  return V2_DIAG_SIN_BLOQUEO;
 }
 
 float escalaEncoderMm(const EstadoEncoderCompartido &encoder) {
@@ -716,6 +889,262 @@ struct Point2D {
   double y;
 };
 
+struct CandidatoPiezaV2 {
+  uint8_t clase;
+  int8_t confianza;
+  int16_t centroXpx;
+  int16_t centroYpx;
+  int16_t anchoPx;
+  int16_t altoPx;
+  Point2D posicion;
+  uint8_t grupoDuplicado;
+};
+
+enum TipoRegistroLogV2 : uint8_t {
+  LOG_V2_CONSULTA = 0,
+  LOG_V2_CANDIDATO = 1
+};
+
+// La tarea de camara nunca imprime el registro estructurado directamente.
+// Deposita estructuras de tamano fijo y loop() las serializa fuera del camino
+// critico de HUSKYLENS. El conteo de perdidos permite detectar saturacion sin
+// bloquear la adquisicion.
+struct RegistroLogV2 {
+  uint8_t tipo;
+  uint8_t causa;
+  uint8_t indiceCandidato;
+  uint8_t grupoCandidato;
+  uint8_t grupoSeleccionado;
+  uint32_t tiempoMs;
+  uint32_t consulta;
+  uint16_t sesion;
+  uint16_t secuenciaObjetivo;
+  uint16_t secuenciaEncoder;
+  int32_t conteoEncoder;
+  uint32_t edadEncoderMs;
+  float velocidadEncoderMmS;
+  uint8_t flagsEncoder;
+  int8_t resultadosHusky;
+  uint8_t candidatosValidos;
+  uint8_t candidatosUnicos;
+  uint8_t duplicadosDescartados;
+  uint8_t rechazadosHomografia;
+  uint8_t rechazadosFueraBanda;
+  uint8_t clase;
+  int8_t confianza;
+  uint8_t deteccionesConsecutivas;
+  int16_t centroXpx;
+  int16_t centroYpx;
+  int16_t anchoPx;
+  int16_t altoPx;
+  float xMm;
+  float yMm;
+  float yCompensadaMm;
+  float dispersionXmm;
+  float dispersionYmm;
+  float desplazamientoMm;
+  int8_t relacionYEncoder;
+  uint32_t duracionConsultaMs;
+  float recorridoDuranteConsultaMm;
+  int32_t conteoAntesConsulta;
+  int32_t conteoDespuesConsulta;
+};
+
+portMUX_TYPE colaLogV2Mux = portMUX_INITIALIZER_UNLOCKED;
+RegistroLogV2 colaLogV2[CAPACIDAD_COLA_LOG_V2] = {};
+volatile uint16_t cabezaColaLogV2 = 0;
+volatile uint16_t colaColaLogV2 = 0;
+volatile uint32_t registrosLogV2Perdidos = 0;
+uint32_t consultasLogV2 = 0;
+
+void encolarRegistroLogV2(const RegistroLogV2 &registro) {
+  portENTER_CRITICAL(&colaLogV2Mux);
+  const uint16_t siguiente = static_cast<uint16_t>(
+    (cabezaColaLogV2 + 1U) % CAPACIDAD_COLA_LOG_V2
+  );
+  if (siguiente == colaColaLogV2) {
+    ++registrosLogV2Perdidos;
+  } else {
+    colaLogV2[cabezaColaLogV2] = registro;
+    cabezaColaLogV2 = siguiente;
+  }
+  portEXIT_CRITICAL(&colaLogV2Mux);
+}
+
+void registrarCandidatoLogV2(
+  uint32_t consulta,
+  const EstadoEncoderCompartido &encoder,
+  const CandidatoPiezaV2 &candidato,
+  uint8_t indice,
+  uint8_t causa
+) {
+  RegistroLogV2 registro = {};
+  registro.tipo = LOG_V2_CANDIDATO;
+  registro.causa = causa;
+  registro.indiceCandidato = indice;
+  registro.grupoCandidato = candidato.grupoDuplicado;
+  registro.grupoSeleccionado = UINT8_MAX;
+  registro.tiempoMs = millis();
+  registro.consulta = consulta;
+  registro.sesion = sesionArranque;
+  registro.secuenciaEncoder = encoder.secuencia;
+  registro.conteoEncoder = encoder.conteo;
+  registro.edadEncoderMs = encoder.recibidoMs == 0
+    ? UINT32_MAX : registro.tiempoMs - encoder.recibidoMs;
+  registro.velocidadEncoderMmS = encoder.velocidadMmS;
+  registro.flagsEncoder = encoder.flags;
+  registro.clase = candidato.clase;
+  registro.confianza = candidato.confianza;
+  registro.centroXpx = candidato.centroXpx;
+  registro.centroYpx = candidato.centroYpx;
+  registro.anchoPx = candidato.anchoPx;
+  registro.altoPx = candidato.altoPx;
+  registro.xMm = static_cast<float>(candidato.posicion.x);
+  registro.yMm = static_cast<float>(candidato.posicion.y);
+  encolarRegistroLogV2(registro);
+}
+
+void registrarConsultaLogV2(
+  const DiagnosticoDeteccionV2 &diag,
+  const EstadoEncoderCompartido &encoder,
+  uint32_t consulta,
+  uint8_t grupoSeleccionado
+) {
+  RegistroLogV2 registro = {};
+  registro.tipo = LOG_V2_CONSULTA;
+  registro.causa = diag.causa;
+  registro.grupoSeleccionado = grupoSeleccionado;
+  registro.tiempoMs = diag.actualizadoMs;
+  registro.consulta = consulta;
+  registro.sesion = sesionArranque;
+  registro.secuenciaObjetivo = diag.secuenciaPublicada;
+  registro.secuenciaEncoder = encoder.secuencia;
+  registro.conteoEncoder = diag.conteoAsociadoCamara;
+  registro.edadEncoderMs = diag.edadEncoderMs;
+  registro.velocidadEncoderMmS = diag.velocidadEncoderMmS;
+  registro.flagsEncoder = diag.flagsEncoder;
+  registro.resultadosHusky = diag.resultadosHusky;
+  registro.candidatosValidos = diag.candidatosValidos;
+  registro.candidatosUnicos = diag.candidatosUnicos;
+  registro.duplicadosDescartados = diag.duplicadosDescartados;
+  registro.rechazadosHomografia = diag.rechazadosHomografia;
+  registro.rechazadosFueraBanda = diag.rechazadosFueraBanda;
+  registro.clase = diag.clase;
+  registro.deteccionesConsecutivas = diag.deteccionesConsecutivas;
+  registro.xMm = static_cast<float>(diag.xMm);
+  registro.yMm = static_cast<float>(diag.yMm);
+  registro.yCompensadaMm = static_cast<float>(diag.yCompensadaMm);
+  registro.dispersionXmm = static_cast<float>(diag.dispersionXmm);
+  registro.dispersionYmm = static_cast<float>(diag.dispersionYCompensadaMm);
+  registro.desplazamientoMm = static_cast<float>(diag.desplazamientoMm);
+  registro.relacionYEncoder = diag.relacionYEncoder;
+  registro.duracionConsultaMs = diag.duracionConsultaMs;
+  registro.recorridoDuranteConsultaMm =
+    static_cast<float>(diag.recorridoDuranteConsultaMm);
+  registro.conteoAntesConsulta = diag.conteoAntesConsulta;
+  registro.conteoDespuesConsulta = diag.conteoDespuesConsulta;
+  encolarRegistroLogV2(registro);
+}
+
+void publicarYRegistrarDiagnosticoV2(
+  DiagnosticoDeteccionV2 &diag,
+  uint8_t causa,
+  const EstadoEncoderCompartido &encoder,
+  uint32_t consulta,
+  uint8_t grupoSeleccionado = UINT8_MAX
+) {
+  publicarCausaDiagnosticoV2(diag, causa);
+  registrarConsultaLogV2(diag, encoder, consulta, grupoSeleccionado);
+}
+
+bool extraerRegistroLogV2(RegistroLogV2 &registro) {
+  bool disponible = false;
+  portENTER_CRITICAL(&colaLogV2Mux);
+  if (colaColaLogV2 != cabezaColaLogV2) {
+    registro = colaLogV2[colaColaLogV2];
+    colaColaLogV2 = static_cast<uint16_t>(
+      (colaColaLogV2 + 1U) % CAPACIDAD_COLA_LOG_V2
+    );
+    disponible = true;
+  }
+  portEXIT_CRITICAL(&colaLogV2Mux);
+  return disponible;
+}
+
+void imprimirRegistroLogV2(const RegistroLogV2 &r) {
+  Serial.print(F("V2LOG|E|ms=")); Serial.print(r.tiempoMs);
+  Serial.print(F("|session=")); Serial.print(r.sesion);
+  Serial.print(F("|event="));
+  Serial.print(r.tipo == LOG_V2_CONSULTA ? F("QUERY") : F("CANDIDATE"));
+  Serial.print(F("|query=")); Serial.print(r.consulta);
+  Serial.print(F("|obj=")); Serial.print(r.secuenciaObjetivo);
+  Serial.print(F("|encseq=")); Serial.print(r.secuenciaEncoder);
+  Serial.print(F("|enc=")); Serial.print(r.conteoEncoder);
+  Serial.print(F("|age="));
+  if (r.edadEncoderMs == UINT32_MAX) Serial.print(F("NA"));
+  else Serial.print(r.edadEncoderMs);
+  Serial.print(F("|vel=")); Serial.print(r.velocidadEncoderMmS, 3);
+  Serial.print(F("|flags=")); Serial.print(r.flagsEncoder);
+  Serial.print(F("|cause=")); Serial.print(nombreCausaDiagnosticoV2(r.causa));
+
+  if (r.tipo == LOG_V2_CANDIDATO) {
+    Serial.print(F("|candidate=")); Serial.print(r.indiceCandidato);
+    Serial.print(F("|group=")); Serial.print(r.grupoCandidato);
+    Serial.print(F("|class=")); Serial.print(r.clase);
+    Serial.print(F("|confidence=")); Serial.print(r.confianza);
+    Serial.print(F("|px=")); Serial.print(r.centroXpx);
+    Serial.print(F("|py=")); Serial.print(r.centroYpx);
+    Serial.print(F("|width=")); Serial.print(r.anchoPx);
+    Serial.print(F("|height=")); Serial.print(r.altoPx);
+    Serial.print(F("|x=")); Serial.print(r.xMm, 3);
+    Serial.print(F("|y=")); Serial.print(r.yMm, 3);
+  } else {
+    Serial.print(F("|husky=")); Serial.print(r.resultadosHusky);
+    Serial.print(F("|valid=")); Serial.print(r.candidatosValidos);
+    Serial.print(F("|unique=")); Serial.print(r.candidatosUnicos);
+    Serial.print(F("|dup=")); Serial.print(r.duplicadosDescartados);
+    Serial.print(F("|rej_h=")); Serial.print(r.rechazadosHomografia);
+    Serial.print(F("|rej_b=")); Serial.print(r.rechazadosFueraBanda);
+    Serial.print(F("|selected=")); Serial.print(r.grupoSeleccionado);
+    Serial.print(F("|class=")); Serial.print(r.clase);
+    Serial.print(F("|n=")); Serial.print(r.deteccionesConsecutivas);
+    Serial.print(F("|x=")); Serial.print(r.xMm, 3);
+    // El encoder desplaza la pieza solo sobre Y; por eso X compensada coincide
+    // con X fisica, pero se publica explicitamente para mantener el CSV fijo.
+    Serial.print(F("|xc=")); Serial.print(r.xMm, 3);
+    Serial.print(F("|y=")); Serial.print(r.yMm, 3);
+    Serial.print(F("|yc=")); Serial.print(r.yCompensadaMm, 3);
+    Serial.print(F("|dx=")); Serial.print(r.dispersionXmm, 3);
+    Serial.print(F("|dy=")); Serial.print(r.dispersionYmm, 3);
+    Serial.print(F("|travel=")); Serial.print(r.desplazamientoMm, 3);
+    Serial.print(F("|rel_y=")); Serial.print(r.relacionYEncoder);
+    Serial.print(F("|query_ms=")); Serial.print(r.duracionConsultaMs);
+    Serial.print(F("|query_travel="));
+    Serial.print(r.recorridoDuranteConsultaMm, 3);
+    Serial.print(F("|enc_before=")); Serial.print(r.conteoAntesConsulta);
+    Serial.print(F("|enc_after=")); Serial.print(r.conteoDespuesConsulta);
+  }
+  Serial.println();
+}
+
+void vaciarColaLogV2() {
+  uint32_t perdidos = 0;
+  portENTER_CRITICAL(&colaLogV2Mux);
+  perdidos = registrosLogV2Perdidos;
+  registrosLogV2Perdidos = 0;
+  portEXIT_CRITICAL(&colaLogV2Mux);
+  if (perdidos != 0) {
+    Serial.print(F("V2LOG|E|ms=")); Serial.print(millis());
+    Serial.print(F("|session=")); Serial.print(sesionArranque);
+    Serial.print(F("|event=DROP|lost=")); Serial.println(perdidos);
+  }
+
+  RegistroLogV2 registro = {};
+  for (uint8_t i = 0; i < 8 && extraerRegistroLogV2(registro); ++i) {
+    imprimirRegistroLogV2(registro);
+  }
+}
+
 struct CalibrationTag {
   int code;
   double sumU;
@@ -1015,6 +1444,11 @@ struct FiltroDeteccionV2 {
   double maximoX;
   double minimoYCompensada;
   double maximoYCompensada;
+  int8_t relacionYEncoder;
+  int16_t ultimoAnchoPx;
+  int16_t ultimoAltoPx;
+  double ultimoXRaw;
+  double ultimoYRaw;
 };
 
 struct ContextoCamara {
@@ -1119,7 +1553,8 @@ void reiniciarFiltroV2(ContextoCamara &ctx) {
     0.0, 0.0,
     0.0, 0.0,
     0.0, 0.0,
-    0.0, 0.0
+    0.0, 0.0,
+    0, 0, 0, 0.0, 0.0
   };
 }
 
@@ -1233,7 +1668,9 @@ void actualizarEsperaDesaparicion(
   ContextoCamara &ctx,
   bool piezaProcesadaPresente,
   uint32_t ahora,
-  bool brazoOcupado
+  bool brazoOcupado,
+  uint32_t tiempoRearmeMs,
+  bool automaticoV2
 ) {
   if (!ctx.esperandoDesaparicion) {
     return;
@@ -1256,7 +1693,7 @@ void actualizarEsperaDesaparicion(
     return;
   }
 
-  if (ahora - ctx.inicioAusencia >= TIEMPO_DESAPARICION_MS) {
+  if (ahora - ctx.inicioAusencia >= tiempoRearmeMs) {
     ctx.esperandoDesaparicion = false;
     ctx.inicioAusencia = 0;
     ctx.rearmada = true;
@@ -1264,7 +1701,13 @@ void actualizarEsperaDesaparicion(
     ctx.xEsperandoDesaparicion = 0.0;
     ctx.yEsperandoDesaparicion = 0.0;
     reiniciarFiltro(ctx);
-    Serial.println(F("[AUTO] Detector rearmado tras desaparicion"));
+    if (automaticoV2) {
+      Serial.println(
+        F("[AUTO V2] Detector liberado tras 500 ms; nueva secuencia permitida")
+      );
+    } else {
+      Serial.println(F("[AUTO] Detector rearmado tras desaparicion"));
+    }
   }
 }
 
@@ -1354,34 +1797,191 @@ void publicarObjetivoEstable(ContextoCamara &ctx) {
   Serial.println(ctx.objetivoY10 / 10.0f, 1);
 }
 
-double compensarYConEncoder(
-  double y,
+double desplazamientoEncoderMm(
   int32_t conteo,
   int32_t referencia,
   const EstadoEncoderCompartido &encoder
 ) {
-  return y - static_cast<double>(encoder.signo) /
-             static_cast<double>(CAMERA_SIGNO_Y_LOCAL) *
-             static_cast<double>(diferenciaConteosConWrap(conteo, referencia)) *
-             static_cast<double>(escalaEncoderMm(encoder));
+  return static_cast<double>(encoder.signo) *
+         static_cast<double>(diferenciaConteosConWrap(conteo, referencia)) *
+         static_cast<double>(escalaEncoderMm(encoder));
 }
 
-bool mismaTrayectoriaV2(
+double compensarYConEncoder(
+  double y,
+  int32_t conteo,
+  int32_t referencia,
+  const EstadoEncoderCompartido &encoder,
+  int8_t relacionYEncoder
+) {
+  const int8_t relacion = relacionYEncoder == 0
+    ? static_cast<int8_t>(1 / CAMERA_SIGNO_Y_LOCAL)
+    : relacionYEncoder;
+  return y - static_cast<double>(relacion) *
+             desplazamientoEncoderMm(conteo, referencia, encoder);
+}
+
+int32_t conteoMedioConWrap(int32_t antes, int32_t despues) {
+  return static_cast<int32_t>(
+    static_cast<uint32_t>(antes) +
+    static_cast<uint32_t>(diferenciaConteosConWrap(despues, antes) / 2)
+  );
+}
+
+double areaCajaV2(const CandidatoPiezaV2 &candidato) {
+  return static_cast<double>(abs(candidato.anchoPx)) *
+         static_cast<double>(abs(candidato.altoPx));
+}
+
+bool cajasDuplicadasV2(
+  const CandidatoPiezaV2 &a,
+  const CandidatoPiezaV2 &b
+) {
+  if (a.clase != b.clase) return false;
+  const double anchoA = fabs(static_cast<double>(a.anchoPx));
+  const double altoA = fabs(static_cast<double>(a.altoPx));
+  const double anchoB = fabs(static_cast<double>(b.anchoPx));
+  const double altoB = fabs(static_cast<double>(b.altoPx));
+  if (anchoA < 1.0 || altoA < 1.0 || anchoB < 1.0 || altoB < 1.0) {
+    return false;
+  }
+
+  const double izquierda = fmax(
+    a.centroXpx - anchoA * 0.5, b.centroXpx - anchoB * 0.5
+  );
+  const double derecha = fmin(
+    a.centroXpx + anchoA * 0.5, b.centroXpx + anchoB * 0.5
+  );
+  const double arriba = fmax(
+    a.centroYpx - altoA * 0.5, b.centroYpx - altoB * 0.5
+  );
+  const double abajo = fmin(
+    a.centroYpx + altoA * 0.5, b.centroYpx + altoB * 0.5
+  );
+  const double interseccion = fmax(0.0, derecha - izquierda) *
+                              fmax(0.0, abajo - arriba);
+  const double areaMenor = fmin(anchoA * altoA, anchoB * altoB);
+  if (areaMenor > 0.0 && interseccion / areaMenor >= SOLAPE_MINIMO_DUPLICADO) {
+    return true;
+  }
+
+  const double dx = a.centroXpx - b.centroXpx;
+  const double dy = a.centroYpx - b.centroYpx;
+  const double radio = 0.25 * fmin(
+    fmax(anchoA, altoA), fmax(anchoB, altoB)
+  );
+  return dx * dx + dy * dy <= radio * radio;
+}
+
+bool candidatoV2MejorQue(
+  const CandidatoPiezaV2 &nuevo,
+  const CandidatoPiezaV2 &actual
+) {
+  if (nuevo.confianza != actual.confianza) {
+    return nuevo.confianza > actual.confianza;
+  }
+  return areaCajaV2(nuevo) > areaCajaV2(actual);
+}
+
+DiagnosticoDeteccionV2 crearDiagnosticoBaseV2(
+  const EstadoEncoderCompartido &encoder,
+  int8_t resultadosHusky
+) {
+  DiagnosticoDeteccionV2 diag = {};
+  diag.causa = V2_DIAG_SIN_BLOQUEO;
+  diag.actualizadoMs = millis();
+  diag.edadEncoderMs = encoder.recibidoMs == 0
+    ? UINT32_MAX : diag.actualizadoMs - encoder.recibidoMs;
+  diag.conteoEncoder = encoder.conteo;
+  diag.velocidadEncoderMmS = encoder.velocidadMmS;
+  diag.flagsEncoder = encoder.flags;
+  diag.signoEncoder = encoder.signo;
+  diag.resultadosHusky = resultadosHusky;
+  return diag;
+}
+
+void completarMetricasFiltroV2(
+  DiagnosticoDeteccionV2 &diag,
   const FiltroDeteccionV2 &filtro,
-  uint8_t clase,
+  int32_t conteoActual,
+  const EstadoEncoderCompartido &encoder
+) {
+  diag.clase = filtro.clase;
+  diag.deteccionesConsecutivas = filtro.consecutivas;
+  if (filtro.consecutivas == 0) return;
+  diag.dispersionXmm = filtro.maximoX - filtro.minimoX;
+  diag.dispersionYCompensadaMm =
+    filtro.maximoYCompensada - filtro.minimoYCompensada;
+  diag.desplazamientoMm = fabs(
+    static_cast<double>(diferenciaConteosConWrap(
+      conteoActual, filtro.conteoReferencia
+    )) * static_cast<double>(escalaEncoderMm(encoder))
+  );
+}
+
+void publicarCausaDiagnosticoV2(
+  DiagnosticoDeteccionV2 &diag,
+  uint8_t causa
+) {
+  diag.causa = causa;
+  diag.actualizadoMs = millis();
+  publicarDiagnosticoV2(diag);
+}
+
+int8_t elegirRelacionYEncoderV2(
+  const FiltroDeteccionV2 &filtro,
   const Point2D &posicion,
   int32_t conteo,
   const EstadoEncoderCompartido &encoder
 ) {
-  if (filtro.consecutivas == 0 || filtro.clase != clase) return false;
+  if (filtro.relacionYEncoder == 1 || filtro.relacionYEncoder == -1) {
+    return filtro.relacionYEncoder;
+  }
+  const double yPositiva = compensarYConEncoder(
+    posicion.y, conteo, filtro.conteoReferencia, encoder, 1
+  );
+  const double yNegativa = compensarYConEncoder(
+    posicion.y, conteo, filtro.conteoReferencia, encoder, -1
+  );
+  return fabs(yPositiva - filtro.promedioYCompensada) <=
+         fabs(yNegativa - filtro.promedioYCompensada) ? 1 : -1;
+}
+
+bool tamanoCompatibleV2(
+  const FiltroDeteccionV2 &filtro,
+  const CandidatoPiezaV2 &candidato
+) {
+  if (filtro.ultimoAnchoPx <= 0 || filtro.ultimoAltoPx <= 0 ||
+      candidato.anchoPx <= 0 || candidato.altoPx <= 0) {
+    return true;
+  }
+  const double areaAnterior = static_cast<double>(filtro.ultimoAnchoPx) *
+                              static_cast<double>(filtro.ultimoAltoPx);
+  const double areaActual = areaCajaV2(candidato);
+  const double relacionArea = areaActual / areaAnterior;
+  return relacionArea >= 0.35 && relacionArea <= 2.85;
+}
+
+bool mismaTrayectoriaV2(
+  const FiltroDeteccionV2 &filtro,
+  const CandidatoPiezaV2 &candidato,
+  int32_t conteo,
+  const EstadoEncoderCompartido &encoder
+) {
+  if (filtro.consecutivas == 0 || filtro.clase != candidato.clase ||
+      !tamanoCompatibleV2(filtro, candidato)) return false;
+  const int8_t relacion = elegirRelacionYEncoderV2(
+    filtro, candidato.posicion, conteo, encoder
+  );
   const double yCompensada = compensarYConEncoder(
-    posicion.y,
+    candidato.posicion.y,
     conteo,
     filtro.conteoReferencia,
-    encoder
+    encoder,
+    relacion
   );
-  const double nuevoMinX = fmin(filtro.minimoX, posicion.x);
-  const double nuevoMaxX = fmax(filtro.maximoX, posicion.x);
+  const double nuevoMinX = fmin(filtro.minimoX, candidato.posicion.x);
+  const double nuevoMaxX = fmax(filtro.maximoX, candidato.posicion.x);
   const double nuevoMinY = fmin(filtro.minimoYCompensada, yCompensada);
   const double nuevoMaxY = fmax(filtro.maximoYCompensada, yCompensada);
   return nuevoMaxX - nuevoMinX <= TOLERANCIA_TRAYECTORIA_V2_MM &&
@@ -1390,71 +1990,81 @@ bool mismaTrayectoriaV2(
 
 void incorporarDeteccionV2(
   ContextoCamara &ctx,
-  uint8_t clase,
-  const Point2D &posicion,
+  const CandidatoPiezaV2 &candidato,
   int32_t conteo,
   const EstadoEncoderCompartido &encoder
 ) {
   FiltroDeteccionV2 &filtro = ctx.filtroV2;
-  if (!mismaTrayectoriaV2(filtro, clase, posicion, conteo, encoder)) {
+  if (!mismaTrayectoriaV2(filtro, candidato, conteo, encoder)) {
     filtro = {
-      clase, 1, conteo, conteo,
-      posicion.x, posicion.y,
-      posicion.x, posicion.y,
-      posicion.x, posicion.x,
-      posicion.y, posicion.y
+      candidato.clase, 1, conteo, conteo,
+      candidato.posicion.x, candidato.posicion.y,
+      candidato.posicion.x, candidato.posicion.y,
+      candidato.posicion.x, candidato.posicion.x,
+      candidato.posicion.y, candidato.posicion.y,
+      0, candidato.anchoPx, candidato.altoPx,
+      candidato.posicion.x, candidato.posicion.y
     };
     ctx.ausenciasFiltroV2 = 0;
     return;
   }
 
+  const int8_t relacion = elegirRelacionYEncoderV2(
+    filtro, candidato.posicion, conteo, encoder
+  );
   const double yCompensada = compensarYConEncoder(
-    posicion.y,
+    candidato.posicion.y,
     conteo,
     filtro.conteoReferencia,
-    encoder
+    encoder,
+    relacion
   );
+  filtro.relacionYEncoder = relacion;
   if (filtro.consecutivas < UINT8_MAX) ++filtro.consecutivas;
   filtro.ultimoConteo = conteo;
-  filtro.sumaX += posicion.x;
+  filtro.sumaX += candidato.posicion.x;
   filtro.sumaYCompensada += yCompensada;
   filtro.promedioX = filtro.sumaX / filtro.consecutivas;
   filtro.promedioYCompensada = filtro.sumaYCompensada / filtro.consecutivas;
-  filtro.minimoX = fmin(filtro.minimoX, posicion.x);
-  filtro.maximoX = fmax(filtro.maximoX, posicion.x);
+  filtro.minimoX = fmin(filtro.minimoX, candidato.posicion.x);
+  filtro.maximoX = fmax(filtro.maximoX, candidato.posicion.x);
   filtro.minimoYCompensada = fmin(filtro.minimoYCompensada, yCompensada);
   filtro.maximoYCompensada = fmax(filtro.maximoYCompensada, yCompensada);
+  filtro.ultimoAnchoPx = candidato.anchoPx;
+  filtro.ultimoAltoPx = candidato.altoPx;
+  filtro.ultimoXRaw = candidato.posicion.x;
+  filtro.ultimoYRaw = candidato.posicion.y;
   ctx.ausenciasFiltroV2 = 0;
 }
 
-void publicarObjetivoV2(
+bool publicarObjetivoV2(
   ContextoCamara &ctx,
   int32_t conteoActual,
   const EstadoEncoderCompartido &encoder
 ) {
   FiltroDeteccionV2 &filtro = ctx.filtroV2;
-  if (filtro.consecutivas < DETECCIONES_ESTABLES_V2) return;
+  if (filtro.consecutivas < DETECCIONES_ESTABLES_V2) return false;
   const double desplazamiento = fabs(
     static_cast<double>(diferenciaConteosConWrap(
       conteoActual,
       filtro.conteoReferencia
     )) * static_cast<double>(escalaEncoderMm(encoder))
   );
-  if (desplazamiento < DESPLAZAMIENTO_MINIMO_V2_MM) return;
+  if (desplazamiento < DESPLAZAMIENTO_MINIMO_V2_MM) return false;
 
+  const int8_t relacion = filtro.relacionYEncoder == 0
+    ? static_cast<int8_t>(1 / CAMERA_SIGNO_Y_LOCAL)
+    : filtro.relacionYEncoder;
   const double yActual = filtro.promedioYCompensada +
-    static_cast<double>(encoder.signo) /
-    static_cast<double>(CAMERA_SIGNO_Y_LOCAL) *
-    static_cast<double>(diferenciaConteosConWrap(
-      conteoActual,
-      filtro.conteoReferencia
-    )) * static_cast<double>(escalaEncoderMm(encoder));
+    static_cast<double>(relacion) * desplazamientoEncoderMm(
+      conteoActual, filtro.conteoReferencia, encoder
+    );
   const long x10 = lround(filtro.promedioX * 10.0);
   const long y10 = lround(yActual * 10.0);
   if (x10 < INT16_MIN || x10 > INT16_MAX ||
       y10 < INT16_MIN || y10 > INT16_MAX) {
     reiniciarFiltroV2(ctx);
-    return;
+    return false;
   }
 
   ++ctx.secuenciaObjetivo;
@@ -1468,7 +2078,7 @@ void publicarObjetivoV2(
   ctx.rearmada = false;
   reiniciarFiltroV2(ctx);
 
-  Serial.print(F("[AUTO V2] Objetivo movil seq="));
+  Serial.print(F("[AUTO V2] Objetivo bloqueado seq="));
   Serial.print(ctx.secuenciaObjetivo);
   Serial.print(F(" clase="));
   Serial.print(ctx.claseObjetivo);
@@ -1478,6 +2088,7 @@ void publicarObjetivoV2(
   Serial.print(ctx.objetivoY10 / 10.0f, 1);
   Serial.print(F(" encoder="));
   Serial.println(ctx.conteoReferenciaObjetivo);
+  return true;
 }
 
 bool leerPiezasV2UnaVez(
@@ -1485,85 +2096,350 @@ bool leerPiezasV2UnaVez(
   const ControlCamaraCompartido &control,
   uint32_t ahora
 ) {
+  uint32_t consulta = ++consultasLogV2;
+  if (consulta == 0) consulta = ++consultasLogV2;
+  const EstadoEncoderCompartido encoderAntes = copiarEstadoEncoder();
+  const uint32_t inicioConsulta = millis();
   const int8_t resultCount = huskylens.getResult(PIECE_MODEL);
-  if (resultCount < 0) return false;
-
-  const EstadoEncoderCompartido encoder = copiarEstadoEncoder();
+  const uint32_t finConsulta = millis();
+  const EstadoEncoderCompartido encoderDespues = copiarEstadoEncoder();
+  EstadoEncoderCompartido encoder = encoderDespues;
+  const bool muestrasCompatibles =
+    encoderAntes.recibidoMs != 0 && encoderDespues.recibidoMs != 0 &&
+    inicioConsulta - encoderAntes.recibidoMs <= TIMEOUT_MUESTRA_ENCODER_MS &&
+    finConsulta - encoderDespues.recibidoMs <= TIMEOUT_MUESTRA_ENCODER_MS &&
+    encoderAntes.nmPorCuenta == encoderDespues.nmPorCuenta &&
+    encoderAntes.signo == encoderDespues.signo;
+  if (muestrasCompatibles) {
+    encoder.conteo = conteoMedioConWrap(
+      encoderAntes.conteo, encoderDespues.conteo
+    );
+  }
   const bool encoderValido = encoderRemotoVigente(encoder);
+  DiagnosticoDeteccionV2 diag = crearDiagnosticoBaseV2(
+    encoder, resultCount
+  );
+  diag.duracionConsultaMs = finConsulta - inicioConsulta;
+  diag.conteoAntesConsulta = encoderAntes.conteo;
+  diag.conteoDespuesConsulta = encoderDespues.conteo;
+  diag.conteoAsociadoCamara = encoder.conteo;
+  if (muestrasCompatibles) {
+    diag.recorridoDuranteConsultaMm = fabs(
+      desplazamientoEncoderMm(
+        encoderDespues.conteo, encoderAntes.conteo, encoderDespues
+      )
+    );
+  }
+  if (resultCount < 0) {
+    publicarYRegistrarDiagnosticoV2(
+      diag, V2_DIAG_HUSKY_ERROR, encoder, consulta
+    );
+    return false;
+  }
 
-  bool hayPrimera = false;
-  uint8_t clasePrimera = 0;
-  Point2D posicionPrimera = {};
-  bool hayCoincidente = false;
-  uint8_t claseCoincidente = 0;
-  Point2D posicionCoincidente = {};
-  double distanciaCoincidente = HUGE_VAL;
+  CandidatoPiezaV2 candidatos[MAX_CANDIDATOS_V2] = {};
+  CandidatoPiezaV2 unicos[MAX_CANDIDATOS_V2] = {};
+  uint8_t cantidadCandidatos = 0;
+  uint8_t cantidadUnicos = 0;
+  uint8_t indiceResultado = 0;
 
   while (huskylens.available(PIECE_MODEL)) {
     Result *result = huskylens.popCachedResult(PIECE_MODEL);
     if (result == nullptr) continue;
-    Point2D posicion;
+    const uint8_t indiceActual = indiceResultado;
+    if (indiceResultado < UINT8_MAX) ++indiceResultado;
+    CandidatoPiezaV2 candidato = {};
+    candidato.grupoDuplicado = UINT8_MAX;
+    candidato.clase = result->ID;
+    candidato.confianza = result->confidence;
+    candidato.centroXpx = result->xCenter;
+    candidato.centroYpx = result->yCenter;
+    candidato.anchoPx = result->width;
+    candidato.altoPx = result->height;
     if (!pixelToMillimeters(result->xCenter, result->yCenter,
-                            ctx.homografiaValida, posicion) ||
-        !isOverWhiteBelt(posicion)) {
+                            ctx.homografiaValida, candidato.posicion)) {
+      if (diag.rechazadosHomografia < UINT8_MAX)
+        ++diag.rechazadosHomografia;
+      registrarCandidatoLogV2(
+        consulta, encoder, candidato, indiceActual, V2_DIAG_HOMOGRAFIA
+      );
+      continue;
+    }
+    if (!isOverWhiteBelt(candidato.posicion)) {
+      if (diag.rechazadosFueraBanda < UINT8_MAX)
+        ++diag.rechazadosFueraBanda;
+      registrarCandidatoLogV2(
+        consulta, encoder, candidato, indiceActual, V2_DIAG_FUERA_BANDA
+      );
+      continue;
+    }
+    if (diag.candidatosValidos < UINT8_MAX) ++diag.candidatosValidos;
+    if (cantidadCandidatos >= MAX_CANDIDATOS_V2) {
+      registrarCandidatoLogV2(
+        consulta, encoder, candidato, indiceActual, V2_DIAG_SIN_BLOQUEO
+      );
       continue;
     }
 
-    if (!hayPrimera) {
-      hayPrimera = true;
-      clasePrimera = result->ID;
-      posicionPrimera = posicion;
-    }
-
-    if (mismaTrayectoriaV2(ctx.filtroV2, result->ID,
-                           posicion, encoder.conteo, encoder)) {
-      const double yCompensada = compensarYConEncoder(
-        posicion.y,
-        encoder.conteo,
-        ctx.filtroV2.conteoReferencia,
-        encoder
-      );
-      const double dx = posicion.x - ctx.filtroV2.promedioX;
-      const double dy = yCompensada - ctx.filtroV2.promedioYCompensada;
-      const double distancia2 = dx * dx + dy * dy;
-      if (distancia2 < distanciaCoincidente) {
-        distanciaCoincidente = distancia2;
-        hayCoincidente = true;
-        claseCoincidente = result->ID;
-        posicionCoincidente = posicion;
+    uint8_t grupo = cantidadUnicos;
+    bool duplicado = false;
+    for (uint8_t i = 0; i < cantidadUnicos; ++i) {
+      if (!cajasDuplicadasV2(unicos[i], candidato)) continue;
+      grupo = i;
+      duplicado = true;
+      if (candidatoV2MejorQue(candidato, unicos[i])) {
+        unicos[i] = candidato;
       }
+      break;
+    }
+    if (!duplicado && cantidadUnicos < MAX_CANDIDATOS_V2) {
+      unicos[cantidadUnicos] = candidato;
+      ++cantidadUnicos;
+    }
+    candidato.grupoDuplicado = grupo;
+    candidatos[cantidadCandidatos++] = candidato;
+    registrarCandidatoLogV2(
+      consulta, encoder, candidato, indiceActual, V2_DIAG_SIN_BLOQUEO
+    );
+  }
+  diag.candidatosUnicos = cantidadUnicos;
+  diag.duplicadosDescartados = cantidadCandidatos >= cantidadUnicos
+    ? cantidadCandidatos - cantidadUnicos : 0;
+
+  if (cantidadCandidatos > 1 &&
+      ahora - ultimoReporteCandidatosV2 >= 1000UL) {
+    ultimoReporteCandidatosV2 = ahora;
+    Serial.print(F("[V2][CAND] total="));
+    Serial.print(resultCount);
+    Serial.print(F(" valid="));
+    Serial.print(cantidadCandidatos);
+    Serial.print(F(" unicos="));
+    Serial.print(cantidadUnicos);
+    Serial.print(F(" duplicados="));
+    Serial.print(diag.duplicadosDescartados);
+    Serial.print(F(" consulta="));
+    Serial.print(diag.duracionConsultaMs);
+    Serial.print(F("ms enc="));
+    Serial.print(diag.conteoAntesConsulta);
+    Serial.print('/');
+    Serial.print(diag.conteoAsociadoCamara);
+    Serial.print('/');
+    Serial.print(diag.conteoDespuesConsulta);
+    Serial.print(F(" recorridoConsulta="));
+    Serial.println(diag.recorridoDuranteConsultaMm, 2);
+    for (uint8_t i = 0; i < cantidadCandidatos; ++i) {
+      const CandidatoPiezaV2 &c = candidatos[i];
+      Serial.print(F("[V2][CAND] i="));
+      Serial.print(i);
+      Serial.print(F(" grupo="));
+      Serial.print(c.grupoDuplicado);
+      Serial.print(F(" id="));
+      Serial.print(c.clase);
+      Serial.print(F(" conf="));
+      Serial.print(static_cast<int>(c.confianza));
+      Serial.print(F(" px="));
+      Serial.print(c.centroXpx);
+      Serial.print(',');
+      Serial.print(c.centroYpx);
+      Serial.print(F(" caja="));
+      Serial.print(c.anchoPx);
+      Serial.print('x');
+      Serial.print(c.altoPx);
+      Serial.print(F(" mm="));
+      Serial.print(c.posicion.x, 1);
+      Serial.print(',');
+      Serial.println(c.posicion.y, 1);
     }
   }
 
-  // En V2 la pieza procesada ya viajo aguas abajo. Se rearma un segundo
-  // despues de que el brazo quede libre, sin exigir que reaparezca en la
-  // posicion antigua de la imagen.
-  actualizarEsperaDesaparicion(ctx, false, ahora, control.brazoOcupado);
+  uint8_t bloqueoPrevio = V2_DIAG_SIN_BLOQUEO;
+  if (!control.portentaActiva || !control.automaticoV2Activo) {
+    bloqueoPrevio = V2_DIAG_INACTIVO;
+  } else if (control.brazoOcupado) {
+    bloqueoPrevio = V2_DIAG_BRAZO_OCUPADO;
+  } else if (ctx.objetivoValido) {
+    bloqueoPrevio = V2_DIAG_OBJETIVO_ACTIVO;
+  } else if (ctx.esperandoDesaparicion) {
+    bloqueoPrevio = V2_DIAG_ESPERANDO_DESAPARICION;
+  } else if (!ctx.rearmada) {
+    bloqueoPrevio = V2_DIAG_NO_REARMADO;
+  } else if (!encoderValido) {
+    bloqueoPrevio = diagnosticarEncoderV2(encoder);
+  }
 
-  if (!control.portentaActiva || !control.automaticoV2Activo ||
-      control.brazoOcupado || ctx.objetivoValido || !ctx.rearmada ||
-      ctx.esperandoDesaparicion || !encoderValido) {
+  if (bloqueoPrevio != V2_DIAG_SIN_BLOQUEO) {
+    publicarYRegistrarDiagnosticoV2(
+      diag, bloqueoPrevio, encoder, consulta
+    );
     reiniciarFiltroV2(ctx);
     ctx.ausenciasFiltroV2 = 0;
     return true;
   }
 
-  if (!hayPrimera) {
+  if (cantidadUnicos == 0) {
     if (ctx.ausenciasFiltroV2 < UINT8_MAX) ++ctx.ausenciasFiltroV2;
     if (ctx.ausenciasFiltroV2 > 2) reiniciarFiltroV2(ctx);
+    uint8_t causaSinPieza = V2_DIAG_SIN_RESULTADOS;
+    if (resultCount == 0) {
+      causaSinPieza = V2_DIAG_SIN_PIEZA;
+    } else if (diag.rechazadosHomografia > 0 &&
+               diag.rechazadosFueraBanda == 0) {
+      causaSinPieza = V2_DIAG_HOMOGRAFIA;
+    } else if (diag.rechazadosFueraBanda > 0) {
+      causaSinPieza = V2_DIAG_FUERA_BANDA;
+    }
+    publicarYRegistrarDiagnosticoV2(
+      diag, causaSinPieza, encoder, consulta
+    );
     return true;
   }
 
-  if (hayCoincidente) {
-    incorporarDeteccionV2(
-      ctx, claseCoincidente, posicionCoincidente, encoder.conteo, encoder
-    );
+  const bool habiaTrayectoria = ctx.filtroV2.consecutivas > 0;
+  uint8_t indiceElegido = 0;
+  bool hayCoincidente = false;
+  double mejorPuntaje = HUGE_VAL;
+  if (habiaTrayectoria) {
+    for (uint8_t i = 0; i < cantidadUnicos; ++i) {
+      const CandidatoPiezaV2 &candidato = unicos[i];
+      if (!mismaTrayectoriaV2(
+            ctx.filtroV2, candidato, encoder.conteo, encoder
+          )) continue;
+      const int8_t relacion = elegirRelacionYEncoderV2(
+        ctx.filtroV2, candidato.posicion, encoder.conteo, encoder
+      );
+      const double yCompensada = compensarYConEncoder(
+        candidato.posicion.y, encoder.conteo,
+        ctx.filtroV2.conteoReferencia, encoder, relacion
+      );
+      const double dx = candidato.posicion.x - ctx.filtroV2.promedioX;
+      const double dy = yCompensada - ctx.filtroV2.promedioYCompensada;
+      const double areaAnterior = fmax(
+        1.0, static_cast<double>(ctx.filtroV2.ultimoAnchoPx) *
+             static_cast<double>(ctx.filtroV2.ultimoAltoPx)
+      );
+      const double penalizacionTamano = fabs(
+        log(fmax(1.0, areaCajaV2(candidato)) / areaAnterior)
+      );
+      const double puntaje = dx * dx + dy * dy +
+                              penalizacionTamano * penalizacionTamano;
+      if (puntaje < mejorPuntaje) {
+        mejorPuntaje = puntaje;
+        indiceElegido = i;
+        hayCoincidente = true;
+      }
+    }
   } else {
-    incorporarDeteccionV2(
-      ctx, clasePrimera, posicionPrimera, encoder.conteo, encoder
+    for (uint8_t i = 1; i < cantidadUnicos; ++i) {
+      if (candidatoV2MejorQue(unicos[i], unicos[indiceElegido])) {
+        indiceElegido = i;
+      }
+    }
+  }
+
+  if (habiaTrayectoria && !hayCoincidente) {
+    for (uint8_t i = 0; i < cantidadUnicos; ++i) {
+      const CandidatoPiezaV2 &candidato = unicos[i];
+      const double recorridoDesdeUltima = fabs(desplazamientoEncoderMm(
+        encoder.conteo, ctx.filtroV2.ultimoConteo, encoder
+      ));
+      const double dxRaw = candidato.posicion.x - ctx.filtroV2.ultimoXRaw;
+      const double dyRaw = candidato.posicion.y - ctx.filtroV2.ultimoYRaw;
+      if (candidato.clase == ctx.filtroV2.clase &&
+          recorridoDesdeUltima >= DESPLAZAMIENTO_CAMARA_REPETIDA_MM &&
+          fabs(dxRaw) <= TOLERANCIA_CAMARA_REPETIDA_MM &&
+          fabs(dyRaw) <= TOLERANCIA_CAMARA_REPETIDA_MM) {
+        diag.clase = candidato.clase;
+        diag.xMm = candidato.posicion.x;
+        diag.yMm = candidato.posicion.y;
+        diag.deteccionesConsecutivas = ctx.filtroV2.consecutivas;
+        diag.desplazamientoMm = recorridoDesdeUltima;
+        diag.relacionYEncoder = ctx.filtroV2.relacionYEncoder;
+        publicarYRegistrarDiagnosticoV2(
+          diag, V2_DIAG_CAMARA_REPETIDA, encoder, consulta, i
+        );
+        return true;
+      }
+    }
+    for (uint8_t i = 1; i < cantidadUnicos; ++i) {
+      if (candidatoV2MejorQue(unicos[i], unicos[indiceElegido])) {
+        indiceElegido = i;
+      }
+    }
+  }
+
+  const CandidatoPiezaV2 &candidatoElegido = unicos[indiceElegido];
+  if (habiaTrayectoria && !hayCoincidente) {
+    const double yCompensadaRechazada = compensarYConEncoder(
+      candidatoElegido.posicion.y,
+      encoder.conteo,
+      ctx.filtroV2.conteoReferencia,
+      encoder,
+      elegirRelacionYEncoderV2(
+        ctx.filtroV2, candidatoElegido.posicion, encoder.conteo, encoder
+      )
+    );
+    diag.clase = candidatoElegido.clase;
+    diag.deteccionesConsecutivas = ctx.filtroV2.consecutivas;
+    diag.xMm = candidatoElegido.posicion.x;
+    diag.yMm = candidatoElegido.posicion.y;
+    diag.yCompensadaMm = yCompensadaRechazada;
+    diag.dispersionXmm =
+      fmax(ctx.filtroV2.maximoX, candidatoElegido.posicion.x) -
+      fmin(ctx.filtroV2.minimoX, candidatoElegido.posicion.x);
+    diag.dispersionYCompensadaMm =
+      fmax(ctx.filtroV2.maximoYCompensada, yCompensadaRechazada) -
+      fmin(ctx.filtroV2.minimoYCompensada, yCompensadaRechazada);
+    diag.desplazamientoMm = fabs(
+      static_cast<double>(diferenciaConteosConWrap(
+        encoder.conteo, ctx.filtroV2.conteoReferencia
+      )) * static_cast<double>(escalaEncoderMm(encoder))
     );
   }
-  publicarObjetivoV2(ctx, encoder.conteo, encoder);
+
+  incorporarDeteccionV2(ctx, candidatoElegido, encoder.conteo, encoder);
+
+  if (habiaTrayectoria && !hayCoincidente) {
+    publicarYRegistrarDiagnosticoV2(
+      diag, V2_DIAG_TRAYECTORIA, encoder, consulta, indiceElegido
+    );
+    return true;
+  }
+
+  diag.clase = ctx.filtroV2.clase;
+  diag.xMm = candidatoElegido.posicion.x;
+  diag.yMm = candidatoElegido.posicion.y;
+  diag.relacionYEncoder = ctx.filtroV2.relacionYEncoder;
+  diag.yCompensadaMm = compensarYConEncoder(
+    candidatoElegido.posicion.y,
+    encoder.conteo,
+    ctx.filtroV2.conteoReferencia,
+    encoder,
+    ctx.filtroV2.relacionYEncoder
+  );
+  completarMetricasFiltroV2(diag, ctx.filtroV2, encoder.conteo, encoder);
+
+  if (ctx.filtroV2.consecutivas < DETECCIONES_ESTABLES_V2) {
+    publicarYRegistrarDiagnosticoV2(
+      diag, V2_DIAG_DETECCIONES, encoder, consulta, indiceElegido
+    );
+    return true;
+  }
+  if (diag.desplazamientoMm < DESPLAZAMIENTO_MINIMO_V2_MM) {
+    publicarYRegistrarDiagnosticoV2(
+      diag, V2_DIAG_DESPLAZAMIENTO, encoder, consulta, indiceElegido
+    );
+    return true;
+  }
+
+  publicarCausaDiagnosticoV2(diag, V2_DIAG_OBJETIVO_LISTO);
+  if (publicarObjetivoV2(ctx, encoder.conteo, encoder)) {
+    diag.secuenciaPublicada = ctx.secuenciaObjetivo;
+    publicarYRegistrarDiagnosticoV2(
+      diag, V2_DIAG_PUBLICADO, encoder, consulta, indiceElegido
+    );
+  } else {
+    registrarConsultaLogV2(diag, encoder, consulta, indiceElegido);
+  }
   return true;
 }
 
@@ -1574,6 +2450,11 @@ bool leerPiezasUnaVez(
 ) {
   if (control.automaticoV2Activo) {
     return leerPiezasV2UnaVez(ctx, control, ahora);
+  }
+  {
+    const EstadoEncoderCompartido encoder = copiarEstadoEncoder();
+    DiagnosticoDeteccionV2 diag = crearDiagnosticoBaseV2(encoder, 0);
+    publicarCausaDiagnosticoV2(diag, V2_DIAG_INACTIVO);
   }
   const int8_t resultCount = huskylens.getResult(PIECE_MODEL);
   if (resultCount < 0) {
@@ -1642,7 +2523,9 @@ bool leerPiezasUnaVez(
     ctx,
     piezaProcesadaPresente,
     ahora,
-    control.brazoOcupado
+    control.brazoOcupado,
+    TIEMPO_DESAPARICION_MS,
+    false
   );
 
   if (
@@ -1793,15 +2676,17 @@ void procesarHandshakeObjetivo(
     control.codigoAckObjetivo != ACK_OBJ_NINGUNO &&
     control.ackObjetivo == ctx.secuenciaObjetivo
   ) {
-    // En V2 el ACK ACEPTADO solo reserva la pieza. Se conserva el objetivo
-    // hasta recibir COMPLETADO, CANCELADO o RECHAZADO, justo despues de que el
-    // tecnico clasifique el catch.
+    // La secuencia evita repetir el mismo mensaje I2C; no representa la clase
+    // ni conserva un historial de piezas fisicas. En V2 el ACK ACEPTADO solo
+    // reserva el objetivo bloqueado hasta un resultado terminal.
     const bool soloReservadoV2 = ctx.objetivoV2 &&
       control.codigoAckObjetivo == ACK_OBJ_ACEPTADO;
     if (!soloReservadoV2) {
-      Serial.print(F("[AUTO] ACK objetivo seq="));
+      Serial.print(ctx.objetivoV2
+        ? F("[AUTO V2] Objetivo liberado seq=")
+        : F("[AUTO] ACK objetivo seq="));
       Serial.print(ctx.secuenciaObjetivo);
-      Serial.print(F(" codigo="));
+      Serial.print(F(" ack="));
       Serial.println(control.codigoAckObjetivo);
       limpiarObjetivo(ctx, true);
     }
@@ -2012,12 +2897,50 @@ void procesarEstadoCamara(
       break;
 
     case CAMARA_LISTA: {
+      // El rearme V2 se resuelve antes de decidir si se consulta la camara. De
+      // este modo no se llama a HUSKYLENS durante el objetivo bloqueado ni en
+      // los 500 ms posteriores a su resultado terminal.
+      if (control.automaticoV2Activo && ctx.esperandoDesaparicion) {
+        actualizarEsperaDesaparicion(
+          ctx,
+          false,
+          ahora,
+          control.brazoOcupado,
+          TIEMPO_REARME_V2_MS,
+          true
+        );
+      }
+
+      if (control.automaticoV2Activo &&
+          (ctx.objetivoValido || control.brazoOcupado ||
+           ctx.esperandoDesaparicion || !ctx.rearmada)) {
+        const EstadoEncoderCompartido encoder = copiarEstadoEncoder();
+        DiagnosticoDeteccionV2 diag = crearDiagnosticoBaseV2(encoder, 0);
+        uint8_t causaBloqueo = V2_DIAG_NO_REARMADO;
+        if (control.brazoOcupado) {
+          causaBloqueo = V2_DIAG_BRAZO_OCUPADO;
+        } else if (ctx.objetivoValido) {
+          causaBloqueo = V2_DIAG_OBJETIVO_ACTIVO;
+        } else if (ctx.esperandoDesaparicion) {
+          causaBloqueo = V2_DIAG_ESPERANDO_DESAPARICION;
+        }
+        publicarCausaDiagnosticoV2(
+          diag,
+          causaBloqueo
+        );
+        reiniciarFiltroV2(ctx);
+        ctx.ausenciasFiltroV2 = 0;
+        ctx.proximaLectura = ahora + CAM_READ_PERIOD_V2_MS;
+        break;
+      }
+
       const bool deteccionNecesaria =
         control.automaticoActivo ||
         ctx.esperandoDesaparicion ||
         ctx.objetivoValido;
-      const uint32_t periodo =
-        deteccionNecesaria ? CAM_READ_PERIOD_MS : CAM_HEALTH_PERIOD_MS;
+      const uint32_t periodo = control.automaticoV2Activo
+        ? CAM_READ_PERIOD_V2_MS
+        : (deteccionNecesaria ? CAM_READ_PERIOD_MS : CAM_HEALTH_PERIOD_MS);
 
       if (!plazoCumplido(ahora, ctx.proximaLectura)) {
         break;
@@ -2279,10 +3202,33 @@ void mostrarModoAutomatico(const PaquetePortentaAESP &p) {
 }
 
 void mostrarModoAutomaticoV2(const PaquetePortentaAESP &p) {
+  const DiagnosticoDeteccionV2 diag = copiarDiagnosticoV2();
   dibujarTitulo(F("AUTOMATICO V2"));
   pantalla.setCursor(0, 12);
   pantalla.print(F("FASE: "));
   pantalla.println(p.faseCalibracionBrazo);
+  if (p.faseCalibracionBrazo == 0) {
+    pantalla.setCursor(0, 23);
+    pantalla.print(F("BLOQ: "));
+    pantalla.println(nombreCortoDiagnosticoV2(diag.causa));
+    pantalla.setCursor(0, 35);
+    pantalla.print(F("N:"));
+    pantalla.print(diag.deteccionesConsecutivas);
+    pantalla.print(F(" D:"));
+    pantalla.print(diag.desplazamientoMm, 1);
+    pantalla.println(F("mm"));
+    pantalla.setCursor(0, 47);
+    pantalla.print(F("AGE:"));
+    if (diag.edadEncoderMs == UINT32_MAX) pantalla.print(F("---"));
+    else pantalla.print(diag.edadEncoderMs);
+    pantalla.print(F(" R:"));
+    pantalla.print(diag.resultadosHusky);
+    pantalla.print(F(" V:"));
+    pantalla.print(diag.candidatosValidos);
+    pantalla.setCursor(0, 57);
+    pantalla.print(F("TRI:CANCELAR"));
+    return;
+  }
   pantalla.setCursor(0, 23);
   pantalla.print(F("ENC: "));
   pantalla.println(p.conteoEncoder);
@@ -2296,11 +3242,94 @@ void mostrarModoAutomaticoV2(const PaquetePortentaAESP &p) {
   pantalla.print(F("ACK:"));
   pantalla.println(p.ackSecuenciaObjetivo);
   pantalla.setCursor(0, 57);
-  if (p.faseCalibracionBrazo == 6) {
-    pantalla.print(F("X=CATCH O=FALLO"));
+  if (p.faseCalibracionBrazo == 7) {
+    pantalla.print(F("CATCH AUTOMATICO"));
   } else {
     pantalla.print(F("TRI:CANCELAR"));
   }
+}
+
+void procesarReporteDiagnosticoV2() {
+  const ControlCamaraCompartido control = copiarControlCamara();
+  if (!control.automaticoV2Activo) {
+    ultimaCausaDiagnosticoV2Reportada = 0xFF;
+    return;
+  }
+
+  const uint32_t ahora = millis();
+  const DiagnosticoDeteccionV2 diag = copiarDiagnosticoV2();
+  const bool cambio = diag.causa != ultimaCausaDiagnosticoV2Reportada;
+  const bool bloqueoObjetivo =
+    diag.causa == V2_DIAG_OBJETIVO_ACTIVO ||
+    diag.causa == V2_DIAG_BRAZO_OCUPADO ||
+    diag.causa == V2_DIAG_ESPERANDO_DESAPARICION ||
+    diag.causa == V2_DIAG_NO_REARMADO;
+  if (!cambio && (bloqueoObjetivo ||
+                  ahora - ultimoReporteDiagnosticoV2 < 1000UL)) return;
+  ultimaCausaDiagnosticoV2Reportada = diag.causa;
+  ultimoReporteDiagnosticoV2 = ahora;
+
+  Serial.print(F("[V2][DIAG] "));
+  if (diag.causa == V2_DIAG_PUBLICADO) {
+    Serial.print(F("PUBLICADO"));
+  } else {
+    Serial.print(F("bloqueo="));
+    Serial.print(nombreCausaDiagnosticoV2(diag.causa));
+  }
+  Serial.print(F(" age="));
+  if (diag.edadEncoderMs == UINT32_MAX) Serial.print(F("NA"));
+  else Serial.print(diag.edadEncoderMs);
+  Serial.print(F("ms flags=0x"));
+  Serial.print(diag.flagsEncoder, HEX);
+  Serial.print(F(" enc="));
+  Serial.print(diag.conteoEncoder);
+  Serial.print(F(" vel="));
+  Serial.print(diag.velocidadEncoderMmS, 1);
+  Serial.print(F(" husky="));
+  Serial.print(diag.resultadosHusky);
+  Serial.print(F(" valid="));
+  Serial.print(diag.candidatosValidos);
+  Serial.print(F(" unique="));
+  Serial.print(diag.candidatosUnicos);
+  Serial.print(F(" dup="));
+  Serial.print(diag.duplicadosDescartados);
+  Serial.print(F(" rejH="));
+  Serial.print(diag.rechazadosHomografia);
+  Serial.print(F(" rejB="));
+  Serial.print(diag.rechazadosFueraBanda);
+  Serial.print(F(" clase="));
+  Serial.print(diag.clase);
+  Serial.print(F(" n="));
+  Serial.print(diag.deteccionesConsecutivas);
+  Serial.print(F(" x="));
+  Serial.print(diag.xMm, 1);
+  Serial.print(F(" y="));
+  Serial.print(diag.yMm, 1);
+  Serial.print(F(" yc="));
+  Serial.print(diag.yCompensadaMm, 1);
+  Serial.print(F(" dx="));
+  Serial.print(diag.dispersionXmm, 1);
+  Serial.print(F(" dy="));
+  Serial.print(diag.dispersionYCompensadaMm, 1);
+  Serial.print(F(" d="));
+  Serial.print(diag.desplazamientoMm, 1);
+  Serial.print(F(" relY="));
+  Serial.print(static_cast<int>(diag.relacionYEncoder));
+  Serial.print(F(" query="));
+  Serial.print(diag.duracionConsultaMs);
+  Serial.print(F("ms dq="));
+  Serial.print(diag.recorridoDuranteConsultaMm, 1);
+  Serial.print(F(" encQ="));
+  Serial.print(diag.conteoAntesConsulta);
+  Serial.print('/');
+  Serial.print(diag.conteoAsociadoCamara);
+  Serial.print('/');
+  Serial.print(diag.conteoDespuesConsulta);
+  if (diag.secuenciaPublicada != 0) {
+    Serial.print(F(" seq="));
+    Serial.print(diag.secuenciaPublicada);
+  }
+  Serial.println();
 }
 
 void mostrarCalibracionEncoder(const PaquetePortentaAESP &p) {
@@ -2512,7 +3541,7 @@ void inicializarSnapshotSeguro() {
 }
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(BAUD_LOG_ESP);
   Serial.println();
   Serial.println(F("[BOOT] ESP32 integrada iniciando"));
 
@@ -2599,8 +3628,10 @@ void loop() {
   mantenerI2CEsclavoRecuperable();
 
   procesarRecepcionI2C();
+  vaciarColaLogV2();
   intentarInicializarOLEDNoBloqueante();
   prepararSnapshotI2C();
+  procesarReporteDiagnosticoV2();
   procesarPantalla();
 
   const uint32_t ahora = millis();
