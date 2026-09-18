@@ -182,11 +182,11 @@ function Nombre-FaseV2([string]$Fase) {
     switch ($Fase) {
         '0' { return 'ESPERANDO_PIEZA' }
         '1' { return 'PREPOSICIONANDO' }
-        '2' { return 'ESPERANDO_LLEGADA' }
+        '2' { return 'PREPARANDO_DESCENSO' }
         '3' { return 'DISPARANDO_CATCH' }
         '4' { return 'BAJANDO_Z' }
         '5' { return 'SUBIENDO_Z' }
-        '6' { return 'ESPERANDO_CONFIRMACION_HISTORICA' }
+        '6' { return 'ESPERANDO_CATCH_AUTOMATICO' }
         '7' { return 'COMPLETADO' }
         '8' { return 'CANCELANDO' }
         default { return '' }
@@ -251,16 +251,28 @@ function Describir-Evento([object]$Analizada, [string]$Linea) {
             return "$fase | brazo=($ax,$ay,Z:$z) objetivo=($tx,$ty) error=($ex,$ey) velocidad=$vel mm/s encoder=$enc"
         }
         'PHASE' { return "FASE -> $fase | objetivo #$obj" }
+        'TRIGGER' { return "PREBAJADA DE Z | objetivo #$obj | preposicion terminada, Z baja para esperar la pieza" }
+        'BUTTON_X' { return "X RECIBIDA E IGNORADA | Automatico V2 no requiere confirmacion | objetivo #$obj fase=$fase" }
         'ACCEPT' { return "OBJETIVO #$obj ACEPTADO | encoder=$enc velocidad=$vel mm/s" }
         'REJECT' { return "OBJETIVO #$obj RECHAZADO: $mensaje" }
         'ACK' {
             $ack = Nombre-AckV2 (Obtener-Dato $Analizada 'ack_code')
             return "ACK objetivo #${obj}: $ack"
         }
-        'CAPTURE' { return "CAPTURA | objetivo #$obj fase=$fase encoder=$enc velocidad=$vel mm/s" }
+        'READY_CATCH' {
+            $piezaY = Obtener-Dato $Analizada 'target_y'
+            return "Z ABAJO EN DIN04 | objetivo #$obj | pieza estimada Y=$piezaY mm | esperando cruce automatico Y=0 | encoder=$enc"
+        }
+        'CAPTURE' {
+            if ($mensaje -eq 'CATCH AUTOMATICO POR ENCODER') {
+                $piezaY = Obtener-Dato $Analizada 'target_y'
+                return "CATCH AUTOMATICO POR ENCODER | objetivo #$obj pieza estimada Y=$piezaY mm encoder=$enc velocidad=$vel mm/s"
+            }
+            return "CAPTURA | objetivo #$obj fase=$fase encoder=$enc velocidad=$vel mm/s"
+        }
         'RESULT' {
             if ($mensaje -eq 'CATCH_AUTOMATICO') {
-                return "CATCH AUTOMATICO completado | objetivo #$obj"
+                return "CICLO DE CATCH AUTOMATICO COMPLETADO | objetivo #$obj"
             }
             return "RESULTADO objetivo #${obj}: $mensaje"
         }
@@ -471,7 +483,8 @@ try {
             # ya estaba dentro de V2 y la linea de entrada ocurrio antes.
             $eventosQueConfirmanV2 = @(
                 'SESSION_START', 'TELEMETRY', 'PHASE', 'ACCEPT', 'REJECT',
-                'ACK', 'CAPTURE', 'RESULT', 'CANCEL', 'ERROR'
+                'ACK', 'TRIGGER', 'READY_CATCH', 'BUTTON_X', 'CAPTURE',
+                'RESULT', 'CANCEL', 'ERROR'
             )
             $eventoConfirmaV2 = $eventosQueConfirmanV2 -contains $evento
             $estadoGeneralLegado = $null

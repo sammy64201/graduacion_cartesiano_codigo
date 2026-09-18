@@ -16,7 +16,7 @@
 namespace ProtocoloI2C {
 
 constexpr uint8_t DIRECCION_ESP32 = 0x40;
-constexpr uint8_t VERSION_PROTOCOLO = 5;
+    constexpr uint8_t VERSION_PROTOCOLO = 6;
 constexpr uint8_t MAGIC_ESP_A_PORTENTA = 0xE3;
 constexpr uint8_t MAGIC_PORTENTA_A_ESP = 0xA7;
 constexpr size_t MAX_BYTES_WIRE = 32;
@@ -34,7 +34,10 @@ enum EstadoSistemaWire : uint8_t {
     SISTEMA_MODO_AUTOMATICO = 9,
     SISTEMA_ERROR = 10,
     SISTEMA_MODO_AUTOMATICO_V2 = 11,
-    SISTEMA_CALIBRANDO_ENCODER = 12
+    SISTEMA_CALIBRANDO_ENCODER = 12,
+    SISTEMA_MENU_CALIBRACIONES = 13,
+    SISTEMA_PRUEBA_SERVOS = 14,
+    SISTEMA_DIAGNOSTICO = 15
 };
 
 enum OpcionMenuWire : uint8_t {
@@ -42,7 +45,10 @@ enum OpcionMenuWire : uint8_t {
     MENU_MODO_AUTOMATICO = 1,
     MENU_CALIBRACION_BRAZO = 2,
     MENU_CALIBRACION_CAMARA = 3,
-    MENU_MODO_AUTOMATICO_V2 = 4
+    MENU_MODO_AUTOMATICO_V2 = 4,
+    MENU_CALIBRACIONES = 5,
+    MENU_PRUEBA_SERVOS = 6,
+    MENU_DIAGNOSTICO = 7
 };
 
 enum FlagsEncoder : uint8_t {
@@ -152,7 +158,7 @@ enum FlagsSistema : uint8_t {
     SIS_FLAG_AUTO_ACTIVO = 1U << 3,
     SIS_FLAG_BRAZO_OCUPADO = 1U << 4,
     SIS_FLAG_ERROR_CRITICO = 1U << 5,
-    SIS_FLAG_CHECKLIST_OK = 1U << 6,
+    SIS_FLAG_ENCODER_CALIBRADO = 1U << 6,
     SIS_FLAG_MOTORES_HABILITADOS = 1U << 7
 };
 
@@ -185,6 +191,7 @@ constexpr uint8_t MOV_SHIFT_X = 0;
 constexpr uint8_t MOV_SHIFT_Y = 2;
 constexpr uint8_t MOV_SHIFT_Z = 4;
 constexpr uint8_t MOV_MASK_EJE = 0x03;
+
 
 struct __attribute__((packed)) PaqueteESPAPortenta {
     uint8_t magic;

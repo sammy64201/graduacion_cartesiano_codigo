@@ -1,0 +1,23 @@
+% Borrador de sustitución del bloque FASE 4 de metodologia.tex.
+% Se conservó la cronología descrita por el autor. Los detalles de software
+% se contrastaron con pruebas de automatico v2 (consulta: 2026-09-07).
+% No sustituir las Fases 1--3 ni las Fases 5--6.
+
+En la cuarta fase se desarrollaron el accionamiento electrónico, el modo de operación manual y la referenciación del brazo. Después de comprobar el funcionamiento mecánico, se montó el circuito de prueba en placas de conexiones sin soldadura, o protoboards, y se utilizó cable calibre AWG~22 para las interconexiones entre módulos y microcontroladores.
+
+La programación se inició con las funciones de movimiento de los motores mediante comandos. En la Portenta H7, mediante la interfaz Machine Control, se implementaron las señales de paso y dirección y el conteo de los pulsos generados. Posteriormente, se incorporó la lectura de los finales de carrera y el bloqueo del desplazamiento hacia un límite activo.
+
+Se integró el mando inalámbrico mediante Bluepad32 en la ESP32. Sus entradas se transformaron en órdenes de dirección para los ejes X, Y y Z y se intercambiaron con la Portenta mediante I2C. La Portenta ejecutó las órdenes admitidas y devolvió información de movimiento, límites y estados. La ESP32 también gestionó los servomotores del efector final y una pantalla OLED como interfaz humano-máquina.
+
+Para el intercambio entre placas, se configuró la Portenta como maestra I2C y la ESP32 como esclava. Se definieron mensajes binarios de longitud fija para transferir las órdenes y los estados, se incorporaron comprobaciones de integridad y vigencia y se programaron las respuestas ante fallos de comunicación. La OLED se conectó a un segundo bus I2C gestionado por la ESP32. El montaje se documentó mediante fotografías, en las cuales se identificó un controlador DM542T.
+
+Después de comprobar esta interacción, se desarrolló la rutina de referenciación y determinación del recorrido en pasos. Para cada eje se programaron la aproximación a sus dos finales de carrera, la liberación de cada sensor y una segunda aproximación a menor frecuencia de pasos. A partir del conteo entre extremos se estableció una referencia central y se calcularon los factores de conversión de pasos por milímetro para X y Y.
+
+Después del desarrollo del movimiento mediante joysticks, se incorporó el ingreso de coordenadas por terminal y una función de conversión de coordenadas cartesianas a destinos de pasos para el posicionamiento de X y Y. Esta función se distinguió del movimiento direccional mediante joystick, que utilizó órdenes de avance, retroceso y detención. Se emplearon recorridos de referencia de 446~mm para X y 336~mm para Y. Las comprobaciones funcionales descritas por el autor abarcaron el movimiento del brazo, la lectura de los finales y la interacción entre el mando, la ESP32 y la Portenta; no se les atribuyeron errores de posicionamiento ni tiempos de respuesta que no se hubieran documentado.
+
+% PENDIENTES: alimentación, ajustes de corriente/micropasos y esquema físico.
+% La foto identificó un DM542T, no todos los controladores ni su configuración.
+% El autor confirmó Y = 336 mm como recorrido físico y confirmó la incorporación
+% de coordenadas por terminal después del accionamiento mediante joysticks.
+% El orden de desarrollo no equivalió al arranque actual: la versión V2
+% también incluyó etapas de cámara y encoder, fuera del alcance de esta fase.

@@ -1,0 +1,151 @@
+\section{Fase 5. Integración de visión y comprobación previa a la sincronización con la banda}
+\label{sec:resultados_fase5}
+
+\subsection{Conjunto de datos y alcance del reconocimiento}
+
+Se obtuvo un conjunto de 800 imágenes a partir de fotografías y fotogramas seleccionados de videos: 400 correspondieron a la pieza 6 y 400 a la pieza 7. Se utilizó Mind+ para cargar las imágenes y preparar las anotaciones en formato YOLO mediante cajas delimitadoras manuales. Cada clase representó el 50\% del conjunto. Las particiones de entrenamiento, validación y prueba quedaron pendientes de documentación; las 800 imágenes correspondieron al conjunto total informado, no a una partición de entrenamiento verificada.
+
+En las pruebas descritas por el autor se detectaron las piezas, pero no se obtuvo una diferenciación consistente entre los tipos 6 y 7. No se dispuso de una matriz de confusión ni de métricas de detección o clasificación para cuantificar ese comportamiento. La clasificación por tipo no se incorporó como resultado validado de la aplicación. La localización visual se conservó para las pruebas de posicionamiento; no se consignó un total de piezas recogidas sin el registro correspondiente.
+
+\subsection{Enlace UART y gestión de la cámara}
+
+Se implementó la comunicación con la HUSKYLENS 2 mediante UART2 de la ESP32, a 115200 baudios y con formato 8N1: ocho bits de datos, sin paridad y un bit de parada. Se asignó GPIO32 a la recepción desde TX de la cámara y GPIO33 a la transmisión hacia RX de la cámara. Se utilizó la biblioteca \texttt{DFRobot\_HuskylensV2}. El enlace sustituyó la conexión I2C utilizada inicialmente para la cámara, según la secuencia de integración reportada por el autor.
+
+Las llamadas a la cámara quedaron concentradas en \texttt{tareaCamara()}. La atención de los estados, comandos y resultados se organizó mediante las funciones del Cuadro~\ref{tab:fase5_comunicacion}. La tarea se creó con prioridad de reposo y se programó una cesión de 2~ms entre sus iteraciones; este parámetro no correspondió al tiempo de respuesta de la cámara.
+
+\begin{table}[H]
+    \centering\small
+    \caption{Funciones implementadas para la comunicación y gestión de la cámara.}
+    \label{tab:fase5_comunicacion}
+    \begin{tabular}{p{0.47\textwidth}p{0.43\textwidth}}
+        \hline
+        Función o llamada & Responsabilidad implementada \\
+        \hline
+        \texttt{HuskyUART.begin()} & Configuración del puerto, formato y pines UART. \\
+        \texttt{vaciarUARTCamara()}, \texttt{huskylens.begin()} & Vaciado de recepción antes de intentar la conexión e inicio de la comunicación. \\
+        \texttt{tareaCamara()} & Ejecución de las operaciones de cámara en una tarea dedicada. \\
+        \texttt{procesarComandoCamara()} & Atención de comandos de espera, calibración, apertura de modelo y reinicio de error. \\
+        \texttt{procesarEstadoCamara()} & Secuencia de conexión, lectura de marcadores, cálculo, apertura y detección. \\
+        \texttt{huskylens.switchAlgorithm()} & Selección del reconocimiento de etiquetas o del modelo personalizado. \\
+        \texttt{publicarEstadoCamara()} & Actualización del estado compartido con las demás funciones de la ESP32. \\
+        \texttt{registrarErrorCamara()} & Registro del fallo y definición de la respuesta de recuperación. \\
+        \hline
+    \end{tabular}
+    \par\small\raggedright Fuente: elaboración propia a partir de ESP.ino, carpeta pruebas de automatico v2.
+\end{table}
+
+Se programaron esperas de 3~s después de seleccionar el reconocimiento de etiquetas, de 2~s después del cálculo de la homografía y de 8~s después de solicitar el modelo personalizado. La adquisición de marcadores se limitó a 120~s. Estos valores correspondieron a parámetros del programa y no a duraciones medidas de carga o calibración.
+
+El modelo se seleccionó mediante \texttt{ALGORITHM\_CUSTOM\_BEGIN} más el índice configurado 1. El estado de modelo listo se estableció después de aceptar el cambio de algoritmo y completar la espera programada; no constituyó una evaluación de la calidad del entrenamiento. Los comandos recibidos desde la Portenta incluyeron una secuencia, que se registró para evitar procesar nuevamente la misma orden. La ESP32 publicó por I2C los estados de cámara conectada, homografía válida, modelo listo y error, junto con el reconocimiento del comando recibido. Esta confirmación de recepción se distinguió de la finalización de la calibración o de la apertura del modelo.
+
+\subsection{Calibración geométrica del plano de trabajo}
+
+Se implementó una correspondencia entre cuatro centros de marcadores en la imagen y cuatro posiciones métricas. El código identificó los marcadores con los valores 0, 1, 2 y 3 y acumuló 25 observaciones por marcador. Las dimensiones utilizadas fueron 292~mm de ancho útil de banda, 412~mm de ancho total y 382~mm de separación longitudinal entre filas de marcadores. Estos valores fueron confirmados por el autor y coincidieron con la configuración del firmware. A partir de estos parámetros, se definió una separación transversal de 352~mm entre los centros de los marcadores y el origen en el centro del rectángulo de referencia. Las coordenadas utilizadas se presentaron en el Cuadro~\ref{tab:fase5_tags}.
+
+\IfFileExists{figuras_fase5/apriltags_banda.jpg}{%
+La disposición de los marcadores sobre el montaje se documentó en la Figura~\ref{fig:fase5_apriltags}.
+}{%
+El registro fotográfico de la disposición de los marcadores quedó pendiente; se reservó el espacio de la Figura~\ref{fig:fase5_apriltags} para incorporarlo.
+}
+
+\begin{figure}[H]
+    \centering
+    \IfFileExists{figuras_fase5/apriltags_banda.jpg}{%
+        \includegraphics[width=0.85\textwidth,height=0.38\textheight,keepaspectratio]{figuras_fase5/apriltags_banda.jpg}
+    }{%
+        \fbox{\parbox[c][5.5cm][c]{0.82\textwidth}{\centering
+        Fotografía pendiente de incorporación\\[1em]
+        Disposición de los cuatro AprilTags y la banda transportadora}}
+    }
+    \caption{Disposición de los cuatro marcadores AprilTag utilizados para la calibración geométrica del plano de trabajo.}
+    \label{fig:fase5_apriltags}
+    \IfFileExists{figuras_fase5/apriltags_banda.jpg}{%
+        \par\small\raggedright Fuente: registro fotográfico del autor.
+    }{%
+        \par\small\raggedright Fuente prevista: registro fotográfico del autor, pendiente de incorporación. El recuadro no constituyó evidencia fotográfica.
+    }
+\end{figure}
+
+\begin{table}[H]
+    \centering
+    \caption{Coordenadas de referencia de los marcadores configuradas en el firmware.}
+    \label{tab:fase5_tags}
+    \begin{tabular}{crr}
+        \hline
+        Identificador & $X_c$ (mm) & $Y_c$ (mm) \\
+        \hline
+        0 & $-176$ & $-191$ \\
+        1 & $176$ & $-191$ \\
+        2 & $176$ & $191$ \\
+        3 & $-176$ & $191$ \\
+        \hline
+    \end{tabular}
+    \par\small\raggedright Fuente: elaboración propia a partir de las constantes geométricas y de getPhysicalTagPosition() en ESP.ino. Los valores correspondieron a la configuración; su disposición física quedó pendiente de corroboración documental.
+\end{table}
+
+La matriz obtenida por el algoritmo tuvo dimensión $3\times3$, con ocho parámetros calculados y el elemento $h_{22}$ fijado en uno, según la indexación desde cero del código. La conversión implementada se expresó mediante la Ecuación~\ref{eq:fase5_homografia}, donde $(u,v)$ correspondió al centro detectado en la imagen y $(X_c,Y_c)$ a la posición en milímetros respecto del rectángulo de referencia.
+
+\begin{equation}
+ X_c=\frac{h_{00}u+h_{01}v+h_{02}}{h_{20}u+h_{21}v+1},\qquad
+ Y_c=\frac{h_{10}u+h_{11}v+h_{12}}{h_{20}u+h_{21}v+1}.
+ \label{eq:fase5_homografia}
+\end{equation}
+
+Se implementó la solución del sistema $8\times8$ mediante eliminación de Gauss-Jordan con selección de pivote por magnitud. Se rechazaron pivotes de magnitud inferior a $10^{-12}$ o no finitos. En la transformación de puntos también se comprobó el denominador y la finitud de las coordenadas. El área útil se restringió a $|X_c|\leq146$~mm y $|Y_c|\leq191$~mm. La matriz numérica y los errores de comprobación en puntos independientes quedaron pendientes de registro.
+
+Las funciones de adquisición, cálculo y aplicación de la calibración se resumieron en el Cuadro~\ref{tab:fase5_calibracion}. Ante un fallo de lectura durante la adquisición, se borraron las muestras acumuladas antes de la recuperación de la comunicación.
+
+\begin{table}[H]
+    \centering\small
+    \caption{Funciones implementadas para la calibración y la localización planar.}
+    \label{tab:fase5_calibracion}
+    \begin{tabular}{p{0.47\textwidth}p{0.43\textwidth}}
+        \hline
+        Función & Resultado del procesamiento \\
+        \hline
+        \texttt{resetCalibrationData()} & Reinicio de acumuladores y matriz. \\
+        \texttt{extractTagCode()}, \texttt{findTagIndex()} & Identificación y asociación de cada marcador. \\
+        \texttt{leerTagsUnaVez()} & Acumulación de centros de imagen por marcador. \\
+        \texttt{allTagsReady()} & Comprobación de 25 observaciones en cada uno de los cuatro marcadores. \\
+        \texttt{getPhysicalTagPosition()} & Asignación de las coordenadas métricas de referencia. \\
+        \texttt{calculateHomography()}, \texttt{solveLinearSystem8()} & Promedios, construcción y resolución del sistema lineal. \\
+        \texttt{pixelToMillimeters()} & Transformación de centros de imagen a coordenadas métricas. \\
+        \texttt{isInsideCalibrationArea()}, \texttt{isOverWhiteBelt()} & Filtrado espacial por límites configurados. \\
+        \texttt{printHomography()} & Presentación de la matriz por terminal. \\
+        \hline
+    \end{tabular}
+    \par\small\raggedright Fuente: elaboración propia a partir de ESP.ino, carpeta pruebas de automatico v2.
+\end{table}
+
+\subsection{Posicionamiento visual previo a la incorporación del encoder}
+
+En la ruta automática básica, \texttt{leerPiezasUnaVez()} obtuvo los centros de las detecciones y aplicó la transformación métrica y el filtro espacial. Las funciones \texttt{mismaDeteccionEstable()} e \texttt{incorporarDeteccion()} agruparon detecciones de la misma clase con una dispersión máxima configurada de 4~mm en cada coordenada. \texttt{publicarObjetivoEstable()} exigió al menos cuatro detecciones consecutivas y publicó la posición promedio, una secuencia de objetivo y la clase. Las coordenadas se codificaron en décimas de milímetro; esa representación no correspondió a una exactitud de 0.1~mm.
+
+La Portenta recibió el objetivo mediante el enlace I2C documentado en la cuarta fase. En \texttt{procesarModoAutomatico()} se aplicaron \texttt{transformarCamaraABrazo()}, \texttt{cinematicaInversaCartesiana()} e \texttt{iniciarMovimientoXY()}. La configuración revisada no intercambió los ejes, invirtió ambos signos y utilizó desplazamientos de origen nulos, por lo que aplicó $X_b=-X_c$ e $Y_b=-Y_c$. Se comprobaron los límites del espacio de trabajo antes de aceptar el movimiento y se utilizó la secuencia del objetivo para evitar su ejecución repetida.
+
+Esta ruta ordenó desplazamientos X/Y y mantuvo Z detenido; no empleó el conteo del encoder para compensar las coordenadas del objetivo. En las cinco pruebas con la banda detenida, el brazo se desplazó hasta la ubicación de la pieza en los cinco casos, según la comprobación funcional reportada por el autor. No se ejecutó la recogida de las piezas en esta subetapa. El resultado agregado se presentó en el Cuadro~\ref{tab:fase5_prueba_estatica}.
+
+\begin{table}[H]
+    \centering
+    \caption{Resultado de las pruebas funcionales de posicionamiento con la banda detenida.}
+    \label{tab:fase5_prueba_estatica}
+    \begin{tabular}{p{0.61\textwidth}p{0.25\textwidth}}
+        \hline
+        Indicador & Resultado \\
+        \hline
+        Pruebas realizadas & 5 \\
+        Desplazamientos hasta la ubicación de la pieza, según el criterio funcional aplicado & 5 \\
+        Casos sin coincidencia de ubicación reportados & 0 \\
+        Proporción de casos aceptados en la serie & 5/5 (100\%) \\
+        Recogida de piezas & No se ejecutó \\
+        Error de posición en milímetros & No se documentó \\
+        \hline
+    \end{tabular}
+    \par\small\raggedright Fuente: elaboración propia a partir de los resultados agregados informados por el autor. La aceptación correspondió a la coincidencia funcional de ubicación, sin tolerancia métrica documentada.
+\end{table}
+
+No se documentaron las coordenadas individuales de las pruebas ni un error de posición en milímetros. El porcentaje correspondió únicamente a los cinco casos examinados; no se presentó como precisión del sistema, tasa de recogida ni resultado de clasificación.
+
+% Los apartados de encoder, sincronización dinámica y conteo de capturas
+% se añadirán después de documentar esa etapa. No equiparar EST_AUTOMATICO
+% con EST_AUTOMATICO_V2 ni inferir el orden histórico desde el arranque actual.

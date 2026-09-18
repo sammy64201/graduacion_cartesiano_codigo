@@ -1,0 +1,112 @@
+La metodología adoptada para este trabajo se estructuró a partir de los objetivos específicos y se desarrolló en seis fases enfocadas en la evaluación del sistema original, la selección de componentes y el rediseño mecánico, la implementación mecánica, el desarrollo y comprobación del modo manual, el desarrollo del sistema de control con retroalimentación y la validación experimental. El proceso siguió el orden en el que se ejecutaron las actividades y permitió integrar progresivamente los componentes mecánicos, electrónicos y de control.
+
+El trabajo se enmarcó en una investigación aplicada de desarrollo tecnológico, debido a que tuvo como finalidad solucionar un problema específico mediante el rediseño y la implementación de un sistema funcional. El proyecto estuvo orientado a mejorar el desempeño de un brazo robótico cartesiano existente y a incorporar las funciones necesarias para su operación manual y automática dentro de una línea de empaquetado.
+
+Asimismo, la investigación se desarrolló bajo un enfoque cuantitativo experimental, debido a que se basó en la medición, el análisis y la comparación de variables relacionadas con el desempeño del sistema. Se realizaron pruebas funcionales durante las etapas de integración y posteriormente se efectuaron ensayos repetitivos para evaluar el movimiento, la precisión, la repetibilidad y el funcionamiento del sistema de control con retroalimentación.
+
+
+% ============================================================
+% FASE 1
+% ============================================================
+
+En la primera fase se inspeccionó el brazo robótico cartesiano existente y se examinó, mediante manipulación directa, el desplazamiento de los ejes X, Y y Z. El sistema electrónico permaneció desenergizado durante esta evaluación.
+
+Se revisaron los elementos de guiado, los carros, los rodamientos y la disposición del conjunto vertical. Se observaron el contacto entre componentes, la resistencia al desplazamiento, la alineación y las diferencias de avance entre los extremos del pórtico. Estas observaciones constituyeron una evaluación cualitativa; no se midieron fuerzas de desplazamiento ni errores de posicionamiento en esta fase.
+
+La configuración inicial se documentó mediante fotografías. Las observaciones se organizaron por eje y se utilizaron como referencia para la selección de componentes y el rediseño mecánico.
+
+
+% ============================================================
+% FASE 2
+% ============================================================
+
+En la segunda fase se seleccionaron los componentes de guiado y se desarrolló el rediseño mecánico mediante Autodesk Inventor. Se mantuvieron la arquitectura cartesiana y la disposición general de los ejes X, Y y Z. Se retomaron los diseños de los soportes de los ejes guía y de los motores de X y Y, y se adaptaron sus dimensiones a los nuevos componentes. Esta reutilización correspondió a los diseños, no a las piezas impresas del mecanismo original.
+
+Se seleccionaron ejes guía de acero de 12~mm de diámetro y rodamientos lineales compatibles. Para los carros de X y Y se eligieron rodamientos con carcasa y puntos de fijación; para el conjunto central se seleccionaron rodamientos lineales cilíndricos.
+
+Se modelaron los carros a partir de la geometría de los rodamientos seleccionados y se definieron los espacios para el paso del eje perpendicular y de la faja dentada. Posteriormente, se modeló el conjunto central y se estableció la separación entre las guías a partir de la disposición de sus rodamientos.
+
+En el ensamblaje CAD se incorporó el mecanismo del eje Z, compuesto por dos guías y un tornillo de avance. Se diseñaron sus soportes superior e inferior según la separación definida en el conjunto central y se desarrolló el soporte de montaje del efector final.
+
+Los componentes se integraron en un ensamblaje digital que sirvió como referencia para la fabricación. Los ajustes derivados de las pruebas físicas se realizaron durante la tercera fase y se incorporaron nuevamente al modelo CAD.
+
+
+% ============================================================
+% FASE 3
+% ============================================================
+
+En la tercera fase se fabricaron los componentes y se ensambló el mecanismo. Los perfiles de aluminio y los ejes de acero se cortaron en el Laboratorio de Máquinas de la Universidad del Valle de Guatemala según las dimensiones del diseño.
+
+Los componentes personalizados se imprimieron en ácido poliláctico (PLA) mediante una impresora Bambu Lab A1. Se fabricaron nuevamente los soportes de los ejes y de los motores, los carros, las piezas del conjunto central, los soportes del eje Z y los elementos complementarios de montaje y acabado. Se emplearon perfiles de aluminio 2020 de ranura en T, escuadras, tornillería compatible con los perfiles y arandelas en las uniones.
+
+El montaje se desarrolló de forma iterativa. Se revisaron las restricciones de impresión y la retención de los rodamientos, se modificaron los modelos que requirieron ajustes y se fabricaron las nuevas versiones. Las modificaciones abarcaron el conjunto central y el soporte inferior del eje Z. Para el efector final se utilizó un modelo de garra obtenido de una fuente externa y se desarrolló su soporte de integración.
+
+% PENDIENTE DOCUMENTAL: completar la referencia del modelo original de la garra.
+% No se atribuyó al proyecto la autoría de ese modelo.
+
+Para alinear las guías, se trasladaron al montaje las distancias obtenidas en Autodesk Inventor y se ajustó la posición de los soportes. Las fajas dentadas se fijaron a los carros mediante tornillos; también se emplearon tornillos para madera que atravesaron las fajas en los puntos seleccionados. Su posición se ajustó durante el tensado y se comprobó el desplazamiento del mecanismo. En el eje Z se ensamblaron las guías y el tornillo de avance según la disposición definida en el modelo.
+
+Antes del accionamiento electrónico, se comprobó el movimiento de los tres ejes mediante manipulación directa. Se observaron la continuidad del desplazamiento, la aparición de atascos, la permanencia de los carros sobre las guías y la retención de los rodamientos. También se revisaron visualmente el avance relativo de los extremos del pórtico y el comportamiento del conjunto durante el movimiento.
+
+Estas comprobaciones fueron cualitativas y se distinguieron de la operación posterior mediante mando inalámbrico. En esta fase no se efectuaron mediciones instrumentadas de fricción, deflexión, precisión o repetibilidad. El montaje y los componentes se documentaron mediante fotografías y videos.
+
+% PENDIENTES DOCUMENTALES DE LAS FASES 1--3:
+% - Período de ejecución y parámetros de impresión, si se conservaron registros.
+% - Procedencia de los recorridos X = 446 mm e Y = 336 mm (CAD o medición física).
+% - Recorrido físico de Z y procedimiento/instrumento usado para determinarlo.
+% - Identificación de las versiones CAD representadas en las figuras de la Fase 2.
+% La Fase 4 se actualizó; las Fases 5--6 se conservaron para su revisión posterior.
+% El autor confirmó Y = 336 mm como recorrido físico; quedó pendiente el método de medición.
+
+
+% ============================================================
+% FASE 4
+% ============================================================
+
+En la cuarta fase se desarrollaron el accionamiento electrónico, el modo de operación manual y la referenciación del brazo. Después de comprobar el funcionamiento mecánico, se montó el circuito de prueba en placas de conexiones sin soldadura, o protoboards, y se utilizó cable calibre AWG~22 para las interconexiones entre módulos y microcontroladores.
+
+La programación se inició con las funciones de movimiento de los motores mediante comandos. En la Portenta H7, mediante la interfaz Machine Control, se implementaron las señales de paso y dirección y el conteo de los pulsos generados. Posteriormente, se incorporó la lectura de los finales de carrera y el bloqueo del desplazamiento hacia un límite activo.
+
+Se integró el mando inalámbrico mediante Bluepad32 en la ESP32. Sus entradas se transformaron en órdenes de dirección para los ejes X, Y y Z y se intercambiaron con la Portenta mediante I2C. La Portenta ejecutó las órdenes admitidas y devolvió información de movimiento, límites y estados. La ESP32 también gestionó los servomotores del efector final y una pantalla OLED como interfaz humano-máquina.
+
+Para el intercambio entre placas, se configuró la Portenta como maestra I2C y la ESP32 como esclava. Se definieron mensajes binarios de longitud fija para transferir las órdenes y los estados, se incorporaron comprobaciones de integridad y vigencia y se programaron las respuestas ante fallos de comunicación. La OLED se conectó a un segundo bus I2C gestionado por la ESP32. El montaje se documentó mediante fotografías, en las cuales se identificó un controlador DM542T.
+
+Después de comprobar esta interacción, se desarrolló la rutina de referenciación y determinación del recorrido en pasos. Para cada eje se programaron la aproximación a sus dos finales de carrera, la liberación de cada sensor y una segunda aproximación a menor frecuencia de pasos. A partir del conteo entre extremos se estableció una referencia central y se calcularon los factores de conversión de pasos por milímetro para X y Y.
+
+Después del desarrollo del movimiento mediante joysticks, se incorporó el ingreso de coordenadas por terminal y una función de conversión de coordenadas cartesianas a destinos de pasos para el posicionamiento de X y Y. Esta función se distinguió del movimiento direccional mediante joystick, que utilizó órdenes de avance, retroceso y detención. Se emplearon recorridos de referencia de 446~mm para X y 336~mm para Y. Las comprobaciones funcionales descritas por el autor abarcaron el movimiento del brazo, la lectura de los finales y la interacción entre el mando, la ESP32 y la Portenta; no se les atribuyeron errores de posicionamiento ni tiempos de respuesta que no se hubieran documentado.
+
+
+% ============================================================
+% FASE 5
+% ============================================================
+
+En la quinta fase se desarrolló el sistema de control con retroalimentación. Esta etapa se inició después de comprobar el funcionamiento del modo manual, los movimientos de los tres ejes, los finales de carrera y la comunicación entre el ESP32 y la Portenta H7.
+
+El ESP32 se utilizó como unidad principal de supervisión del sistema. En esta unidad se concentró la información necesaria para gestionar la secuencia automática y generar las instrucciones de movimiento que posteriormente fueron ejecutadas por la Portenta H7.
+
+Se integró el sistema de visión encargado de detectar los objetos y obtener la información requerida para establecer su posición dentro del área de trabajo. Asimismo, se incorporó la lectura del codificador rotativo asociado con la banda transportadora para obtener información sobre su movimiento.
+
+La información proporcionada por el sistema de visión y el codificador se procesó junto con las referencias obtenidas mediante los finales de carrera. A partir de estas señales se determinaron las condiciones de operación y se generaron las referencias utilizadas para coordinar el movimiento del brazo con el desplazamiento de los objetos.
+
+Las referencias de movimiento se enviaron desde el ESP32 hacia la Portenta H7 mediante la comunicación establecida previamente. La Portenta ejecutó los desplazamientos requeridos en los ejes y devolvió la información de estado utilizada por el ESP32 para supervisar la secuencia.
+
+El lazo de control se estableció a nivel de supervisión del proceso. La información del entorno y del movimiento de la banda se utilizó para actualizar las decisiones del sistema y coordinar las acciones del brazo. Los movimientos de los ejes se ejecutaron mediante motores paso a paso a partir de las referencias establecidas durante la calibración y del conteo de los pulsos generados.
+
+Finalmente, se integraron las rutinas de detección, seguimiento del movimiento de la banda, generación de referencias, desplazamiento de los ejes y accionamiento del efector final dentro de la secuencia automática del sistema.
+
+
+% ============================================================
+% FASE 6
+% ============================================================
+
+En la sexta fase se realizó la validación experimental del sistema y el análisis de los resultados obtenidos. Durante esta etapa se efectuaron pruebas controladas con el objetivo de evaluar el desempeño del brazo después de implementar las modificaciones mecánicas, el modo manual y el sistema de control con retroalimentación.
+
+La validación se dividió en pruebas funcionales y pruebas de desempeño. Las pruebas funcionales permitieron comprobar la comunicación entre los microcontroladores, la lectura de los finales de carrera, el movimiento de los ejes, el funcionamiento del mando inalámbrico y el accionamiento del efector final.
+
+Las pruebas de desempeño se enfocaron en evaluar la precisión de posicionamiento, la repetibilidad, el tiempo de respuesta y el funcionamiento del sistema de visión. Los ensayos se realizaron bajo condiciones controladas mediante la ejecución repetitiva de movimientos y ciclos de operación.
+
+La precisión se evaluó mediante la comparación entre la posición alcanzada por el efector final y la posición objetivo establecida por el sistema de control. Para ello, se utilizaron diferentes posiciones distribuidas dentro del espacio de trabajo y se registró la diferencia entre los valores de referencia y las posiciones alcanzadas.
+
+La repetibilidad se evaluó mediante la ejecución sucesiva de movimientos hacia una misma posición objetivo. Se registraron las posiciones finales alcanzadas y se analizó su variación entre las distintas ejecuciones.
+
+Asimismo, se evaluó la respuesta del sistema de visión y la utilización de la información obtenida del codificador para coordinar el movimiento del brazo con la banda transportadora. Finalmente, se registró el tiempo requerido para ejecutar las secuencias consideradas durante las pruebas.

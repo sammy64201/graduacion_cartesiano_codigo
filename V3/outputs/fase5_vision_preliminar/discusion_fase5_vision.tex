@@ -1,0 +1,36 @@
+\section{Fase 5. Integración de visión y comprobación previa a la sincronización con la banda}
+\label{sec:discusion_fase5}
+
+\subsection{Alcance del modelo de detección}
+
+La preparación de imágenes en distintas posiciones incorporó variaciones de apariencia al material de entrenamiento. La distribución de 400 imágenes por clase mantuvo un balance numérico entre los dos tipos de pieza. Sin embargo, ese balance y el total de 800 imágenes no demostraron por sí solos diversidad visual ni capacidad de generalización. Al no disponerse de las particiones ni de las métricas del conjunto de datos, no se estableció una relación cuantitativa entre su tamaño y el desempeño obtenido. Mind+ se identificó como la herramienta de preparación de las imágenes y anotaciones; el formato YOLO no identificó, por sí solo, la arquitectura o versión del detector entrenado.
+
+La detección de una pieza y su clasificación por tipo correspondieron a resultados diferentes. La primera aportó una región de imagen utilizable para localizar un objetivo; la segunda requirió asignar correctamente su identidad. Según las observaciones del autor, la similitud visual entre las piezas se consideró una posible explicación de las confusiones entre clases. Esa explicación no se presentó como una causa demostrada sin examinar la calidad de las etiquetas, la diversidad de ejemplos por clase y los resultados del entrenamiento.
+
+La decisión de conservar la localización y no validar la clasificación delimitó el alcance alcanzado. La posibilidad de aproximarse a una pieza no demostró que se hubiera distinguido correctamente su tipo. Por ello, no se consideró cumplida la función de clasificación incluida en el objetivo general únicamente a partir de una detección o de una recogida. El conteo de piezas tampoco sustituyó la evaluación de clasificación: correspondió a un indicador operativo distinto, cuyo método de registro quedó pendiente.
+
+Aunque la aplicación dejó de exigir la clasificación como resultado, el código conservó la clase en los mensajes y la utilizó para asociar detecciones consecutivas. Esta diferencia resultó relevante porque una alternancia del identificador pudo reiniciar el filtro aun cuando la pieza permaneciera en la misma posición. No se afirmó que el sistema hubiera quedado completamente independiente de la clase ni se modificó el firmware durante la revisión documental.
+
+\subsection{Separación de comunicaciones y carga del modelo}
+
+El traslado de la cámara a UART se adoptó después de las incidencias de integración reportadas con I2C. La configuración resultante separó físicamente el enlace de visión de los buses de la OLED y de la comunicación entre microcontroladores. No obstante, la coincidencia temporal de los fallos no permitió atribuirlos exclusivamente a una colisión de direcciones, a saturación del bus o a problemas eléctricos. Tampoco se demostró una reducción de latencia sin una comparación instrumentada entre ambas configuraciones.
+
+La tarea dedicada concentró las llamadas a la cámara y separó sus operaciones potencialmente bloqueantes de la atención inmediata del enlace entre placas. La máquina de estados estableció condiciones explícitas para adquirir los marcadores, calcular la transformación y solicitar el modelo. El reconocimiento del comando recibido y los estados de finalización representaron momentos diferentes de esa secuencia. Esta organización facilitó distinguir una solicitud aceptada de un modelo declarado listo, pero no convirtió las esperas programadas en tiempos medidos ni aseguró por sí sola el funcionamiento sin interrupciones.
+
+\subsection{Significado y límites de la calibración}
+
+Los AprilTags se utilizaron como referencias fiduciales identificables y sus centros establecieron las correspondencias para el cálculo geométrico \cite{apriltag_fase5}. La homografía relacionó la imagen con un plano de coordenadas métricas, en concordancia con la transformación proyectiva planar descrita en la documentación de OpenCV \cite{opencv_homografia_fase5}. En este proyecto, el cálculo se implementó directamente en la ESP32 y no mediante OpenCV.
+
+El promedio de 25 observaciones por marcador consolidó una posición de referencia a partir de lecturas sucesivas. No equivalió a 100 puntos geométricos independientes: el ajuste siguió apoyado en cuatro centros. Además, la validez numérica de la matriz no demostró la exactitud de la transformación. La evaluación del error requirió comparar puntos de comprobación independientes de los utilizados para obtenerla.
+
+La transformación utilizada correspondió a una calibración geométrica bidimensional, no a una calibración intrínseca completa ni a una estimación tridimensional de la pose de la pieza. Su aplicación a las detecciones supuso su correspondencia con el plano calibrado. Las diferencias de altura entre el plano de referencia y la superficie observada de las piezas se identificaron como una posible fuente de error no cuantificada. El centro de la caja delimitadora se utilizó como punto objetivo, sin demostrar que coincidiera siempre con el punto óptimo de agarre.
+
+También se distinguieron el sistema de referencia del rectángulo de marcadores y el del brazo. Los cambios de signo configurados relacionaron la orientación de sus ejes, pero los desplazamientos nulos supusieron coincidencia entre los orígenes. La homografía no demostró por sí sola esa alineación física. Por tanto, la disposición de los marcadores y la comprobación de la transformación entre referencias quedaron como evidencia necesaria para completar la validación del posicionamiento.
+
+\subsection{Relación con el objetivo de control con retroalimentación}
+
+La prueba con la banda detenida separó la correspondencia espacial de los efectos asociados al transporte de la pieza. Los cinco desplazamientos aceptados en cinco pruebas aportaron evidencia funcional preliminar de la integración entre detección, transformación de coordenadas y posicionamiento X/Y bajo las condiciones examinadas. Sin embargo, el tamaño de la serie y la ausencia de una tolerancia métrica documentada limitaron su interpretación: el 100\% observado no demostró exactitud milimétrica, repetibilidad ni una probabilidad general de éxito. Tampoco representó una tasa de recogida, ya que en esta subetapa no se realizó el agarre de las piezas.
+
+Esta comprobación aportó una base funcional para incorporar posteriormente el encoder y la sincronización del movimiento. No obstante, el posicionamiento a partir de una detección no se interpretó como demostración de un lazo cerrado de posición del brazo: la ruta revisada no midió continuamente el error entre la posición física del efector y la referencia visual para corregirlo durante el movimiento.
+
+El resultado de esta etapa se delimitó, por tanto, como posicionamiento guiado por visión con comprobación preliminar en condición estática. La evaluación del cumplimiento del objetivo de control con retroalimentación quedó reservada para la integración posterior del encoder y el análisis de las variables efectivamente medidas y corregidas. Las señales de aceptación y finalización del software tampoco se equipararon a una confirmación física de recogida sin observación o medición adicional.

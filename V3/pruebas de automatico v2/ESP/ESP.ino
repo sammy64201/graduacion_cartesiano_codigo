@@ -140,8 +140,8 @@ int8_t joystickX = 0;
 int8_t joystickY = 0;
 int8_t joystickZ = 0;
 uint8_t botonesControl = 0;
-bool bluetoothConectado = false;
 uint8_t dpadRaw = 0;
+bool bluetoothConectado = false;
 int anguloServoRotacion = ANGULO_SERVO_INICIAL;
 int anguloServoPinza = ANGULO_SERVO_INICIAL;
 
@@ -641,25 +641,27 @@ void processControllers() {
     dpadRaw = ctl->dpad();
 
     const uint32_t ahora = millis();
-    if (ahora - ultimoUpdateServo >= PERIODO_SERVO_MS) {
+    const bool servosHabilitados = estadoPortentaValido &&
+      millis() - ultimoEstadoPortenta <= TIMEOUT_PORTENTA_MS &&
+      (estadoPortenta.estadoSistema == SISTEMA_MODO_MANUAL ||
+       estadoPortenta.estadoSistema == SISTEMA_PRUEBA_SERVOS);
+    if (servosHabilitados && ahora - ultimoUpdateServo >= PERIODO_SERVO_MS) {
       ultimoUpdateServo = ahora;
-
       if (ejeDerechoX > 150) {
         anguloServoRotacion = min(180, anguloServoRotacion + 1);
       } else if (ejeDerechoX < -150) {
         anguloServoRotacion = max(0, anguloServoRotacion - 1);
       }
-
       if (dpadRaw & 0x08U) {
         anguloServoPinza = min(180, anguloServoPinza + 1);
       }
       if (dpadRaw & 0x04U) {
         anguloServoPinza = max(0, anguloServoPinza - 1);
       }
-
       servoRotacion.write(anguloServoRotacion);
       servoPinza.write(anguloServoPinza);
     }
+
   }
 
   bluetoothConectado = hayControlConectado;
@@ -3124,21 +3126,103 @@ void mostrarCalibracionCamara() {
 
 void mostrarMenuPrincipal(const PaquetePortentaAESP &p) {
   dibujarTitulo(F("MENU PRINCIPAL"));
-  const char *opciones[5] = {
-    "MANUAL",
-    "AUTOMATICO",
-    "CALIBRAR BRAZO",
-    "CALIBRAR CAMARA",
-    "AUTOMATICO V2"
+  const char *opciones[6] = {
+    "MANUAL", "AUTOMATICO", "AUTOMATICO V2",
+    "CALIBRACIONES", "PRUEBA SERVOS", "CHECKLIST"
   };
-
-  for (uint8_t i = 0; i < 5; ++i) {
-    pantalla.setCursor(0, 11 + i * 9);
-    pantalla.println(opciones[i]);
-    if (p.opcionMenu == i) {
-      pantalla.drawFastVLine(127, 11 + i * 9, 7, SH110X_WHITE);
-    }
+  const uint8_t valores[6] = {
+    MENU_MODO_MANUAL, MENU_MODO_AUTOMATICO, MENU_MODO_AUTOMATICO_V2,
+    MENU_CALIBRACIONES, MENU_PRUEBA_SERVOS, MENU_DIAGNOSTICO
+  };
+  uint8_t seleccion = 0;
+  for (uint8_t i = 0; i < 6; ++i) {
+    if (p.opcionMenu == valores[i]) seleccion = i;
   }
+  const uint8_t inicio = seleccion == 5 ? 1 : 0;
+  for (uint8_t fila = 0; fila < 5; ++fila) {
+    const uint8_t i = inicio + fila;
+    pantalla.setCursor(0, 12 + fila * 10);
+    pantalla.print(seleccion == i ? F(">") : F(" "));
+    pantalla.println(opciones[i]);
+  }
+}
+
+void mostrarMenuCalibraciones(const PaquetePortentaAESP &p) {
+  dibujarTitulo(F("CALIBRACIONES"));
+  const char *nombres[3] = {"BRAZO", "CAMARA", "ENCODER"};
+  const bool listas[3] = {
+    (p.flagsSistema & (SIS_FLAG_XY_CALIBRADO | SIS_FLAG_Z_CALIBRADO)) ==
+      (SIS_FLAG_XY_CALIBRADO | SIS_FLAG_Z_CALIBRADO),
+    (copiarEstadoCamara().estado == CAMARA_LISTA &&
+     copiarEstadoCamara().conectada &&
+     copiarEstadoCamara().homografiaValida &&
+     copiarEstadoCamara().modeloListo),
+    (p.flagsSistema & SIS_FLAG_ENCODER_CALIBRADO) != 0
+  };
+  for (uint8_t i = 0; i < 3; ++i) {
+    pantalla.setCursor(0, 14 + i * 13);
+    pantalla.print(p.opcionMenu == i ? F(">") : F(" "));
+    pantalla.print(nombres[i]);
+    pantalla.print(F("  "));
+    pantalla.println(listas[i] ? F("OK") : F("PEND"));
+  }
+  pantalla.setCursor(0, 55);
+  pantalla.print(F("X:INICIAR TRI:SALIR"));
+}
+
+void mostrarPruebaServos() {
+  dibujarTitulo(F("PRUEBA SERVOS"));
+  pantalla.setCursor(0, 15);
+  pantalla.print(F("ROTACION: "));
+  pantalla.println(anguloServoRotacion);
+  pantalla.setCursor(0, 27);
+  pantalla.print(F("PINZA:    "));
+  pantalla.println(anguloServoPinza);
+  pantalla.setCursor(0, 40);
+  pantalla.println(F("STICK DER X: ROT"));
+  pantalla.println(F("CRUCETA IZ/DER: PIN"));
+  pantalla.setCursor(0, 56);
+  pantalla.print(F("TRI: MENU"));
+}
+
+void mostrarDiagnostico(const PaquetePortentaAESP &p) {
+  dibujarTitulo(F("CHECKLIST"));
+  const bool paginaDos = p.opcionMenu != 0;
+  if (!paginaDos) {
+    pantalla.setCursor(0, 14);
+    pantalla.println(F("PORTENTA I2C: OK"));
+    pantalla.setCursor(0, 25);
+    pantalla.print(F("CAMARA: "));
+    pantalla.println(copiarEstadoCamara().conectada
+      ? F("CONECTADA") : F("SIN ENLACE"));
+    pantalla.setCursor(0, 36);
+    pantalla.print(F("HOM:"));
+    pantalla.print(copiarEstadoCamara().homografiaValida ? F("OK ") : F("-- "));
+    pantalla.print(F("MOD:"));
+    pantalla.println(copiarEstadoCamara().modeloListo ? F("OK") : F("--"));
+    pantalla.setCursor(0, 47);
+    pantalla.print(F("CONTROL: "));
+    pantalla.println(bluetoothConectado ? F("OK") : F("SIN ENLACE"));
+  } else {
+    pantalla.setCursor(0, 14);
+    pantalla.print(F("BRAZO: "));
+    pantalla.println((p.flagsSistema & (SIS_FLAG_XY_CALIBRADO | SIS_FLAG_Z_CALIBRADO)) ==
+      (SIS_FLAG_XY_CALIBRADO | SIS_FLAG_Z_CALIBRADO) ? F("OK") : F("PEND"));
+    pantalla.setCursor(0, 25);
+    pantalla.print(F("ENC CAL: "));
+    pantalla.println((p.flagsSistema & SIS_FLAG_ENCODER_CALIBRADO)
+      ? F("OK") : F("PEND"));
+    pantalla.setCursor(0, 36);
+    pantalla.print(F("ENC PULSOS: "));
+    pantalla.println((p.estadoEncoder & ENC_FLAG_PULSOS_VISTOS)
+      ? F("SI") : F("NO"));
+    pantalla.setCursor(0, 47);
+    pantalla.print(F("FINALES: "));
+    pantalla.println((p.flagsLimites & LIM_FLAG_COHERENTES)
+      ? F("OK") : F("ERROR"));
+  }
+  pantalla.setCursor(0, 56);
+  pantalla.print(F("X:PAGINA TRI:MENU"));
 }
 
 void mostrarModoManual(const PaquetePortentaAESP &p) {
@@ -3242,7 +3326,9 @@ void mostrarModoAutomaticoV2(const PaquetePortentaAESP &p) {
   pantalla.print(F("ACK:"));
   pantalla.println(p.ackSecuenciaObjetivo);
   pantalla.setCursor(0, 57);
-  if (p.faseCalibracionBrazo == 7) {
+  if (p.faseCalibracionBrazo == 6) {
+    pantalla.print(F("ESPERA CATCH AUTO"));
+  } else if (p.faseCalibracionBrazo == 7) {
     pantalla.print(F("CATCH AUTOMATICO"));
   } else {
     pantalla.print(F("TRI:CANCELAR"));
@@ -3333,7 +3419,7 @@ void procesarReporteDiagnosticoV2() {
 }
 
 void mostrarCalibracionEncoder(const PaquetePortentaAESP &p) {
-  dibujarTitulo(F("CAL ENCODER 3/3"));
+  dibujarTitulo(F("CAL ENCODER"));
   pantalla.setCursor(0, 13);
   switch (p.faseCalibracionBrazo) {
     case 0:
@@ -3437,9 +3523,9 @@ void actualizarPantallaESP32(const PaquetePortentaAESP &p) {
       break;
 
     case SISTEMA_ESPERANDO_CONTROL:
-      dibujarTitulo(F("BRAZO EN HOME"));
+      dibujarTitulo(F("ESPERANDO CONTROL"));
       pantalla.setCursor(0, 19);
-      pantalla.println(F("CALIBRACION OK"));
+      pantalla.println(F("ENLACE I2C ESTABLE"));
       pantalla.setCursor(0, 34);
       pantalla.println(F("CONECTE EL CONTROL"));
       break;
@@ -3462,11 +3548,23 @@ void actualizarPantallaESP32(const PaquetePortentaAESP &p) {
       pantalla.print(F("ENC:"));
       pantalla.println((p.estadoEncoder & ENC_FLAG_PULSOS_VISTOS) ? F("OK") : F("--"));
       pantalla.setCursor(0, 56);
-      pantalla.print((p.flagsSistema & SIS_FLAG_CHECKLIST_OK) ? F("TODO CORRECTO") : F("VERIFICANDO..."));
+      pantalla.print((p.flagsSistema & SIS_FLAG_ENCODER_CALIBRADO) ? F("ENC CAL: OK") : F("ENC CAL: PEND"));
       break;
 
     case SISTEMA_MENU_PRINCIPAL:
       mostrarMenuPrincipal(p);
+      break;
+
+    case SISTEMA_MENU_CALIBRACIONES:
+      mostrarMenuCalibraciones(p);
+      break;
+
+    case SISTEMA_PRUEBA_SERVOS:
+      mostrarPruebaServos();
+      break;
+
+    case SISTEMA_DIAGNOSTICO:
+      mostrarDiagnostico(p);
       break;
 
     case SISTEMA_MODO_MANUAL:

@@ -1,0 +1,184 @@
+%----------------------------------------------------------------------------------------
+%------------------------------Automatización-Industrial----------------------------------
+%----------------------------------------------------------------------------------------
+\section{Automatización industrial}
+
+\subsection{Definición de automatización}
+La automatización industrial se define como la aplicación de tecnologías, sistemas de control y dispositivos electrónicos para operar y supervisar procesos industriales con la mínima intervención humana. Este concepto implica la integración de componentes mecánicos, eléctricos y computacionales con el objetivo de mejorar la eficiencia, precisión y seguridad en los sistemas productivos (Groover, 2020).
+
+\subsection{Importancia de la automatización}
+La importancia de esta rama radica en su capacidad para optimizar los procesos productivos, reducir errores humanos e incrementar la calidad del producto, al mismo tiempo que disminuye los costos operativos. Además, permite la operación continua de los sistemas, el monitoreo en tiempo real y la toma de decisiones basada en datos, lo cual resulta fundamental en entornos industriales modernos altamente competitivos (Groover, 2020).
+
+\subsection{Aplicaciones en la industria }
+La automatización industrial se encuentra presente en múltiples sectores, tales como manufactura, líneas de ensamblaje, sistemas de empaquetado, control de procesos químicos, industria alimentaria y logística. Particularmente, en sistemas de tipo pick and place, la automatización permite realizar tareas repetitivas con alta precisión y velocidad, mejorando significativamente la productividad.
+
+\subsection{Interfaces hombre-máquina (HMI)}
+Un elemento fundamental dentro de la automatización industrial son las interfaces hombre máquina (HMI). Estas interfaces permiten la interacción entre el operador y el sistema automatizado, facilitando la supervisión, control y ajuste de variables del proceso. Asimismo, proporcionan visualización de datos en tiempo real, generación de alarmas y monitoreo del estado del sistema, lo cual permite una operación más intuitiva y segura de los equipos industriales.
+
+%----------------------------------------------------------------------------------------
+%--------------------------------ROBOTICA-INDUSTRIAL-------------------------------------
+%----------------------------------------------------------------------------------------
+
+\section{Robótica industrial}
+La robótica industrial constituye una de las áreas más consolidadas de la automatización moderna, debido a su capacidad para ejecutar tareas repetitivas, precisas y programables dentro de entornos estructurados. Desde el punto de vista mecánico, un robot manipulador puede entenderse como una cadena cinemática compuesta por eslabones rígidos unidos mediante articulaciones, cuya función es posicionar y orientar un efector final dentro de un espacio de trabajo determinado. En este contexto, la estructura del manipulador, los grados de libertad y la naturaleza de sus articulaciones definen directamente sus capacidades de movimiento y su aplicabilidad en procesos industriales (Lynch \& Park, 2017; Siciliano et al., 2010).
+
+En la industria los robots han sido ampliamente adopados para operaciones como ensamblaje, soldadura, empaque, inspección y manipulación de materiales, principalmente porque permiten elevar la productividad, mejorar la repetibilidad y reducir la variabilidad del proceso. Dentro de estas aplicaciones, los manipuladores de arquitectura serial y, en particular, los robots cartesianos, resultan de especial interés cuando se requiere movimiento desacoplado en ejes ortogonales, facilidad de control geométrico y buena rigidez estructural. La importancia de la robótica industrial no radica únicamente en el reemplazo de tareas manuales, sino en la posibilidad de integrar sensado, modelado cinemático y estrategias de control para lograr sistemas más flexibles y adaptables (Siciliano et al., 2010).
+
+Desde la perspectiva del modelado, la robótica industrial se apoya en la cinemática para describir la relación entre las variables articulares y la pose del efector final. Esta formulación permite establecer, por un lado, qué configuración adopta el robot para un conjunto dado de coordenadas articulares y, por otro, qué valores articulares son necesarios para alcanzar una posición y orientación deseadas. En consecuencia, conceptos como espacio de trabajo, cinemática directa y cinemática inversa constituyen bases teóricas indispensables para el diseño, análisis y programación de manipuladores industriales (Murray et al., 1994; Lynch \& Park, 2017).
+
+\subsection{Espacio de trabajo}
+El espacio de trabajo de un manipulador se define como el conjunto de todas las configuraciones del efector final que pueden alcanzarse mediante alguna combinación admisible de variables articulares. En forma más precisa, si la cinemática directa del robot se expresa como un mapeo entre el espacio articular y el espacio de configuraciones del efector final, entonces el espacio de trabajo corresponde a la imagen de dicho mapeo. Este concepto es importante en la planificación de tareas, ya que cualquier trayectoria o punto objetivo que se asigne al robot debe pertenecer necesariamente a la región accesible por su estructura mecánica (Murray et al., 1994).
+
+Una distinción importante dentro de este concepto es la diferencia entre espacio de trabajo alcanzable y espacio de trabajo diestro. El primero corresponde al conjunto de posiciones que el efector final puede alcanzar con al menos una orientación posible, mientras que el segundo representa aquellas posiciones en las que el robot puede además adoptar orientaciones arbitrarias. Esta diferenciación resulta especialmente relevante en aplicaciones industriales, ya que no basta con que el robot llegue a un punto; en muchas tareas de manipulación también debe orientar adecuadamente la herramienta o pieza para ejecutar la operación de forma correcta (Lynch \& Park, 2017).
+
+El espacio de trabajo está condicionado por la geometría del manipulador, el tipo de articulaciones empleadas y los límites mecánicos de cada junta. En consecuencia, la arquitectura del robot determina la forma geométrica de la región accesible. En manipuladores cartesianos, por ejemplo, el espacio de trabajo suele aproximarse a un volumen prismático, producto del desplazamiento lineal en ejes mutuamente ortogonales. Esta es una de las caracteristicas que representa una ventaja en aplicaciones de pick and place y de empaque ya que facilita la relación entre coordenadas físicas del entrono y de coordenadas del sistema. Además de delimitar la región físicamente accesible, el análisis del espacio de trabajo permite identificar restricciones operativas importantes, como zonas cercanas a límites articulares o regiones donde pueden presentarse singularidades cinemáticas. Por ello, su estudio no solo es útil en la etapa de diseño mecánico, sino también en la programación y validación de trayectorias, ya que contribuye a garantizar que los movimientos del robot sean realizables, seguros y compatibles con la tarea industrial asignada (Lynch \& Park, 2017; Siegwart et al., 2011).
+
+\subsection{Cinemática directa}
+La cinemática directa estudia la relación entre las variables del robot y la pose del efector final, es decir, su posición y orientación respecto a un sistema de referencia. En otras palabras, permite determinar dónde se encuentra el extremo del manipulador cuando se conocen los desplazamientos o ángulos de cada articulación. Por ello, constituye una herramienta fundamental para describir geométricamente el comportamiento del robot y verificar configuraciones de trabajo (Murray et al., 1994).
+
+En manipuladores seriales, la cinemática directa se obtiene mediante la composición sucesiva de transformaciones entre eslabones. En robots cartesianos, este análisis suele simplificarse debido a que los movimientos se realizan en ejes ortogonales, lo que facilita la correspondencia entre coordenadas articulares y coordenadas espaciales. Esta característica resulta especialmente útil en aplicaciones industriales de pick and place, donde se requiere un posicionamiento claro y predecible del efector final (Siciliano et al., 2010; Lynch \& Park, 2017).
+
+\subsection{Cinemática inversa}
+La cinemática inversa resuelve el problema de determinar los valores articulares necesarios para que el efector final alcance una pose deseada. A diferencia de la cinemática directa, este problema suele ser más complejo, ya que puede presentar múltiples soluciones, una sola o ninguna, dependiendo de la geometría del robot y de la ubicación del objetivo dentro del espacio de trabajo (Lynch \& Park, 2017; Murray et al., 1994).
+
+En aplicaciones industriales, la cinemática inversa es esencial porque las tareas suelen definirse en coordenadas cartesianas, mientras que los actuadores operan en el espacio articular. En configuraciones simples puede resolverse de forma analítica; sin embargo, en sistemas más complejos suelen emplearse métodos numéricos basados en el jacobiano. Su estudio también permite identificar configuraciones problemáticas, como las singularidades, que pueden afectar la precisión y viabilidad del movimiento del robot (Siciliano et al., 2010; Corke, 2017).
+
+%----------------------------------------------------------------------------------------
+%--------------------------------ROBOTICA-INDUSTRIAL-------------------------------------
+%----------------------------------------------------------------------------------------
+
+
+\section{Sistemas de manipulación}
+Los sistemas de manipulación comprenden el conjunto de mecanismos, actuadores, sensores y estrategias de control destinados a sujetar, mover, orientar y colocar objetos dentro de una tarea específica. En robótica industrial, estos sistemas permiten ejecutar operaciones como transferencia de piezas, ensamblaje, clasificación y empaque, integrando el manipulador con el efector final y con la lógica del proceso automatizado (Siciliano et al., 2010; Correll et al., 2022).
+
+Su importancia radica en que no solo hacen posible el movimiento físico de los objetos, sino también la repetición consistente de secuencias de trabajo dentro de entornos industriales. Por ello, el desempeño de un sistema de manipulación depende de factores como la geometría del objeto, el tipo de agarre, la trayectoria seguida y la capacidad del robot para posicionarse con precisión y repetibilidad.
+
+\subsection{Líneas de empaquetado}
+Una línea de empaquetado se define como un sistema organizado de varias operaciones en el que los productos son preparados para su presentación, protección, transporte o almacenamiento. Dentro de este entorno, las tareas de manipulación son esenciales, ya que los objetos deben ser recogidos, desplazados, ordenados y colocados de forma continua y coordinada con otros elementos del proceso, como bandas transportadoras, estaciones de inspección o módulos de clasificación (Siciliano et al., 2010).
+
+La incorporación de robots en líneas de empaquetado permite aumentar la producción, mantener uniformidad en la operación y reducir la intervención manual en tareas repetitivas. Esto resulta especialmente ventajoso cuando se requiere ejecutar movimientos constantes entre posiciones definidas, conservar un ritmo de trabajo estable y adaptar la operación a distintas configuraciones de producto dentro de un sistema automatizado (Siciliano et al., 2010).
+
+\subsection{Sistemas pick and place}
+Los sistemas de pick and place son aquellas aplicaciones de manipulacion en las que un robot recoge un objeto desde un lugar y lo traslada hacia otra posición definida. Al ser una tarea basica, esta involucra una secuencia completa como la aproximacion, agarre, elevacion, colocacion y liberacion por lo que es una de las funciones mas representativas de la robótica industrial (Correll et al., 2022).
+
+Este tipo de sistema es ampliamente utilizado en manufactura, ensamblaje y empaque, ya que permite automatizar la transferencia de objetos con rapidez y consistencia. Su desempeño depende no solo del movimiento del manipulador, sino también de la planificación de la trayectoria y la verificación de que el objeto haya sido colocado correctamente, razón por la cual suele integrarse con sensores, lógica de control secuencial y retroalimentacion (Correll et al., 2022; Lynch \& Park, 2017).
+
+\subsection{Precisión en sistemas robóticos}
+La precisión en sistemas robóticos se refiere al grado de cercanía entre la posición realmente alcanzada por el robot y la posición objetivo definida para la tarea. En términos prácticos, un sistema es más preciso cuando el error entre el valor deseado y el valor ejecutado es menor, por lo que este concepto depende tanto de la estructura mecánica del robot como de sus sensores, actuadores y algoritmos de control (Correll et al., 2022; Siciliano et al., 2010).
+
+\subsection{Repetibilidad}
+La repetibilidad es la capacidad de un sistema robótico para regresar consistentemente a una misma posición o ejecutar una misma trayectoria bajo condiciones iguales de operación. A diferencia de la precisión, que compara el resultado con una referencia objetivo, la repetibilidad evalúa qué tan similares son entre sí múltiples ejecuciones del mismo movimiento, por lo que un robot puede ser altamente repetible aun cuando presente cierto error absoluto respecto al punto deseado (Seborg et al., 2017; Correll et al., 2022).
+
+%----------------------------------------------------------------------------------------
+%-----------------------------DISEÑO-MECANICO-DEL-SISTEMA--------------------------------
+%----------------------------------------------------------------------------------------
+
+\section{Diseño mecánico del sistema}
+El diseño mecánico del sistema comprende la definición de la estructura física que permitirá al robot ejecutar sus movimientos de forma estable, precisa y repetible. En un manipulador cartesiano, esta etapa incluye la selección de la arquitectura de movimiento, los grados de libertad requeridos, los elementos estructurales que guían el desplazamiento y los componentes que soportan las cargas y reducen la fricción durante la operación. Por ello, el diseño mecánico no solo determina la forma del sistema, sino también su desempeño cinemático y su viabilidad para tareas de manipulación industrial (Lynch \& Park, 2017; Siciliano et al., 2010).
+
+\subsection{Movimiento en coordenadas ortogonales}
+El movimiento en coordenadas ortogonales consiste en desplazar el sistema a lo largo de ejes lineales mutuamente perpendiculares, normalmente asociados con las direcciones x, y, z. Esta disposición es característica de los robots cartesianos y simplifica tanto el análisis cinemático como la programación del movimiento, ya que existe una relación más directa entre el desplazamiento físico del efector final y las coordenadas del entorno de trabajo (Siciliano et al., 2010; Lynch \& Park, 2017).
+
+Desde el punto de vista mecánico, esta arquitectura ofrece ventajas importantes en sistemas de manipulación, porque facilita trayectorias rectas, reduce la complejidad geométrica y permite delimitar un volumen de trabajo. Por ello, el movimiento ortogonal resulta especialmente adecuado en aplicaciones de empaque y transferencia de objetos, donde es importante mover el efector final entre posiciones definidas de manera clara, repetitiva y controlable (Siciliano et al., 2010).
+
+\subsection{Grados de libertad}
+Los grados de libertad representan el número mínimo de coordenadas independientes necesarias para describir la configuración de un sistema mecánico o de un robot. En términos generales, indican cuántos movimientos independientes puede realizar el sistema; por ello, su definición es esencial para establecer si el manipulador cuenta con la movilidad suficiente para cumplir la tarea propuesta (Lynch \& Park, 2017; Correll et al., 2022).
+
+En un robot cartesiano destinado a tareas de pick and place, los grados de libertad suelen asociarse a desplazamientos lineales en ejes ortogonales y, en algunos casos, a movimientos adicionales de orientación o agarre. La correcta selección de estos grados de libertad permite alcanzar el espacio de trabajo requerido sin añadir complejidad innecesaria al sistema, lo cual es importante para mantener un diseño mecánico simple, robusto y funcional (Lynch \& Park, 2017).
+
+\subsection{Ejes acerados}
+Los ejes acerados son elementos cilíndricos de acero utilizados como guías lineales o superficies de deslizamiento y rodadura en mecanismos de movimiento rectilíneo. En sistemas de manipulación, su función principal es proporcionar una trayectoria rígida y geométricamente estable para el desplazamiento de carros o bujes lineales, contribuyendo a conservar la alineación del movimiento y a soportar las cargas transmitidas durante la operación. Su uso es común en máquinas y sistemas lineales porque combinan resistencia mecánica, estabilidad dimensional y buena compatibilidad con elementos rodantes (THK, s. f.; NB Corporation, 2018).
+
+\subsection{Rodamientos lineales de bolas}
+Los rodamientos lineales de bolas son elementos mecánicos diseñados para permitir el desplazamiento lineal de una carga a lo largo de un eje o guía, utilizando bolas recirculantes como elementos rodantes. Su principio de funcionamiento consiste en transformar el rozamiento de deslizamiento en rozamiento de rodadura, lo que disminuye la fricción, mejora la suavidad del movimiento y favorece trayectorias más uniformes en comparación con apoyos deslizantes convencionales (THK, s. f.; NB Corporation, s. f.).
+
+%----------------------------------------------------------------------------------------
+%-----------------------------ELECTRONICA-Y-SISTEMAS-EMBEBIDOS--------------------------------
+%----------------------------------------------------------------------------------------
+
+\section{Electrónica y sistemas embebidos}
+La electrónica y los sistemas embebidos constituyen la base funcional del sistema robótico, ya que permiten adquirir señales del entorno, procesarlas y generar acciones sobre actuadores y periféricos en tiempo real. En un robot cartesiano automatizado, esta capa integra microcontroladores, conversión de señales, buses de comunicación, sensores e interfaces hombre-máquina, de modo que la estructura mecánica pueda operar de forma coordinada, programable y con capacidad de retroalimentación.
+
+\subsection{Microcontroladores}
+Los microcontroladores son dispositivos electrónicos programables que integran procesador, memoria y periféricos de entrada/salida en un solo circuito, y se utilizan para ejecutar tareas de control, adquisición de datos y comunicación dentro de sistemas embebidos. En aplicaciones robóticas, su selección depende de la capacidad de cómputo, disponibilidad de interfaces, velocidad de respuesta y compatibilidad con sensores y actuadores del sistema.
+
+\paragraph{Arduino Portenta H7} El Arduino Portenta H7 es una plataforma orientada a las aplicaciones embebidas de alto desempeño. Su procesador principal es el STM32H747XI de doble núcleo, con un Cortex-M7 a 480 MHz y un Cortex-M4 a 240 MHz, lo que permite repartir tareas entre procesamiento de alto nivel y control en tiempo real. Esta arquitectura resulta conveniente en sistemas robóticos donde se desea separar funciones como visión, comunicaciones y control de movimiento sin recurrir a múltiples placas principales (Arduino, 2024).
+
+\paragraph{ESP32 UWB DW3000} El módulo ESP32 UWB DW3000 integra un microcontrolador ESP32 junto con un chip DW3000 para comunicaciones ultra wideband (UWB). De acuerdo con Makerfabs, esta placa combina capacidades de procesamiento local con comunicación UWB de corto alcance; y, de acuerdo con Qorvo, la familia DW3000/DWM3000 cumple con IEEE 802.15.4a/802.15.4z y está pensada para aplicaciones de localización y ranging de alta precisión. Por ello, este tipo de módulo resulta útil como coprocesador dedicado a comunicación inalámbrica de precisión o sensado espacial dentro del sistema robótico (Makerfabs, s. f.; Qorvo, 2020).
+
+\subsection{Conversión de señales}
+En sistemas embebidos, la conversión de señales es necesaria porque muchos sensores entregan salidas analógicas, mientras que los microcontroladores procesan información en forma digital. Por ello, la conversión analógico-digital constituye una etapa fundamental para vincular el mundo físico con la lógica de control implementada en el sistema.
+
+\paragraph{Convertidor analógico digital (ADC)} Un ADC convierte una señal analógica, como la salida de un sensor, en un valor digital que pueda ser procesado por el microcontrolador. STMicroelectronics describe esta función como la conversión de un voltaje analógico externo a datos digitales; además, en sistemas digitales de control esta conversión introduce muestreo y cuantización, por lo que su resolución y frecuencia de muestreo influyen directamente en la calidad de la medición y en la capacidad de respuesta del sistema (STMicroelectronics, 2018; Nise, 2015).
+
+\subsection{Comunicaciones seriales}
+La comunicación serial es un método de transmisión de datos en el que la información se envía de manera secuencial, bit a bit, a través de una o más líneas físicas. En sistemas embebidos se emplea ampliamente porque reduce el número de conductores necesarios, simplifica la interconexión entre dispositivos y permite enlazar microcontroladores, sensores, memorias y periféricos dentro de arquitecturas compactas.
+
+\paragraph{Protocolo I2C}
+El bus I2C es un protocolo serial síncrono que utiliza únicamente dos líneas: SDA para datos y SCL para reloj. Según la especificación oficial de NXP, permite transferencias bidireccionales orientadas a 8 bits y soporta diferentes modos de velocidad, desde 100 kbit/s en modo estándar hasta 3.4 Mbit/s en modo de alta velocidad. Su funcionamiento se basa en una arquitectura compartida entre múltiples dispositivos sobre el mismo bus, lo que lo hace especialmente útil para integrar sensores y periféricos con pocos pines. Entre sus principales ventajas se encuentran la simplicidad del cableado, la posibilidad de conectar múltiples circuitos integrados en el mismo canal y su amplia adopción en sistemas de control y electrónica embebida (NXP Semiconductors, 2021).
+
+\subsection{Sensores}
+Los sensores son dispositivos que convierten una magnitud física en una señal utilizable por el sistema de control. En robótica, su función es proporcionar información sobre posición, velocidad, contacto, estado lógico o variables del entorno, permitiendo implementar retroalimentación y supervisión de la operación. La selección del sensor depende de la variable a medir, la precisión requerida y la forma en que esa señal será interpretada por el microcontrolador.
+
+\paragraph{Encoder rotativo} El encoder rotativo es un sensor que mide rotaciones, ángulo y posición rotacional. OMRON lo describe como un dispositivo que detecta posición y velocidad al convertir desplazamientos mecánicos rotacionales en señales eléctricas; en robótica, estos sensores se usan ampliamente para retroalimentar la posición y el movimiento de ejes, motores y juntas, siendo especialmente relevantes en el control de trayectoria y velocidad (OMRON, s. f.).
+
+\paragraph{Finales de carrera} Un final de carrera es un interruptor de detección diseñado para activarse cuando un elemento mecánico llega a una posición límite. Según OMRON, consiste en un interruptor básico alojado en una carcasa protectora que lo resguarda de fuerzas externas, humedad, aceite, polvo y suciedad. En sistemas robóticos, se emplea para definir referencias mecánicas, evitar sobrecarreras y aumentar la seguridad operativa de los ejes lineales o articulaciones móviles (OMRON, s. f.).
+
+\paragraph{Sensores analógicos y digitales} Los sensores analógicos entregan una señal continua, normalmente en forma de voltaje o corriente proporcional a la magnitud medida, mientras que los sensores digitales producen valores discretos o estados lógicos. Esta diferencia condiciona la electrónica de adquisición: los sensores analógicos requieren ADC para ser procesados por el microcontrolador, mientras que los digitales pueden conectarse directamente a entradas lógicas o a buses de comunicación, según su interfaz. En consecuencia, la elección entre ambos depende de la naturaleza de la variable y la resolución requerida (STMicroelectronics, 2018; NXP Semiconductors, 2021).
+
+\subsection{Interfaces y periféricos}
+Las interfaces y periféricos complementan la funcionalidad del sistema embebido al permitir interacción inalámbrica, visualización de información y configuración del equipo durante la operación. En sistemas robóticos, estos elementos mejoran tanto la supervisión local como la comunicación con el usuario o con dispositivos externos.
+
+\paragraph{Bluetooth} Bluetooth es una tecnología de comunicación inalámbrica de corto alcance diseñada para intercambiar datos entre dispositivos electrónicos sin necesidad de conexión física por cable. Su funcionamiento se basa en la transmisión de información por radiofrecuencia en la banda de 2.4 GHz, lo que permite enlazar equipos como microcontroladores, teléfonos, computadoras, sensores y periféricos. En sistemas embebidos y robóticos, Bluetooth se utiliza principalmente para habilitar comunicación inalámbrica entre el sistema y un dispositivo externo, por ejemplo para enviar comandos, monitorear variables de operación o establecer una interfaz de control remoto (El-Bendary, 2018).
+
+\paragraph{Pantallas OLED}
+Las pantallas OLED emplean diodos orgánicos emisores de luz, en los cuales capas delgadas orgánicas emiten luz cuando circula corriente eléctrica. Universal Display Corporation describe los OLED como dispositivos sólidos monolíticos formados por varias capas orgánicas entre electrodos conductores. En aplicaciones embebidas, su uso es conveniente por su buen contraste, bajo espesor, bajo consumo en interfaces pequeñas y capacidad para mostrar información local del sistema, como estados, variables o menús de operación (Universal Display Corporation, s. f.).
+
+\subsection{Actuadores}
+Los actuadores son dispositivos encargados de transformar una señal de control en una acción física, como movimiento lineal o rotacional, dentro del sistema. En robótica y sistemas embebidos, su función es ejecutar las órdenes generadas por el controlador para producir desplazamiento, posicionamiento o fuerza sobre un mecanismo. Por ello, los actuadores construyen el vínculo entre la etapa electrónica y la respuesta mecánica del sistema, siendo importantes para mover ejes o posicionar elementos del manipulador.
+
+\paragraph{Motores}
+Los motores son uno de los actuadores más utilizados en automatización, ya que convierten energía eléctrica en movimiento mecánico, normalmente rotacional. En aplicaciones robóticas, este movimiento puede emplearse directamente o combinarse con mecanismos como husillos, poleas, engranajes o cremalleras para obtener desplazamientos lineales o aumentar torque y control de posición. Debido a ello, los motores son fundamentales en sistemas de manipulación, porque proporcionan la energía necesaria para mover los ejes del robot de forma controlada y repetible.
+
+%----------------------------------------------------------------------------------------
+%-----------------------------SISTEMAS-DE-VISION-COMPUTACIONAL--------------------------------
+%----------------------------------------------------------------------------------------
+\section{Sistemas de visión computacional}
+Los sistemas de visión computacional permiten que un robot obtenga información del entorno a partir de imágenes y la transforme en datos útiles para la toma de decisiones. Estos sistemas capturan una escena mediante una cámara, procesan la información visual y extraen características relevantes como formas, bordes, regiones, objetos o posiciones dentro del espacio de trabajo. Por ello, la visión computacional es un componente clave en sistemas robóticos que deben localizar piezas, verificar condiciones del entorno o adaptar su comportamiento según la escena observada (Corke, 2017; Correll et al., 2022).
+
+\subsection{Definición de visión computacional}
+La visión computacional puede definirse como el conjunto de métodos y algoritmos que permiten a una máquina adquirir, procesar e interpretar imágenes con el propósito de obtener información significativa del entorno. A diferencia de una simple captura visual, este campo busca convertir datos bidimensionales en descripciones útiles para medición, reconocimiento o control, razón por la cual se considera una herramienta fundamental en robótica autónoma y en automatización industrial (Correll et al., 2022; Corke, 2017).
+
+\subsection{Procesamiento de imágenes}
+El procesamiento de imágenes corresponde al conjunto de operaciones aplicadas sobre una imagen para mejorarla, transformarla o preparar su contenido para etapas posteriores de análisis. Entre estas operaciones se incluyen cambios de escala, transformaciones de color, filtrado, convolución y detección de movimiento, todas orientadas a reducir ruido, resaltar estructuras y facilitar la extracción de información útil (Corke, 2017; Correll et al., 2022).
+
+\subsection{Detección de objetos}
+La detección de objetos es el proceso mediante el cual un sistema de visión identifica la presencia de uno o más objetos dentro de una imagen y determina su ubicación en la escena. Este problema va más allá del simple reconocimiento, porque no solo requiere clasificar qué aparece en la imagen, sino también localizarlo espacialmente para que el sistema robótico pueda actuar sobre él. En aplicaciones industriales, esta capacidad es esencial para tareas de pick and place, inspección visual y clasificación automática de piezas (Correll et al., 2022).
+
+%----------------------------------------------------------------------------------------
+%-----------------------------ALGORITMOS-DE-PROCESAMIENTO-DE-IMAGEN-------------------------------
+%----------------------------------------------------------------------------------------
+
+% \section{Algoritmos de procesamiento de imagen}
+
+% \subsection{Técnicas de procesamiento de imagen}
+
+% \subsection{Segmentación}
+
+% \subsection{Extracción de características}
+
+% \subsection{Clasificación de objetos}
+
+%----------------------------------------------------------------------------------------
+%---------------------------------SISTEMAS-DE-CONTROL------------------------------------
+%----------------------------------------------------------------------------------------
+
+% \section{Sistemas de control}
+
+% \subsection{Definición de sistema de control}
+
+% \subsection{Sistemas de lazo abierto}
+
+% \subsection{Sistemas de lazo cerrado}
+
+% \subsection{Ventajas del control en lazo cerrado}

@@ -13,10 +13,48 @@ X=446 mm y Y=336 mm.
 - `PORTENTA/PORTENTA.ino`: calibración X/Y/Z, encoder ABZ, motores y máquina
   de estados de interceptación.
 - Los dos archivos `ProtocoloI2C.h` son copias idénticas del protocolo de
-  prueba versión 5. Ambos paquetes miden exactamente 32 bytes y terminan con
+  prueba versión 6. Ambos paquetes miden exactamente 32 bytes y terminan con
   CRC-8/ATM.
 - `registrar_v2.ps1`: abre simultáneamente los USB de ambas placas y crea un
   CSV sincronizado por cada entrada a Automático V2.
+
+Después de este cambio se deben cargar **ambos** sketches: la versión 6 del
+protocolo rechaza una placa que todavía ejecute la versión 5.
+
+## Arranque y menú
+
+Al encender, los motores esperan a que ESP32 y Portenta intercambien paquetes
+válidos y mantengan el enlace estable durante cinco segundos. Si se pierde la
+comunicación, el movimiento se detiene y se vuelve a intentar el enlace sin
+reiniciar físicamente las placas. Si había un motor en movimiento, se invalida
+la calibración del brazo para volver a medir sus límites antes de moverlo.
+Después se espera el control y aparece el
+menú. Ninguna de las tres calibraciones se ejecuta por obligación al arrancar.
+
+El menú contiene `MANUAL`, `AUTOMATICO`, `AUTOMATICO V2`, `CALIBRACIONES`,
+`PRUEBA SERVOS` y `CHECKLIST`. Se navega con el joystick izquierdo vertical,
+X entra y triángulo regresa. Al elegir un modo se ejecutan, una sola vez por
+sesión, las calibraciones que todavía falten:
+
+| Modo | Calibraciones necesarias |
+|---|---|
+| Manual | Brazo X/Y/Z y sus finales |
+| Automático | Brazo y cámara |
+| Automático V2 | Brazo, cámara y encoder |
+
+Al volver al menú y reentrar, una calibración válida se conserva. `CALIBRACIONES`
+permite repetir independientemente brazo, cámara o encoder. La calibración de
+cámara conserva la verificación de las cuatro marcas, homografía y apertura del
+modelo. El `CHECKLIST` muestra comunicación I²C con Portenta, conexión
+de cámara, modelo, control, estado de calibraciones, pulsos de encoder y
+coherencia de finales. X alterna sus dos páginas; no bloquea el acceso al menú.
+
+En `MANUAL` se mueven X/Y con el joystick izquierdo y Z con el eje vertical del
+derecho. El eje horizontal del joystick derecho mueve la rotación (GPIO25) y la
+cruceta izquierda/derecha mueve la pinza (GPIO26). `PRUEBA SERVOS` usa esos
+mismos mandos sin habilitar motores. Los ángulos se limitan a 0–180 grados y
+aparecen en OLED. Fuera de Manual y Prueba de servos, los mandos no cambian sus
+ángulos.
 
 ## Registro sincronizado en Windows
 
@@ -77,16 +115,17 @@ OUTC solo se usa como índice de diagnóstico: no pone la distancia en cero.
 
 ## Tercera calibración: encoder y banda
 
-No se introduce una distancia por terminal. La rueda mide 65 mm de diámetro,
+No se introduce una distancia por terminal. El acople configurado en el código
+mide 15 mm de diámetro,
 gira 1:1 con el encoder y la lectura es X2 (2048 cuentas/vuelta), por lo que la
 escala se obtiene directamente de la geometría:
 
 ```text
-mmPorCuenta = pi * 65 / 2048 = 0.0997088 mm/cuenta
+mmPorCuenta = pi * 15 / 2048 = 0.0230097 mm/cuenta
 ```
 
-El arranque tiene tres etapas obligatorias: cámara, brazo X/Y/Z y encoder. Al
-terminar HOME y conectar el control, el OLED muestra `CAL ENCODER 3/3`:
+Al solicitar Automático V2 sin encoder calibrado, el OLED muestra la
+calibración del encoder:
 
 1. El técnico pone manualmente la banda al 50 % y en sentido cámara→brazo.
 2. Cuando ya esté avanzando, presiona X.
@@ -94,8 +133,8 @@ terminar HOME y conectar el control, el OLED muestra `CAL ENCODER 3/3`:
 4. Mide durante 5 s y obtiene automáticamente sentido y velocidad al 50 %.
 5. Rechaza la medición si hay paro, inversión, pocos pulsos o variación mayor
    al 10 % entre ventanas de 200 ms. X permite repetirla.
-6. El OLED pide detener la banda. Cuando el encoder confirma el paro, se
-   habilitan el checklist y el menú.
+6. El OLED pide detener la banda. Cuando el encoder confirma el paro, entra
+   automáticamente en V2 si las demás calibraciones ya están listas.
 
 La velocidad máxima matemática se estima como `2 * velocidadAl50`. Esta
 referencia se recalibra en cada encendido porque el técnico ajusta físicamente
@@ -196,20 +235,38 @@ piezaY = -(510 mm + ajusteCatch) + YlocalCamara
          + signo * (conteoActual - conteoReferencia) * mmPorCuenta
 ```
 
-La prueba con `ajusteCatch=0` quedó adelantada y la prueba con `420 mm` quedó
-atrasada. La siguiente iteración usa el punto medio, `210 mm`, por lo que la
-distancia efectiva cámara-catch es `720 mm`. El ajuste se afina por aproximación
-sucesiva sin cambiar la escala del encoder.
+La calibración manual final produjo tres marcas coherentes en `Y=116.7, 131.9 y
+133.2 mm` y una marca aislada en `-98.2 mm`. La mediana robusta indicó que
+faltaban aproximadamente `125 mm` de recorrido. Por eso `ajusteCatch` pasa de
+`210 a 335 mm` y la distancia efectiva cámara-catch queda en `845 mm`, sin
+cambiar la escala del encoder.
 
 Después preposiciona X y deja Y inmóvil en la estación de catch (`Y=0 mm`). El
 encoder actualiza la posición estimada de la pieza, pero ya no gobierna la
 velocidad del eje Y. La Portenta calcula el tiempo mecánico de descenso Z y lo
-convierte en distancia usando la velocidad actual de la banda. Cuando la pieza
-entra en ese umbral anticipado, dispara Z para que llegue al final inferior al
-mismo tiempo que la pieza alcanza `Y=0`. Entonces exige que el final físico
+convierte en distancia usando la velocidad actual de la banda. Las pruebas del
+27 de agosto midieron un descenso muy estable de `1.686 a 1.695 s`; el problema
+no era una variación de Z, sino que llegaba abajo prácticamente al mismo tiempo
+que la pieza (`-2 a +8 mm` alrededor de `Y=0`) y no dejaba tiempo para pulsar X.
+
+El umbral conserva una reserva manual mínima de `0.50 s` además del tiempo de
+descenso. La reserva se escala con la velocidad: representa unos `36 mm` a
+`72 mm/s`, `70 mm` a `140 mm/s` y `85 mm` a `170 mm/s`. Sin embargo, la fase 2
+ya no espera a que la pieza alcance ese umbral. En cuanto termina la
+preposición X/Y, comprueba que la pieza todavía esté antes del límite seguro y
+prebaja Z inmediatamente. Si ya está demasiado cerca, cancela el intento en vez
+de iniciar un descenso tardío. De esta manera Z queda abajo esperando la pieza,
+especialmente cuando la banda trabaja despacio. Entonces exige que el final físico
 `DIN04` confirme `Z abajo`. Si el conteo termina antes del sensor, realiza una
 búsqueda lenta adicional de hasta 600 pasos; solo después cancela. Al confirmar
-DIN04 imprime `CAPTURA_VIRTUAL`, congela Y y regresa Z verticalmente a HOME.
+DIN04 congela X/Y/Z, registra `READY_CATCH` y entra en la fase 6. La cámara
+permanece bloqueada y solamente el encoder actualiza la posición estimada de la
+pieza. La pantalla muestra `ESPERA CATCH AUTO`.
+
+Cuando la posición corregida cruza automáticamente `Y=0`, la Portenta registra
+`CAPTURE=CATCH AUTOMATICO POR ENCODER`, considera ejecutado el catch virtual y
+retira Z verticalmente hasta HOME. No se requiere X. Si se pulsa, queda un
+evento diagnóstico `BUTTON_X`, pero se ignora y no modifica la trayectoria.
 
 El intento se cancela si la banda se detiene o invierte antes del disparo, la
 pieza rebasa la estación antes de que el brazo esté listo, falta espacio para
@@ -224,33 +281,37 @@ salen del modo.
 Desde que se publica un objetivo, la ESP bloquea su secuencia, clase,
 coordenadas de cámara y conteo de referencia. No consulta HUSKYLENS durante el
 movimiento; la Portenta actualiza únicamente Y con el delta del encoder. Las
-fases normales son `0 -> 1 -> 2 -> 3 -> 4 -> 5 -> 7 -> 0`; el valor 6 queda
-reservado para interpretar registros anteriores.
+fases normales son `0 -> 1 -> 2 -> 3 -> 4 -> 6 -> 5 -> 7 -> 0`.
 
-## Finalización automática
+## Catch automático por encoder
 
-Cuando Z vuelve a HOME, Y se detiene y la Portenta registra
-`CATCH_AUTOMATICO`, envía `ACK_OBJ_COMPLETADO` y pasa directamente a
-`COMPLETADO`. No se requiere X, círculo ni timeout de confirmación. El OLED
-muestra `CATCH AUTOMATICO` durante la fase completada.
+En la fase 6 los tres ejes permanecen detenidos hasta el cruce `Y=0`. En ese
+instante Z comienza a subir. Cuando vuelve a HOME, la
+Portenta registra `CATCH_AUTOMATICO`, envía `ACK_OBJ_COMPLETADO` y pasa a
+`COMPLETADO`. El OLED muestra `CATCH AUTOMATICO`. Triángulo conserva la
+cancelación y retirada segura de Z.
 
-La ESP libera el objetivo terminal, mantiene HUSKYLENS bloqueada durante
-500 ms y después permite una publicación nueva. La comparación de secuencia
-solo impide repetir el mismo mensaje I²C: la misma pieza o clase puede volver a
-procesarse cuando una detección posterior recibe otra secuencia.
+La ESP libera el objetivo terminal, mantiene HUSKYLENS bloqueada durante 500 ms
+y después permite una publicación nueva.
+La comparación de secuencia solo impide repetir el mismo mensaje I²C: la misma
+pieza o clase puede volver a procesarse cuando una detección posterior recibe
+otra secuencia.
 
 ## Orden de puesta en marcha
 
 1. Trabaje primero con los motores sin herramienta y a velocidad baja.
 2. Verifique A/B, OUTC y unas 2048 cuentas por vuelta.
-3. Complete en el arranque la medición automática con la banda al 50 %.
+3. Seleccione Automático V2 y complete la medición del encoder al 50 % cuando
+   el menú la solicite.
 4. Valide cámara+encoder observando que la pieza estimada avance desde la
    distancia efectiva configurada hasta la estación `Y=0 mm`.
 5. Pruebe la preposición fija X/Y y confirme que Y no se mueve durante la
    espera ni durante el descenso Z.
 6. Pruebe Z con la banda detenida y confirme la nueva altura física.
-7. Habilite el ciclo completo y confirme el resultado `CATCH_AUTOMATICO` sin
-   pulsar X ni círculo; triángulo debe seguir cancelando antes de completarse.
+7. Habilite el ciclo completo sin pulsar X. Confirme en el registro la cadena
+   `READY_CATCH -> CAPTURE (CATCH AUTOMATICO POR ENCODER) -> RESULT
+   (CATCH_AUTOMATICO)`. Triángulo debe seguir cancelando y no debe producir un
+   resultado positivo.
 8. Inyecte individualmente pérdida de I²C, cámara, encoder, banda, control y
    finales de carrera.
 

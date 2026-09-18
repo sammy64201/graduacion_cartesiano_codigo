@@ -1,0 +1,10 @@
+Subir en esta carpeta una fotografía real en formato JPEG con el nombre:
+apriltags_banda.jpg
+
+La fotografía debe mostrar la disposición de los cuatro AprilTags y la banda.
+No basta cambiar a .jpg la extensión de un archivo PNG: debe ser un JPEG real.
+
+El archivo resultados_fase5_vision.tex mostrará un recuadro mientras falte la
+fotografía. Al subir figuras_fase5/apriltags_banda.jpg y recompilar Overleaf,
+la fotografía sustituirá automáticamente el recuadro y se actualizarán el
+texto de presentación y la fuente. No es necesario editar el bloque LaTeX.
