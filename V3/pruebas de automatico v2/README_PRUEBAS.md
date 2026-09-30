@@ -7,32 +7,67 @@ las placas.
 La escala cartesiana usada después de recorrer los finales es actualmente
 X=446 mm y Y=336 mm.
 
+## Orientacion aproximada y rueda de 49 mm
+
+Automatico y Automatico V2 orientan el servo de rotacion cuando publican un
+objetivo confirmado. El Automatico original mantiene su movimiento XY; V2
+mantiene ademas la secuencia de catch con encoder y cierre de pinza.
+Compara el ancho y alto de la caja detectada, transformados al plano calibrado,
+en las detecciones consecutivas (cuatro en Automatico, tres en V2). Si al menos
+dos cajas coinciden y el eje
+mayor supera al otro por un factor de 1.35, ordena `ANGULO_GARRA_EJE_X` (90°)
+o `ANGULO_GARRA_EJE_Y` (0°). Si la forma es casi cuadrada, diagonal o las
+lecturas discrepan, usa el angulo inicial de 90°. Los dos angulos de servo son
+parametros de montaje en `ESP/ESP.ino`; verificar su correspondencia fisica
+con los ejes antes de un catch. La caja del modelo no contiene una rotacion
+firmada: este metodo solo distingue aproximadamente los ejes X e Y. En
+Ensenanza ML se usa la regla experimental de cajas anchas/altas descrita abajo
+y se conserva el ajuste manual de la rotacion.
+
+La rueda del encoder ahora mide 49 mm. Con 2048 cuentas X2 por vuelta y
+acoplamiento 1:1, la escala geometrica es aproximadamente 0.075165 mm/cuenta.
+El catch automatico existente sigue usando esa escala y la velocidad medida;
+su resultado de software no confirma por si solo que la pieza haya quedado
+sujeta. Tras cargar ambos sketches, comprobar una distancia conocida y luego
+probar el catch a baja velocidad observando el log de orientacion, el evento
+`GRIP_COMMAND` y la posicion real de la pieza. Revisar tambien
+`V2_AJUSTE_DISTANCIA_CATCH_MM`: se ajusto con mediciones anteriores y puede
+necesitar correccion despues del cambio de rueda.
+
 ## Contenido
 
 - `ESP/ESP.ino`: HUSKYLENS, Bluepad32, OLED e I²C esclavo `0x40`.
 - `PORTENTA/PORTENTA.ino`: calibración X/Y/Z, encoder ABZ, motores y máquina
   de estados de interceptación.
 - Los dos archivos `ProtocoloI2C.h` son copias idénticas del protocolo de
-  prueba versión 6. Ambos paquetes miden exactamente 32 bytes y terminan con
+  prueba versión 9. Ambos paquetes miden exactamente 32 bytes y terminan con
   CRC-8/ATM.
 - `registrar_v2.ps1`: abre simultáneamente los USB de ambas placas y crea un
-  CSV sincronizado por cada entrada a Automático V2.
+  registro combinado continuo desde el arranque, además de un CSV sincronizado
+  por cada entrada a Automático V2.
 
-Después de este cambio se deben cargar **ambos** sketches: la versión 6 del
-protocolo rechaza una placa que todavía ejecute la versión 5.
+Después de este cambio se deben cargar **ambos** sketches: la versión 9 del
+protocolo rechaza una placa que todavía ejecute una versión anterior.
 
 ## Arranque y menú
 
-Al encender, los motores esperan a que ESP32 y Portenta intercambien paquetes
-válidos y mantengan el enlace estable durante cinco segundos. Si se pierde la
-comunicación, el movimiento se detiene y se vuelve a intentar el enlace sin
-reiniciar físicamente las placas. Si había un motor en movimiento, se invalida
-la calibración del brazo para volver a medir sus límites antes de moverlo.
-Después se espera el control y aparece el
-menú. Ninguna de las tres calibraciones se ejecuta por obligación al arrancar.
+Al encender, los motores esperan a que ESP32 y Portenta completen tres
+comprobaciones I²C de ida y vuelta con CRC. La ESP debe informar además que la
+OLED está inicializada. Solo después comienza la estabilización de cinco
+segundos. Al terminar, la Portenta envía el estado de confirmación y la OLED
+permanece en una checklist que muestra únicamente `PORTENTA` y `CAMARA`. Con
+ambos en `OK`, se conecta el control y se presiona `X` para entrar al menú.
 
-El menú contiene `MANUAL`, `AUTOMATICO`, `AUTOMATICO V2`, `CALIBRACIONES`,
-`PRUEBA SERVOS` y `CHECKLIST`. Se navega con el joystick izquierdo vertical,
+Si el enlace se pierde después de haber quedado estable, el movimiento se
+detiene y no se inicia otra estabilización automáticamente. La Portenta recupera
+el bus, repite el triple check y espera que el control esté conectado y se pulse
+`X`. Si había un motor en movimiento, se invalida la calibración del brazo para
+volver a medir sus límites antes de moverlo.
+Ninguna de las tres calibraciones se ejecuta por obligación al arrancar.
+
+El menú contiene `MANUAL`, `AUTOMATICO`, `AUTOMATICO V2`,
+`REGISTRAR ANGULO`, `CALIBRACIONES`, `PRUEBA SERVOS`, `ENSENANZA ML`,
+`PRUEBA DE ENCODER` y `CHECKLIST`. Se navega con el joystick izquierdo vertical,
 X entra y triángulo regresa. Al elegir un modo se ejecutan, una sola vez por
 sesión, las calibraciones que todavía falten:
 
@@ -41,20 +76,211 @@ sesión, las calibraciones que todavía falten:
 | Manual | Brazo X/Y/Z y sus finales |
 | Automático | Brazo y cámara |
 | Automático V2 | Brazo, cámara y encoder |
+| Registrar ángulo | Brazo y cámara |
+| Enseñanza ML | Brazo, cámara y encoder |
+
+En **Manual**, el boton **cuadrado** devuelve el brazo al HOME que fijo la
+calibracion (`X=0, Y=0, Z=0`). Detiene el movimiento manual actual, lleva Z
+a 0 y despues X/Y a 0. Los joysticks quedan ignorados durante el retorno y
+deben soltarse antes de volver al control continuo. Triangulo o la perdida del
+control cancelan el retorno. El OLED muestra `CUAD:HOME` y Portenta informa
+inicio, etapas y final por la terminal. Cargue las versiones ESP y Portenta
+juntas porque el boton nuevo usa la version 10 del protocolo I2C.
 
 Al volver al menú y reentrar, una calibración válida se conserva. `CALIBRACIONES`
 permite repetir independientemente brazo, cámara o encoder. La calibración de
-cámara conserva la verificación de las cuatro marcas, homografía y apertura del
-modelo. El `CHECKLIST` muestra comunicación I²C con Portenta, conexión
+cámara conserva la verificación de las cuatro marcas, homografía y apertura y
+confirmación del modelo personalizado 128. El `CHECKLIST` del menú muestra comunicación I²C con Portenta, conexión
 de cámara, modelo, control, estado de calibraciones, pulsos de encoder y
 coherencia de finales. X alterna sus dos páginas; no bloquea el acceso al menú.
 
+Automático V2 permite reentrar siempre que las tres calibraciones de la sesión
+sigan válidas. La entrada ya no depende de que la banda se esté moviendo, de
+una bandera instantánea del encoder ni de que Z se encuentre exactamente en
+HOME. Si Z quedó en otra altura válida, V2 la lleva automáticamente a la
+posición segura antes de habilitar la detección.
+
+## Registrar ángulo de catch
+
+Este modo usa la deteccion y el posicionamiento XY del Automatico normal, con
+la banda detenida. Detener la banda antes de entrar: este firmware no controla
+el motor de la banda. No requiere movimiento ni calibracion del encoder.
+Como prueba experimental, si la caja de una pieza de clase 0 es muy ancha
+(`width/height >= 1,5`) sugiere 60 grados; si es muy alta
+(`width/height <= 0,75`) sugiere 156 grados. En las demas cajas no sugiere
+angulo y conserva el ajuste manual. Estas reglas provienen solo de cinco
+etiquetas, sin evaluacion fisica del agarre. La OLED muestra `SUG:` cuando
+hay sugerencia o `MANUAL` cuando no la hay, junto con `ROT:`. El joystick
+derecho siempre permite corregir el giro.
+Al llegar a XY, el brazo espera al menos 2,5 segundos y hasta que el servo
+lleve 1 segundo sin cambiar. Luego baja Z hasta DIN04, cierra la pinza y
+retira Z automaticamente. X no dispara el catch; triangulo cancela y vuelve
+al menu. La sugerencia no reemplaza el angulo que el operador eligio.
+
+Iniciar `registrar_v2.ps1` antes de entrar. Al seleccionar `REGISTRAR ANGULO`
+se crea `registros_v2/angulo_AAAA-MM-DD_HH-mm-ss.csv`. La fila `ANGLE_SAMPLE`
+guarda `objective_seq`, `class`, `camera_x_mm`, `camera_y_mm` y `label_rot_deg`
+cuando termina el cierre ordenado. La fila `ANGLE_DETECTION` de la ESP32 con
+el mismo `objective_seq` contiene `pixel_x`, `pixel_y`, `width_px`, `height_px`
+y `confidence`, ademas de `approx_rot_deg`, `suggested_rot_deg` y los votos
+del estimador actual. La fila `ANGLE_FEEDBACK` registra el angulo sugerido,
+el aplicado al cerrar y la magnitud de la correccion manual.
+El modelo personalizado de esta prueba devolvio `confidence=-128`, que no es
+una probabilidad utilizable; las siguientes versiones registran `NA` en ese
+caso. Las cajas son paralelas a la imagen y no muestran el sentido diagonal
+de la pieza. Por eso dos cajas parecidas pueden requerir angulos distintos:
+No se ha actualizado el giro de AUTOMATICO ni AUTOMATICO V2; esta sugerencia
+solo se prueba en REGISTRAR ANGULO y admite correccion manual.
+Retirar la pieza del campo de vision despues de cada intento
+para que el detector pueda reconocer la siguiente. `physical_result=NO_VERIFICADO`
+indica que no hay sensor que confirme el agarre.
+Subir ese CSV al terminar las pruebas para ajustar los modos automaticos.
+
+## Prueba de encoder (sin movimiento del brazo ni catch)
+
+Cargar los sketches de esta carpeta en **ambas placas** y reiniciar el
+registrador `registrar_v2.ps1`. Seleccionar **PRUEBA DE ENCODER** en el menu
+principal y entrar con X. El brazo queda detenido y no se ordena cierre de
+garra. La banda se controla externamente. Este modo cuenta
+cuentas del hardware sin convertir a mm ni estimar velocidad. No requiere
+calibracion de camara, brazo o escala del encoder.
+
+- **X (primera pulsacion):** inicia el conteo relativo desde cero y el cronometro.
+  La OLED muestra pulsos y segundos transcurridos en vivo.
+- **X (segunda pulsacion):** detiene la medicion y deja pulsos y segundos fijos
+  en la OLED. En ese instante se agrega una fila al CSV.
+- **Circulo:** pone a cero la medicion y la deja lista para comenzar de nuevo
+  con X. No borra el contador fisico del encoder ni el CSV ya guardado.
+- **Triangulo:** sale y cierra el CSV. Desconectar el mando tambien termina
+  la prueba. Solo los ensayos terminados quedan en el CSV.
+
+Para la prueba al 50%: pulsar X al inicio del tramo y X otra vez al final.
+La OLED permite comprobar el intervalo medido; no hay un temporizador
+automatico de 2 segundos. La sincronizacion incluye el tiempo de reaccion
+de ambas pulsaciones.
+
+El archivo es `registros_v2/encoder_AAAA-MM-DD_HH-mm-ss.csv`. Se abre al
+entrar al modo o recibir su primer evento si PowerShell se inicio tarde.
+Tiene las columnas `ensayo,contador_pulsos,tiempo_s`, una fila por cada
+segunda pulsacion de X. El tiempo usa segundos con tres decimales. No incluye
+velocidad, distancias, camara ni filas de diagnostico. Circulo prepara otro
+tramo en el mismo CSV. El `.log` tecnico separado conserva las muestras en
+vivo y otros eventos.
+
+El contador muestra la magnitud del desplazamiento neto desde el primer X,
+para que la lectura no salga negativa en el sentido habitual de la banda.
+Mantener un solo sentido durante cada medicion: no es un acumulador de ida
+y vuelta. Son cuentas de lectura X2, no los 1024 pulsos/vuelta nominales del
+encoder: con la configuracion actual hay 2048 cuentas por vuelta.
+
+## Modo de enseñanza ML
+
+### Ajustes de camara y error de catch segun velocidad
+
+En `PORTENTA/PORTENTA.ino`, `DESFASE_CAMARA_X_MM` y
+`DESFASE_CAMARA_Y_MM` corrigen la deteccion en milimetros del sistema del brazo,
+despues de aplicar los signos y el intercambio de ejes. Un valor positivo suma
+posicion hacia +X/+Y. Se aplican en los tres modos automaticos y no modifican
+la homografia. Para Y movil, positivo estima la pieza mas adelantada y dispara
+antes. Mantenga la distancia fisica camara-catch separada de estos ajustes.
+
+`CATCH_ADELANTO_EXTRA_MS` suma tiempo al adelanto del cierre en V2 y ML.
+Por ejemplo, 100 ms extra adelantan 10 mm a 100 mm/s y 20 mm a 200 mm/s.
+El calculo es `umbralY = catchY - velocidad * anticipacionSegundos`.
+Los valores iniciales siguen siendo 450 ms mecanicos + 50 ms de transporte,
+con adelanto extra en cero hasta medirlo. El filtro de velocidad responde ahora
+con alpha 0.5 y la posicion usa el contador vivo. La orden I2C se envia antes
+de imprimir los registros para que Serial no retrase la garra. La retirada
+espera tambien el margen de transporte, no solo el recorrido del servo.
+
+Inicie `registrar_v2.ps1` antes de entrar en `ENSENANZA ML`: abre
+`ml_*.csv` al entrar y lo cierra al salir. Cada captura guarda
+`ML_ANGLE_SUGGESTION`, los tramos `ML_ANGLE_ADJUST` si se giro manualmente,
+`ML_CATCH_TRIGGER`, `ML_SAMPLE`, `ML_GRIP_APPLIED` y `ML_CLOSE`.
+La terminal describe la sugerencia, los cambios de angulo y si X o el
+encoder ordeno el catch. Los tiempos `ms` de ESP y Portenta son relojes
+distintos; compare los eventos entre placas mediante `pc_utc` del CSV.
+
+- `servo_rot_deg`: angulo ordenado de orientacion; no es una lectura fisica.
+- `trigger`: X manual o ENCODER automatico.
+- `catch_type`: MANUAL o AUTOMATICO, segun quien disparo el cierre. No confirma
+  que la pieza haya sido agarrada. El registrador PowerShell muestra cada
+  `ML_SAMPLE` como `CATCH MANUAL (X)` o `CATCH AUTOMATICO (ENCODER)`, incluso
+  en vivo. El CSV de ML incluye `catch_type`, `trigger`, el instante de la
+  orden en Portenta y el instante en que la ESP aplico el pulso.
+- `suggested_rot_deg`: sugerencia inicial de 60 o 156 grados para cajas
+  claramente anchas o altas de clase 0. `NA` significa que la regla de cinco
+  ejemplos no tiene una sugerencia para esa pieza; el angulo previo se conserva.
+- `angle_before_deg`, `angle_after_deg`, `adjust_start_ms`, `adjust_end_ms`:
+  cada ajuste continuo con el joystick derecho, agrupado al soltarlo 120 ms.
+  `angle_origin=MANUAL` distingue estos cambios de la sugerencia inicial.
+- `delta_x`, `delta_y`: correccion del joystick respecto a la posicion inicial.
+- `error_disparo_mm`: pieza estimada menos umbral automatico en el disparo.
+- `error_disparo_ms`: la misma diferencia dividida por la velocidad; negativo
+  significa que X se pulso antes de lo que habria disparado el encoder.
+- `adelanto_extra_sugerido_ms`: ajuste total sugerido por esa pulsacion manual.
+  Usarlo solo cuando el catch manual fue bueno; ENCODER produce nan porque no
+  es una etiqueta humana. Promediar varias capturas exitosas a distintas velocidades.
+- `cierre_y_predicha`: posicion prevista al completar el tiempo mecanico y transporte.
+- `ML_CLOSE.error_y_estimado_mm`: posicion por encoder menos catchY al retirar Z.
+
+Estos errores comparan el gesto humano con la prediccion; el sistema no tiene
+un sensor que mida si la pieza quedo fisicamente centrada o agarrada. Por eso
+se informa `error_fisico_medido=NO`. Si el error en mm crece aproximadamente
+en proporcion a la velocidad, ajuste el tiempo. Si permanece parecido en mm,
+revise el desfase Y. Si crece con la distancia recorrida, revise diametro,
+relacion de transmision y deslizamiento de la rueda (49 mm, 1:1, X2).
+
+`ENSENANZA ML` es un modo supervisado separado de Automático V2. Requiere la
+calibración del brazo, de la cámara y del encoder. Puede abrirse con la banda
+detenida, pero solo acepta una detección cuando la banda avanza en sentido
+cámara→brazo y el encoder entrega velocidad y pulsos válidos. Su ciclo es:
+
+1. La cámara confirma una pieza en movimiento y conserva su clase, coordenadas
+   X/Y y el conteo de encoder asociado a la imagen.
+2. El brazo alinea X con la detección, lleva Y a la estación trasera `Y=0` y
+   baja Z simultáneamente hasta confirmar físicamente DIN04. Los tres motores
+   arrancan juntos; el sistema espera al último que termine. Durante este
+   recorrido el encoder actualiza continuamente la posición estimada de la pieza.
+3. La camara aplica una sugerencia inicial de giro si la caja es claramente
+   ancha o alta (solo clase 0). El operador puede corregir el giro con el eje
+   horizontal del joystick derecho desde que se acepta la pieza, durante el
+   traslado y el descenso. Con Z abajo tambien corrige X/Y con el joystick
+   izquierdo. La pinza permanece abierta hasta el catch.
+4. Desde la detección, la Portenta calcula continuamente el avance. Cuando Z
+   está abajo, la primera condición entre el umbral automático del encoder y
+   una pulsación de X ordena el cierre. X funciona como catch manual inmediato;
+   si no se pulsa, el encoder lo hace solo.
+5. El disparo automático adelanta la orden 500 ms (450 ms de recorrido de la
+   garra + 50 ms de comunicación). La línea `ML_SAMPLE` registra si el cierre
+    fue disparado por `X` o por `ENCODER`, junto al angulo final y el error
+    temporal respecto al umbral automatico. `ML_GRIP_APPLIED` confirma que
+    la ESP ordeno el pulso; `ML_CLOSE` es el fin estimado de su recorrido,
+    no una medida de agarre fisico.
+6. Z sube al mismo tiempo que X/Y transportan la pieza a `X máximo - 10 mm`,
+   junto al final derecho. Después vuelve a bajar, abre la garra, sube y queda
+   listo para otra pieza.
+
+Ejemplo de etiqueta supervisada:
+
+```text
+ML_SAMPLE|mode=ML|ms=...|session=...|n=1|seq=4|class=0|cam_x=...|cam_y=...|auto_x=...|auto_y=0.000|label_x=...|label_y=...|delta_x=...|delta_y=...|label_rot=...|piece_y=...|catch_y=...|close_threshold_y=...|belt_mm_s=...|encoder_ref=...|encoder=...|trigger=X|catch_type=MANUAL|catch_command_ms=...|detection_to_command_ms=...
+```
+
+Las columnas `cam_*`, `belt_mm_s`, `piece_y` y `encoder_ref` son entradas para
+entrenar el modelo; `label_*` y `catch_y` describen la corrección hecha por el
+operador. Si la pieza rebasa el catch, se detiene o pierde una lectura válida,
+el intento se cancela, la garra se abre y Z se retira de forma segura. Triángulo
+cancela el ciclo y vuelve al menú.
+
 En `MANUAL` se mueven X/Y con el joystick izquierdo y Z con el eje vertical del
-derecho. El eje horizontal del joystick derecho mueve la rotación (GPIO25) y la
-cruceta izquierda/derecha mueve la pinza (GPIO26). `PRUEBA SERVOS` usa esos
-mismos mandos sin habilitar motores. Los ángulos se limitan a 0–180 grados y
-aparecen en OLED. Fuera de Manual y Prueba de servos, los mandos no cambian sus
-ángulos.
+derecho. El eje horizontal del joystick derecho mueve la rotación (GPIO25) por
+ángulos de 0–180 grados. Cada pulsación de círculo alterna la garra (GPIO26)
+entre abierta y cerrada usando los pulsos calibrados de 937 µs y 1816 µs.
+En `PRUEBA SERVOS` se usa el mismo control: joystick derecho horizontal para
+rotación y círculo para alternar la garra.
+El OLED muestra ambos ángulos y el pulso de la garra. Fuera de Manual y Prueba
+de servos, los mandos no cambian sus ángulos.
 
 ## Registro sincronizado en Windows
 
@@ -76,7 +302,8 @@ powershell -ExecutionPolicy Bypass -File ".\pruebas de automatico v2\registrar_v
 
 El registrador permanece silencioso durante calibración y conserva dos
 segundos de prebúfer. Cuando la Portenta entra en V2 crea
-`registros_v2/v2_YYYY-MM-DD_HH-mm-ss.csv`; al salir, cancelar o perder un
+`registros_v2/v2_YYYY-MM-DD_HH-mm-ss.csv`; en Registrar Angulo usa el prefijo
+`angulo_`. Al salir, cancelar o perder un
 puerto vacía y cierra el archivo. Cada fila se escribe inmediatamente. Las
 líneas antiguas que no usan `V2LOG` quedan como eventos `RAW`, por lo que no se
 pierde el contexto de diagnóstico. El separador del CSV es coma, compatible
@@ -115,13 +342,13 @@ OUTC solo se usa como índice de diagnóstico: no pone la distancia en cero.
 
 ## Tercera calibración: encoder y banda
 
-No se introduce una distancia por terminal. El acople configurado en el código
-mide 15 mm de diámetro,
+No se introduce una distancia por terminal. La rueda configurada en el código
+mide 49 mm de diámetro,
 gira 1:1 con el encoder y la lectura es X2 (2048 cuentas/vuelta), por lo que la
 escala se obtiene directamente de la geometría:
 
 ```text
-mmPorCuenta = pi * 15 / 2048 = 0.0230097 mm/cuenta
+mmPorCuenta = pi * 49 / 2048 = 0.0751651 mm/cuenta
 ```
 
 Al solicitar Automático V2 sin encoder calibrado, el OLED muestra la
@@ -241,7 +468,8 @@ faltaban aproximadamente `125 mm` de recorrido. Por eso `ajusteCatch` pasa de
 `210 a 335 mm` y la distancia efectiva cámara-catch queda en `845 mm`, sin
 cambiar la escala del encoder.
 
-Después preposiciona X y deja Y inmóvil en la estación de catch (`Y=0 mm`). El
+Después preposiciona X con la coordenada detectada, lleva Y hacia atrás hasta
+la estación de catch (`Y=0 mm`) y baja Z al mismo tiempo. El
 encoder actualiza la posición estimada de la pieza, pero ya no gobierna la
 velocidad del eje Y. La Portenta calcula el tiempo mecánico de descenso Z y lo
 convierte en distancia usando la velocidad actual de la banda. Las pruebas del
@@ -251,22 +479,25 @@ que la pieza (`-2 a +8 mm` alrededor de `Y=0`) y no dejaba tiempo para pulsar X.
 
 El umbral conserva una reserva manual mínima de `0.50 s` además del tiempo de
 descenso. La reserva se escala con la velocidad: representa unos `36 mm` a
-`72 mm/s`, `70 mm` a `140 mm/s` y `85 mm` a `170 mm/s`. Sin embargo, la fase 2
-ya no espera a que la pieza alcance ese umbral. En cuanto termina la
-preposición X/Y, comprueba que la pieza todavía esté antes del límite seguro y
-prebaja Z inmediatamente. Si ya está demasiado cerca, cancela el intento en vez
-de iniciar un descenso tardío. De esta manera Z queda abajo esperando la pieza,
-especialmente cuando la banda trabaja despacio. Entonces exige que el final físico
+`72 mm/s`, `70 mm` a `140 mm/s` y `85 mm` a `170 mm/s`. Antes de aceptar el
+objetivo comprueba que la pieza todavía esté antes del límite seguro. Si hay
+espacio, inicia X/Y/Z juntos; si ya está demasiado cerca, cancela el intento en
+vez de iniciar un movimiento tardío. De esta manera Z puede quedar abajo antes
+de que terminen XY, especialmente cuando la banda trabaja despacio. El sistema
+espera a que los tres ejes terminen y exige que el final físico
 `DIN04` confirme `Z abajo`. Si el conteo termina antes del sensor, realiza una
 búsqueda lenta adicional de hasta 600 pasos; solo después cancela. Al confirmar
 DIN04 congela X/Y/Z, registra `READY_CATCH` y entra en la fase 6. La cámara
 permanece bloqueada y solamente el encoder actualiza la posición estimada de la
 pieza. La pantalla muestra `ESPERA CATCH AUTO`.
 
-Cuando la posición corregida cruza automáticamente `Y=0`, la Portenta registra
-`CAPTURE=CATCH AUTOMATICO POR ENCODER`, considera ejecutado el catch virtual y
-retira Z verticalmente hasta HOME. No se requiere X. Si se pulsa, queda un
-evento diagnóstico `BUTTON_X`, pero se ignora y no modifica la trayectoria.
+Cuando la pieza se aproxima a `Y=0`, la Portenta calcula el instante de cierre
+con la velocidad real del encoder. Adelanta la orden por el tiempo configurado
+de la garra (450 ms) y el margen I²C (50 ms), y envía
+`ACK_OBJ_CERRAR_PINZA`. La ESP32 cierra físicamente GPIO26 con el pulso calibrado
+de 1816 us. Solo después de completar esos 450 ms, Z se retira verticalmente
+hasta HOME. No se requiere X. Si se pulsa, queda un evento diagnóstico
+`BUTTON_X`, pero se ignora y no modifica la trayectoria.
 
 El intento se cancela si la banda se detiene o invierte antes del disparo, la
 pieza rebasa la estación antes de que el brazo esté listo, falta espacio para
@@ -281,15 +512,19 @@ salen del modo.
 Desde que se publica un objetivo, la ESP bloquea su secuencia, clase,
 coordenadas de cámara y conteo de referencia. No consulta HUSKYLENS durante el
 movimiento; la Portenta actualiza únicamente Y con el delta del encoder. Las
-fases normales son `0 -> 1 -> 2 -> 3 -> 4 -> 6 -> 5 -> 7 -> 0`.
+fases normales son `0 -> 1 -> 2 -> 3 -> 4 -> 6 -> 10 -> 5 -> 7 -> 0`.
+La fase `9` aparece únicamente al entrar si Z debe volver primero a la altura
+segura de espera.
 
-## Catch automático por encoder
+## Catch físico automático por encoder
 
-En la fase 6 los tres ejes permanecen detenidos hasta el cruce `Y=0`. En ese
-instante Z comienza a subir. Cuando vuelve a HOME, la
-Portenta registra `CATCH_AUTOMATICO`, envía `ACK_OBJ_COMPLETADO` y pasa a
-`COMPLETADO`. El OLED muestra `CATCH AUTOMATICO`. Triángulo conserva la
-cancelación y retirada segura de Z.
+En la fase 6 los tres ejes permanecen detenidos mientras el encoder aproxima la
+pieza. Al alcanzar el umbral anticipado se pasa a `CERRANDO_PINZA`; X/Y/Z siguen
+inmóviles y la garra completa su cierre alrededor de la estación `Y=0`. Luego Z
+sube. Cuando vuelve a HOME, la Portenta registra `CATCH_AUTOMATICO`, envía
+`ACK_OBJ_COMPLETADO`, la ESP32 vuelve a abrir la garra y se pasa a `COMPLETADO`.
+El OLED muestra las fases de cierre y resultado. Triángulo conserva la
+cancelación, abre la garra y hace la retirada segura de Z.
 
 La ESP libera el objetivo terminal, mantiene HUSKYLENS bloqueada durante 500 ms
 y después permite una publicación nueva.
@@ -309,7 +544,7 @@ otra secuencia.
    espera ni durante el descenso Z.
 6. Pruebe Z con la banda detenida y confirme la nueva altura física.
 7. Habilite el ciclo completo sin pulsar X. Confirme en el registro la cadena
-   `READY_CATCH -> CAPTURE (CATCH AUTOMATICO POR ENCODER) -> RESULT
+   `READY_CATCH -> GRIP_COMMAND -> CAPTURE (PINZA CERRADA) -> RESULT
    (CATCH_AUTOMATICO)`. Triángulo debe seguir cancelando y no debe producir un
    resultado positivo.
 8. Inyecte individualmente pérdida de I²C, cámara, encoder, banda, control y
@@ -327,26 +562,54 @@ Portenta: arduino:mbed_portenta:envie_m7
 Los `static_assert` de ambos headers verifican en cada compilación el tamaño
 de 32 bytes y que el CRC esté en el byte 31.
 
+### Protección del USB durante el arranque
+
+La Portenta espera como máximo 1.5 s para que Windows enumere el USB CDC antes
+de inicializar I²C. Luego comprueba físicamente SDA y SCL. Si cualquiera ya
+está en bajo, no entra en una transacción bloqueante: mantiene los motores
+detenidos, conserva el puerto USB y muestra `Bus ocupado antes de iniciar`.
+Reintenta la inicialización cada segundo y solo habilita la comunicación y el
+movimiento después de verificar el expansor de entradas de Machine Control.
+
+Los marcadores `[BOOT][1]` a `[BOOT][5]` identifican la última etapa de
+arranque completada. El enlace volvió a la frecuencia estándar de 100 kHz;
+los periodos 23/47 ms, CRC y reintentos siguen reduciendo la sensibilidad al
+ruido sin depender de una frecuencia I²C no validada.
+
 ## Diagnóstico de comunicación con el encoder girando
 
-El enlace permanece a 100 kHz, pero la Portenta solicita el control cada 10 ms
-y publica la telemetría del encoder cada 20 ms. Dos paquetes completos de 32
-bytes ocupaban casi el 90 % del bus con los periodos anteriores de 5/10 ms;
-los nuevos periodos reducen la ocupación teórica aproximadamente al 45 % y
-dejan margen para las interrupciones X2 del encoder.
+El enlace funciona a 100 kHz. La Portenta solicita el control cada 23 ms y
+publica su estado cada 47 ms; la ESP renueva su instantánea cada 20 ms. Los
+periodos 23/47 ms evitan iniciar siempre las transferencias en la misma fase
+del ticker STEP de 100 us. Al fallar una operación, la Portenta realiza hasta
+dos reintentos no bloqueantes, separados primero 3 ms y después 9 ms. Durante
+esa recuperación no intercala otra operación normal del bus.
+
+El timeout de seguridad permanece en 150 ms. Un reintento válido conserva el
+enlace, pero ningún paquete corto, con cabecera incorrecta, CRC inválido o
+semántica inválida modifica el estado de control. El eje Y arranca con divisor
+8 y baja hacia el divisor solicitado cada 75 ms para reducir el transitorio de
+conmutación del driver.
 
 Una vez por segundo la Portenta imprime:
 
 ```text
-[I2C] rxOK=... rxError=...(len=... crc=... sem=...) txOK=...
-      txError=... ultimoTx=... pausaLoopMax=...ms encVel=...
-      encCps=... estado=...
+[I2C] rxOK=... rxError=...(len=... hdr=... crc=... sem=...) txOK=...
+      txError=... ultimoTx=... rxErrPct=... txErrPct=... retry=...
+      recRx=... recTx=... burstFail=... pausaLoopMax=...ms estado=...
 ```
 
 - `len`: lectura incompleta o sin respuesta de la ESP.
+- `hdr`: `magic`, versión o longitud declarada no coincide con el protocolo.
 - `crc`: paquete recibido con bytes alterados.
 - `sem`: paquete íntegro pero con valores fuera del protocolo.
 - `ultimoTx`: código devuelto por `Wire.endTransmission()`; cero es correcto.
+- `rxErrPct` y `txErrPct`: porcentaje de error de la última ventana de un
+  segundo, no el acumulado desde el arranque.
+- `retry`: cantidad acumulada de reintentos ejecutados.
+- `recRx` y `recTx`: ráfagas recuperadas antes de vencer los 150 ms.
+- `burstFail`: operaciones que continuaron fallando después de ambos
+  reintentos.
 - `pausaLoopMax`: mayor tiempo observado sin ejecutar el `loop()`.
 - `encCps`: cuentas X2 por segundo; permite relacionar el fallo con la carga
   real de interrupciones incluso antes de calibrar los mm por cuenta.
@@ -361,3 +624,61 @@ periférico I²C una vez por segundo mientras está detenida y esperando enlace;
 la ESP vuelve a iniciar su esclavo si `Wire.begin()` falla o si pasan cinco
 segundos sin ninguna solicitud ni escritura. Reiniciar el periférico no cambia
 la sesión de arranque de la ESP y nunca permite reanudar motores por sí solo.
+
+## Diagnóstico de reinicios y pérdidas I²C
+
+El protocolo versión 9 conserva ambos paquetes en 32 bytes. La ESP publica en
+cada paquete la causa de su último reset y la Portenta distingue un reinicio
+real de una recuperación del periférico I²C.
+
+Cuando la Portenta pierde el enlace, detiene los motores y mantiene durante dos
+segundos el estado `DIAG I2C PORTENTA`. La espera usa `millis()`; no bloquea el
+programa ni detiene los intentos de comunicación. Después exige tres desafíos
+de ida y vuelta válidos. En el arranque inicial pasa automáticamente a los cinco
+segundos de estabilización; después de una pérdida posterior muestra
+`PULSE X PARA ESTABILIZAR 5 S` y permanece detenido hasta recibir ese flanco del
+control. Las causas mostradas son:
+
+- `REINICIO ESP`: cambió la sesión de arranque; el detalle indica encendido,
+  pin externo, software, watchdog, brownout, panic u otra causa;
+- `PAQUETE CORTO`: faltaron bytes o no respondió el esclavo;
+- `VERSION/HEADER`: firmware incompatible o cabecera dañada;
+- `ERROR CRC`: se alteraron bytes durante la transferencia;
+- `DATO INVALIDO`: paquete íntegro con contenido fuera del contrato;
+- `SEQ CONGELADA`: siguen llegando bytes, pero la instantánea de la ESP no
+  avanza;
+- `TIMEOUT RX`: no llegó ningún paquete válido durante 150 ms;
+- `NACK DIRECCION`, `NACK DATOS` o `ERROR TX`: fallo persistente al escribir
+  desde la Portenta.
+
+La ESP muestra además `PORTENTA AUSENTE`, `ESCLAVO REINIC.` o
+`WIRE.BEGIN FALLO`. Esto permite separar un reinicio completo —repite
+`[BOOT]`, cambia la sesión y genera `[RESET]`— de un reinicio exclusivo del
+periférico I²C, que conserva la misma sesión.
+
+Cada evento produce una línea estructurada `[I2CDBG]`; cada arranque produce
+`[RESET]`. `registrar_v2.ps1` guarda desde que abre los puertos un archivo
+`registros_v2/i2c_YYYY-MM-DD_HH-mm-ss.log`, aunque nunca se entre a Automático
+V2. El CSV de movimiento conserva su funcionamiento anterior.
+
+Para registrar ambas placas:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\pruebas de automatico v2\registrar_v2.ps1" `
+  -PuertoESP COM8 -PuertoPortenta COM6
+```
+
+La ESP usa 460800 baudios y la Portenta 115200. Las dos deben cargarse juntas
+con protocolo 9; mezclar versiones debe producir `VERSION/HEADER`.
+
+### Revisión física recomendada
+
+1. Con el sistema apagado, comprobar continuidad de SDA, SCL y GND extremo a
+   extremo, además de ausencia de cortos entre esas redes y 3.3 V.
+2. Inspeccionar con lupa soldaduras frías, grietas, puentes, vías, resistencias
+   pull-up, terminales y los conectores de la Portenta/Machine Control.
+3. Con alimentación, verificar que SDA y SCL suban a 3.3 V, nunca a 5 V.
+4. Repetir primero sin motores ni servos y reconectar cargas una por una. Si la
+   falla aparece al conmutar potencia, revisar EMI, caída de tensión y masas.
+5. Con osciloscopio o analizador lógico, buscar una línea retenida en LOW,
+   flancos lentos, picos o pausas superiores a 150 ms.

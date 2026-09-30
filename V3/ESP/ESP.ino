@@ -6,7 +6,7 @@
  *  - esclavo I2C de la Portenta H7 en el bus de control;
  *  - maestro del bus I2C independiente de la pantalla SH1106;
  *  - adquisicion del control Bluepad32 y control de los dos servos;
- *  - calibracion y deteccion HUSKYLENS 2 por UART2;
+ *  - calibracion y deteccion HUSKYLENS 2 por UART1;
  *  - publicacion atomica de telemetria y objetivos estables.
  *
  * Todas las llamadas de DFRobot_HuskylensV2 se ejecutan en una tarea FreeRTOS
@@ -38,6 +38,7 @@ using namespace ProtocoloI2C;
 struct Point2D;
 struct FiltroDeteccion;
 struct ContextoCamara;
+void invalidarControlCamaraPorTimeout();
 
 // =============================================================================
 // Hardware fijo. Estos pines son parte del contrato electrico del prototipo.
@@ -60,12 +61,16 @@ constexpr int PIN_SERVO_PINZA = 26;
 constexpr int HUSKY_RX_PIN = 32;
 constexpr int HUSKY_TX_PIN = 33;
 constexpr uint32_t HUSKY_BAUDRATE = 115200;
+constexpr uint8_t HUSKY_UART_NUMBER = 1;
 
 TwoWire I2C_Pantalla(1);
 Adafruit_SH1106G pantalla(128, 64, &I2C_Pantalla, -1);
 Servo servoRotacion;
 Servo servoPinza;
-HardwareSerial HuskyUART(2);
+// UART1 es la configuracion comprobada fisicamente con esta HUSKYLENS.
+// Los GPIO se reasignan explicitamente en begin(), por lo que no se usan los
+// pines UART predeterminados del ESP32.
+HardwareSerial HuskyUART(HUSKY_UART_NUMBER);
 HuskylensV2 huskylens;
 
 // =============================================================================
@@ -77,10 +82,13 @@ constexpr uint32_t PERIODO_PUBLICACION_I2C_MS = 10;
 constexpr uint32_t PERIODO_PANTALLA_MS = 100;
 constexpr uint32_t PERIODO_REPORTE_I2C_MS = 1000;
 constexpr uint32_t TIMEOUT_PORTENTA_MS = 1000;
+constexpr uint32_t PERIODO_REINTENTO_I2C_MS = 1000;
+constexpr uint32_t TIMEOUT_ACTIVIDAD_I2C_MS = 5000;
 constexpr uint32_t PERIODO_REINTENTO_OLED_MS = 1000;
 constexpr uint32_t RETARDO_INICIAL_OLED_MS = 1500;
 
 constexpr uint32_t CAM_RECONNECT_MS = 2000;
+constexpr uint32_t CAM_UART_STARTUP_MS = 500;
 constexpr uint32_t CAM_TAG_LOAD_MS = 3000;
 constexpr uint32_t CAM_POST_CALC_MS = 2000;
 constexpr uint32_t CAM_MODEL_LOAD_MS = 8000;
@@ -122,6 +130,9 @@ bool sistemaBaseListo = false;
 bool busPantallaIniciado = false;
 bool pantallaInicializada = false;
 bool i2cEsclavoIniciado = false;
+uint32_t ultimoIntentoI2C = 0;
+uint32_t inicioInstanciaI2C = 0;
+uint32_t reiniciosI2CEsclavo = 0;
 uint32_t proximoIntentoOLED = 0;
 uint32_t intentosInicioOLED = 0;
 uint32_t ultimoUpdateServo = 0;
@@ -153,6 +164,8 @@ volatile uint32_t rxI2COk = 0;
 volatile uint32_t rxI2CLongitudIncorrecta = 0;
 volatile uint32_t rxI2CProtocoloIncorrecto = 0;
 volatile int ultimoTamanoRecibido = -1;
+volatile uint32_t solicitudesLecturaI2C = 0;
+volatile uint32_t ultimaActividadI2C = 0;
 
 uint8_t secuenciaPaqueteI2C = 0;
 uint16_t sesionArranque = 0;
@@ -232,6 +245,8 @@ void ponerControlEnNeutro() {
 // =============================================================================
 
 void requestEvent() {
+  ++solicitudesLecturaI2C;
+  ultimaActividadI2C = millis();
   PaqueteESPAPortenta copia;
   portENTER_CRITICAL(&txI2CMux);
   copia = paqueteTxSnapshot;
@@ -240,6 +255,7 @@ void requestEvent() {
 }
 
 void receiveEvent(int cantidadBytes) {
+  ultimaActividadI2C = millis();
   // Un sondeo de direccion puede disparar el callback sin carga util.
   if (cantidadBytes <= 0) {
     while (Wire.available()) {
@@ -268,6 +284,51 @@ void receiveEvent(int cantidadBytes) {
   rxPendiente = temporal;
   hayRxPendiente = true;
   portEXIT_CRITICAL(&rxI2CMux);
+}
+
+bool iniciarI2CEsclavo(bool reinicio) {
+  if (i2cEsclavoIniciado) {
+    Wire.end();
+    i2cEsclavoIniciado = false;
+  }
+
+  Wire.onReceive(receiveEvent);
+  Wire.onRequest(requestEvent);
+  Wire.setBufferSize(64);
+  i2cEsclavoIniciado = Wire.begin(
+    static_cast<uint8_t>(DIRECCION_ESP32),
+    I2C_PORTENTA_SDA,
+    I2C_PORTENTA_SCL,
+    I2C_PORTENTA_HZ
+  );
+  ultimoIntentoI2C = millis();
+  inicioInstanciaI2C = ultimoIntentoI2C;
+  ultimaActividadI2C = 0;
+  if (reinicio) ++reiniciosI2CEsclavo;
+
+  Serial.print(reinicio ? F("[I2C][RECUPERACION] Esclavo reiniciado: ")
+                        : F("[BOOT] I2C esclavo 0x40 GPIO27/GPIO14: "));
+  Serial.println(i2cEsclavoIniciado ? F("OK") : F("ERROR"));
+  return i2cEsclavoIniciado;
+}
+
+void mantenerI2CEsclavoRecuperable() {
+  const uint32_t ahora = millis();
+  if (!i2cEsclavoIniciado) {
+    if (ahora - ultimoIntentoI2C >= PERIODO_REINTENTO_I2C_MS) {
+      iniciarI2CEsclavo(true);
+    }
+    return;
+  }
+
+  const uint32_t ultima = ultimaActividadI2C;
+  const uint32_t referencia = ultima == 0 ? inicioInstanciaI2C : ultima;
+  if (sistemaBaseListo && ahora - referencia >= TIMEOUT_ACTIVIDAD_I2C_MS &&
+      ahora - ultimoIntentoI2C >= PERIODO_REINTENTO_I2C_MS) {
+    estadoPortentaValido = false;
+    invalidarControlCamaraPorTimeout();
+    iniciarI2CEsclavo(true);
+  }
 }
 
 // =============================================================================
@@ -544,7 +605,8 @@ constexpr double TAG_X_FROM_CENTER_MM =
 constexpr double TAG_ROWS_DISTANCE_MM = 382.0;
 constexpr uint16_t SAMPLES_PER_TAG = 25;
 constexpr uint8_t NUMBER_OF_TAGS = 4;
-constexpr uint8_t CUSTOM_MODEL_INDEX = 1;
+// 0 = modelo personalizado 128, confirmado para esta instalacion.
+constexpr uint8_t CUSTOM_MODEL_INDEX = 0;
 
 const eAlgorithm_t PIECE_MODEL = static_cast<eAlgorithm_t>(
   static_cast<uint8_t>(ALGORITHM_CUSTOM_BEGIN) + CUSTOM_MODEL_INDEX
@@ -1426,7 +1488,7 @@ void procesarEstadoCamara(
       }
 
       cambiarEstadoCamara(ctx, CAMARA_CONECTANDO);
-      Serial.println(F("[CAM] Intentando conexion UART2"));
+      Serial.println(F("[CAM] Intentando conexion UART1 RX32/TX33"));
       vaciarUARTCamara();
 
       // Llamada potencialmente bloqueante, confinada a esta tarea prioridad 0.
@@ -1582,12 +1644,25 @@ void procesarEstadoCamara(
         ctx.operacionEstadoIniciada = true;
         ctx.plazoEstado = millis() + CAM_MODEL_LOAD_MS;
       } else if (plazoCumplido(ahora, ctx.plazoEstado)) {
+        // No se publica MODELO_LISTO solo por haber esperado. Una lectura
+        // valida (tambien con cero detecciones) confirma que el modelo 128
+        // termino de cargar y responde por UART.
+        const int8_t resultados = huskylens.getResult(PIECE_MODEL);
+        if (resultados < 0) {
+          registrarErrorCamara(
+            ctx,
+            CAM_ERROR_ABRIR_MODELO,
+            true,
+            true
+          );
+          break;
+        }
         ctx.modeloListo = true;
         ctx.solicitarModelo = false;
         ctx.error = CAM_ERROR_NINGUNO;
         ctx.proximaLectura = ahora;
         cambiarEstadoCamara(ctx, CAMARA_LISTA);
-        Serial.println(F("[CAM] Modelo listo; deteccion habilitada"));
+        Serial.println(F("[CAM] Modelo 128 confirmado; deteccion habilitada"));
       }
       break;
 
@@ -1645,7 +1720,9 @@ void tareaCamara(void *parametro) {
   camaraCtx.estado = CAMARA_OFFLINE;
   camaraCtx.error = CAM_ERROR_NINGUNO;
   camaraCtx.rearmada = true;
-  camaraCtx.proximaConexion = millis();
+  // Replica la espera que usa el sketch minimo que ya fue validado en el
+  // hardware. La tarea sigue siendo no bloqueante para el resto del sistema.
+  camaraCtx.proximaConexion = millis() + CAM_UART_STARTUP_MS;
   publicarEstadoCamara(camaraCtx);
 
   Serial.print(F("[CAM] Tarea en core "));
@@ -1738,21 +1815,42 @@ void dibujarTitulo(const __FlashStringHelper *titulo) {
   pantalla.drawLine(0, 10, 127, 10, SH110X_WHITE);
 }
 
-void mostrarSinPortenta() {
+void dibujarChecklistConexiones(
+  bool portentaOk,
+  bool estabilizando,
+  uint32_t restanteMs
+) {
   const EstadoCamaraPublicado camara = copiarEstadoCamara();
-  pantalla.clearDisplay();
-  dibujarTitulo(F("ESP32 ACTIVA"));
+  const bool camaraOk = camara.conectada &&
+                        camara.estado != CAMARA_OFFLINE &&
+                        camara.estado != CAMARA_CONECTANDO &&
+                        camara.estado != CAMARA_ERROR &&
+                        camara.error == CAM_ERROR_NINGUNO;
+
+  dibujarTitulo(F("CHECK CONEXIONES"));
   pantalla.setCursor(0, 16);
-  pantalla.println(F("ESPERANDO PORTENTA"));
+  pantalla.print(F("PORTENTA: "));
+  pantalla.println(portentaOk ? F("OK") : F("PENDIENTE"));
   pantalla.setCursor(0, 30);
-  pantalla.print(F("CAM: "));
-  pantalla.println(nombreEstadoCamara(camara.estado));
-  pantalla.setCursor(0, 44);
-  pantalla.print(F("BT: "));
-  pantalla.println(bluetoothConectado ? F("CONECTADO") : F("DESCONECTADO"));
-  pantalla.setCursor(0, 56);
-  pantalla.print(F("I2C RX: "));
-  pantalla.print(rxI2COk);
+  pantalla.print(F("CAMARA:   "));
+  pantalla.println(camaraOk ? F("OK") : F("PENDIENTE"));
+  pantalla.setCursor(0, 48);
+  if (estabilizando) {
+    pantalla.print(F("ESTABILIZANDO "));
+    pantalla.print((restanteMs + 999U) / 1000U);
+    pantalla.println(F(" s"));
+  } else if (!portentaOk || !camaraOk) {
+    pantalla.println(F("ESPERANDO ENLACES"));
+  } else if (!bluetoothConectado) {
+    pantalla.println(F("CONECTE EL CONTROL"));
+  } else {
+    pantalla.println(F("X: ENTRAR AL MENU"));
+  }
+}
+
+void mostrarSinPortenta() {
+  pantalla.clearDisplay();
+  dibujarChecklistConexiones(false, false, 0);
   pantalla.display();
 }
 
@@ -1871,32 +1969,19 @@ void actualizarPantallaESP32(const PaquetePortentaAESP &p) {
 
   switch (p.estadoSistema) {
     case SISTEMA_ARRANQUE_SEGURO:
-      dibujarTitulo(F("ARRANQUE SEGURO"));
-      pantalla.setCursor(0, 18);
-      pantalla.println(F("MOTORES DETENIDOS"));
-      pantalla.println(F("INICIANDO SISTEMA"));
+      dibujarChecklistConexiones(true, false, 0);
       break;
 
     case SISTEMA_ESPERANDO_I2C:
-      dibujarTitulo(F("COMUNICACION I2C"));
-      pantalla.setCursor(0, 20);
-      pantalla.println(F("ESP32 RESPONDIENDO"));
-      pantalla.println(F("ESPERANDO PORTENTA"));
+      dibujarChecklistConexiones(true, false, 0);
       break;
 
-    case SISTEMA_ESPERA_5S:
-      dibujarTitulo(F("ENLACE I2C OK"));
-      pantalla.setCursor(0, 20);
-      pantalla.println(F("ESTABILIZANDO 5 S"));
-      pantalla.setCursor(0, 38);
-      pantalla.print(F("RESTANTE: "));
-      {
-        const uint32_t transcurrido = millis() - inicioEstadoRemoto;
-        const uint32_t restante = transcurrido < 5000 ? 5000 - transcurrido : 0;
-        pantalla.print(restante);
-      }
-      pantalla.println(F(" ms"));
+    case SISTEMA_ESPERA_5S: {
+      const uint32_t transcurrido = millis() - inicioEstadoRemoto;
+      const uint32_t restante = transcurrido < 5000 ? 5000 - transcurrido : 0;
+      dibujarChecklistConexiones(true, true, restante);
       break;
+    }
 
     case SISTEMA_CALIBRANDO_CAMARA:
       mostrarCalibracionCamara();
@@ -1925,24 +2010,7 @@ void actualizarPantallaESP32(const PaquetePortentaAESP &p) {
       break;
 
     case SISTEMA_CHECKLIST:
-      dibujarTitulo(F("CHECKLIST FINAL"));
-      pantalla.setCursor(0, 14);
-      pantalla.print(F("CAM:"));
-      pantalla.print((copiarEstadoCamara().estado == CAMARA_LISTA) ? F("OK ") : F("-- "));
-      pantalla.print(F("XY:"));
-      pantalla.println((p.flagsSistema & SIS_FLAG_XY_CALIBRADO) ? F("OK") : F("--"));
-      pantalla.setCursor(0, 28);
-      pantalla.print(F("Z:"));
-      pantalla.print((p.flagsSistema & SIS_FLAG_Z_CALIBRADO) ? F("OK ") : F("-- "));
-      pantalla.print(F("HOME:"));
-      pantalla.println((p.flagsSistema & SIS_FLAG_EN_HOME) ? F("OK") : F("--"));
-      pantalla.setCursor(0, 42);
-      pantalla.print(F("BT:"));
-      pantalla.print(bluetoothConectado ? F("OK ") : F("-- "));
-      pantalla.print(F("LIM:"));
-      pantalla.println((p.flagsLimites & LIM_FLAG_COHERENTES) ? F("OK") : F("--"));
-      pantalla.setCursor(0, 56);
-      pantalla.print((p.flagsSistema & SIS_FLAG_CHECKLIST_OK) ? F("TODO CORRECTO") : F("VERIFICANDO..."));
+      dibujarChecklistConexiones(true, false, 0);
       break;
 
     case SISTEMA_MENU_PRINCIPAL:
@@ -2052,14 +2120,14 @@ void setup() {
   Serial.print(F("[BOOT] Bus OLED GPIO21/GPIO22: "));
   Serial.println(busPantallaIniciado ? F("OK") : F("ERROR"));
 
-  // UART2 no consulta la camara; por tanto no bloquea setup().
+  // UART1 no consulta la camara; por tanto no bloquea setup().
   HuskyUART.begin(
     HUSKY_BAUDRATE,
     SERIAL_8N1,
     HUSKY_RX_PIN,
     HUSKY_TX_PIN
   );
-  Serial.println(F("[BOOT] HUSKYLENS UART2 RX32/TX33 a 115200"));
+  Serial.println(F("[BOOT] HUSKYLENS UART1 RX32/TX33 a 115200"));
 
   const BaseType_t tareaCreada = xTaskCreatePinnedToCore(
     tareaCamara,
@@ -2083,22 +2151,12 @@ void setup() {
   }
 
   // El bus de control se activa al final para que los callbacks nunca observen
-  // perifericos a medio inicializar.
-  Wire.onReceive(receiveEvent);
-  Wire.onRequest(requestEvent);
-  Wire.setBufferSize(64);
-  i2cEsclavoIniciado = Wire.begin(
-    static_cast<uint8_t>(DIRECCION_ESP32),
-    I2C_PORTENTA_SDA,
-    I2C_PORTENTA_SCL,
-    I2C_PORTENTA_HZ
-  );
-
+  // perifericos a medio inicializar. Si coincide con el encendido de la
+  // Portenta, loop() vuelve a levantarlo automaticamente.
+  iniciarI2CEsclavo(false);
   sistemaBaseListo = true;
   prepararSnapshotI2C();
 
-  Serial.print(F("[BOOT] I2C esclavo 0x40 GPIO27/GPIO14: "));
-  Serial.println(i2cEsclavoIniciado ? F("OK") : F("ERROR"));
   Serial.print(F("[BOOT] Sesion ESP: "));
   Serial.println(sesionArranque);
   Serial.println(F("[BOOT] Sistema base listo"));
@@ -2108,6 +2166,7 @@ void loop() {
   // Bluepad32 conserva prioridad funcional en cada iteracion.
   BP32.update();
   processControllers();
+  mantenerI2CEsclavoRecuperable();
 
   procesarRecepcionI2C();
   intentarInicializarOLEDNoBloqueante();
@@ -2126,7 +2185,11 @@ void loop() {
     Serial.print(F(" errLen="));
     Serial.print(rxI2CLongitudIncorrecta);
     Serial.print(F(" errCRC="));
-    Serial.println(rxI2CProtocoloIncorrecto);
+    Serial.print(rxI2CProtocoloIncorrecto);
+    Serial.print(F(" requests="));
+    Serial.print(solicitudesLecturaI2C);
+    Serial.print(F(" reinicios="));
+    Serial.println(reiniciosI2CEsclavo);
   }
 
   if (

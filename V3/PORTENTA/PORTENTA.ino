@@ -282,6 +282,8 @@ uint32_t lecturasI2COk = 0;
 uint32_t lecturasI2CError = 0;
 uint32_t enviosI2COk = 0;
 uint32_t enviosI2CError = 0;
+uint32_t reiniciosBusI2CMaestro = 0;
+unsigned long ultimoReinicioBusI2CMs = 0;
 unsigned long ultimoReporteI2C = 0;
 
 String lineaTerminal = "";
@@ -1344,7 +1346,14 @@ uint8_t construirFlagsSistema() {
         flags |= SIS_FLAG_BRAZO_OCUPADO;
     }
     if (estadoGeneral == EST_SYSTEM_ERROR) flags |= SIS_FLAG_ERROR_CRITICO;
-    if (checklistInicialCompletado && estadoGeneral != EST_SYSTEM_ERROR) {
+    const bool conexionesListasParaMenu =
+        enlaceI2CVigente() && protocoloValido && baseESPLista() &&
+        camaraConectada() && estadoCamara != CAMARA_OFFLINE &&
+        estadoCamara != CAMARA_CONECTANDO && estadoCamara != CAMARA_ERROR &&
+        errorCamara == CAM_ERROR_NINGUNO;
+    if ((checklistInicialCompletado ||
+         (estadoGeneral == EST_FINAL_CHECKLIST && conexionesListasParaMenu)) &&
+        estadoGeneral != EST_SYSTEM_ERROR) {
         flags |= SIS_FLAG_CHECKLIST_OK;
     }
     if (enlaceI2CVigente() && estadoGeneral != EST_SYSTEM_ERROR &&
@@ -1435,6 +1444,33 @@ bool enviarPaquetePortenta() {
     }
     enviosI2CError++;
     return false;
+}
+
+void mantenerBusI2CMaestroRecuperable() {
+    if (!comunicacionI2CHabilitada || enlaceI2CVigente()) return;
+
+    // Solo se reinicia el periferico en estados seguros. La maquina de
+    // seguridad detiene primero los ejes si el enlace se pierde en movimiento.
+    const bool estadoSeguro =
+        estadoGeneral == EST_BOOT_SAFE ||
+        estadoGeneral == EST_WAIT_I2C ||
+        estadoGeneral == EST_I2C_SETTLE ||
+        estadoGeneral == EST_FINAL_CHECKLIST ||
+        estadoGeneral == EST_SYSTEM_ERROR;
+    if (!estadoSeguro || motoresEnMovimiento() || movimientoPosicionadoActivo)
+        return;
+
+    const unsigned long ahora = millis();
+    if (ahora - ultimoReinicioBusI2CMs < 1000UL) return;
+    ultimoReinicioBusI2CMs = ahora;
+
+    Wire.end();
+    Wire.begin();
+    Wire.setClock(100000);
+    fallosPaqueteConsecutivos = 0;
+    ++reiniciosBusI2CMaestro;
+    Serial.print(F("[I2C][RECUPERACION] Maestro reiniciado, intento="));
+    Serial.println(reiniciosBusI2CMaestro);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1531,23 +1567,17 @@ void entrarErrorSistema(CodigoErrorLocal codigo, const char *mensaje) {
 ResultadoChecklist evaluarChecklistFinal() {
     if (!enlaceI2CVigente()) return CHECK_I2C;
     if (!protocoloValido || !baseESPLista()) return CHECK_PROTOCOLO;
-    if (!camaraConectada() || estadoCamara != CAMARA_LISTA || errorCamara != 0)
-        return CHECK_CAMARA;
-    if (!homografiaValida()) return CHECK_HOMOGRAFIA;
-    if (!modeloListo()) return CHECK_MODELO;
-    if (!calibracionXYValida || !escalaConfigurada()) return CHECK_XY;
-    if (!calibracionZValida) return CHECK_Z;
-    if (!brazoEnHome()) return CHECK_HOME;
-    if (motoresEnMovimiento() || movimientoPosicionadoActivo) return CHECK_MOTORES;
-    if (!btConectado) return CHECK_BT;
-    if (faseCal == CAL_ERROR || mensajeErrorCalibracion[0] != '\0') return CHECK_CAL_ERROR;
-    if (!finalesCoherentes() || algunFinalActivo()) return CHECK_FINALES;
+    // En el arranque solo se comprueban los dos enlaces solicitados. La
+    // homografia, el modelo y el brazo se validan al entrar a cada modo.
+    if (!camaraConectada() || estadoCamara == CAMARA_OFFLINE ||
+        estadoCamara == CAMARA_CONECTANDO || estadoCamara == CAMARA_ERROR ||
+        errorCamara != CAM_ERROR_NINGUNO) return CHECK_CAMARA;
     return CHECK_OK;
 }
 
 const char *textoChecklist(ResultadoChecklist resultado) {
     switch (resultado) {
-        case CHECK_OK: return "Checklist completo";
+        case CHECK_OK: return "Portenta y camara conectadas";
         case CHECK_I2C: return "Comunicacion I2C inactiva";
         case CHECK_PROTOCOLO: return "Protocolo/base ESP32 invalido";
         case CHECK_CAMARA: return "Camara no conectada o con error";
@@ -1813,8 +1843,10 @@ void vigilarSeguridadComunicacion() {
 
     if (!enlaceI2CVigente()) {
         detenerTodos();
-        if (estadoGeneral == EST_I2C_SETTLE) {
-            Serial.println(F("[I2C] Enlace perdido durante espera de 5 s"));
+        if (estadoGeneral == EST_I2C_SETTLE ||
+            estadoGeneral == EST_FINAL_CHECKLIST) {
+            checklistInicialCompletado = false;
+            Serial.println(F("[I2C] Enlace perdido antes de confirmar checklist"));
             cambiarEstadoGeneral(EST_WAIT_I2C);
         } else {
             entrarErrorSistema(ERROR_TIMEOUT_I2C, "Timeout de comunicacion I2C");
@@ -1919,7 +1951,10 @@ void procesarMaquinaGeneral() {
         case EST_I2C_SETTLE:
             detenerTodos();
             if (millis() - inicioEstadoGeneral >= TIEMPO_ESTABILIZACION_I2C_MS) {
-                cambiarEstadoGeneral(EST_CAMERA_CALIBRATION);
+                // El paquete periodico que sigue a este cambio confirma a la
+                // ESP32 que el enlace termino de estabilizarse.
+                Serial.println(F("[I2C] Enlace estable; enviando confirmacion de checklist"));
+                cambiarEstadoGeneral(EST_FINAL_CHECKLIST);
             }
             break;
 
@@ -1943,15 +1978,16 @@ void procesarMaquinaGeneral() {
         case EST_FINAL_CHECKLIST:
             detenerTodos();
             ultimoResultadoChecklist = evaluarChecklistFinal();
-            if (ultimoResultadoChecklist == CHECK_OK) {
+            if (eventoBotonX && ultimoResultadoChecklist == CHECK_OK &&
+                btConectado) {
+                eventoBotonX = false;
                 checklistInicialCompletado = true;
-                Serial.println(F("[BOOT] Checklist final OK"));
+                Serial.println(F("[BOOT] Checklist de conexiones confirmada con X"));
                 cambiarEstadoGeneral(EST_MAIN_MENU);
-            } else {
-                const char *texto = textoChecklist(ultimoResultadoChecklist);
-                Serial.print(F("[BOOT][CHECKLIST] Falla: "));
-                Serial.println(texto);
-                entrarErrorSistema(ERROR_CHECKLIST, texto);
+            } else if (eventoBotonX) {
+                eventoBotonX = false;
+                Serial.print(F("[BOOT][CHECKLIST] Aun no listo: "));
+                Serial.println(textoChecklist(ultimoResultadoChecklist));
             }
             break;
 
@@ -2260,6 +2296,7 @@ void loop() {
     vigilarSeguridadComunicacion();
     procesarMaquinaGeneral();
     aplicarBloqueoPorFinales();
+    mantenerBusI2CMaestroRecuperable();
 
     // Los clicks son eventos de una sola iteracion, nunca quedan latched al cambiar de estado.
     eventoBotonX = false;
@@ -2275,6 +2312,8 @@ void loop() {
         Serial.print(enviosI2COk);
         Serial.print(F(" txError="));
         Serial.print(enviosI2CError);
+        Serial.print(F(" reinicios="));
+        Serial.print(reiniciosBusI2CMaestro);
         Serial.print(F(" estado="));
         Serial.println(estadoGeneralWire());
     }

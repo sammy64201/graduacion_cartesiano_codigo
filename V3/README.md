@@ -85,7 +85,7 @@ Datos físicos actuales:
 - Ancho total incluyendo aluminio: 412 mm.
 - Distancia entre centros de las filas de tags: 382 mm.
 - Posición lateral estimada de los centros de tags: ±176 mm respecto al centro.
-- Modelo personalizado seleccionado: índice 1.
+- Modelo personalizado seleccionado: índice 0 (algoritmo 128).
 
 Este algoritmo funciona actualmente. Su matemática de calibración, cálculo de homografía y conversión píxel-milímetro no debe modificarse sin una razón técnica documentada.
 
@@ -133,10 +133,9 @@ Los callbacks I²C de la ESP32 deben ser cortos. Dentro de `requestEvent()` y `r
 
 - Coordinar la secuencia de arranque.
 - Verificar la comunicación I²C.
-- Ordenar la calibración de cámara.
-- Ejecutar la calibración del brazo.
-- Esperar la conexión del control.
-- Ejecutar el checklist final.
+- Confirmar los enlaces de ESP32/Portenta y cámara.
+- Esperar `X` antes de habilitar el menú.
+- Ordenar las calibraciones únicamente cuando el usuario o un modo las requiera.
 - Mostrar y administrar el menú principal.
 - Validar coordenadas y límites.
 - Ejecutar los movimientos X,Y.
@@ -148,7 +147,7 @@ Los callbacks I²C de la ESP32 deben ser cortos. Dentro de `requestEvent()` y `r
 - Mantener la OLED activa.
 - Controlar los servos.
 - Mantenerse como esclavo I²C.
-- Comunicarse con HUSKYLENS 2 por UART2.
+- Comunicarse con HUSKYLENS 2 por UART1, RX32/TX33.
 - Calibrar la cámara cuando la Portenta lo ordene.
 - Abrir el modelo personalizado después de calibrar.
 - Detectar piezas y calcular X,Y en milímetros.
@@ -164,21 +163,14 @@ Al encender el sistema:
 2. La ESP32 debe iniciar Bluetooth, servos, ambos buses I²C y UART de la cámara sin bloquear el arranque.
 3. La Portenta debe verificar que la ESP32 responda por I²C.
 4. Cuando exista comunicación I²C válida, iniciar una espera de 5 segundos.
-5. Después de esos 5 segundos, la Portenta debe ordenar a la ESP32 iniciar la calibración de la cámara.
-6. La ESP32 debe:
-   - Conectarse o reconectarse a HUSKYLENS.
-   - Abrir Tag Recognition.
-   - Tomar las muestras de los cuatro tags.
-   - Calcular la homografía.
-   - Abrir el modelo personalizado.
-   - Informar que la cámara quedó lista para detectar piezas.
-7. Cuando la Portenta reciba confirmación de cámara lista, debe iniciar automáticamente la calibración del brazo X/Y/Z.
-8. La calibración del brazo debe funcionar aunque el control Bluetooth todavía no esté conectado.
-9. Al finalizar la calibración, el brazo debe llegar a HOME.
-10. El sistema debe esperar la conexión del control Bluetooth.
-11. Cuando el control se conecte, ejecutar un checklist final.
-12. Si todo está correcto, mostrar el menú principal.
-13. Si ocurre un error crítico, mantener los motores detenidos, mostrar el error y permitir reintento seguro.
+5. Después de esos 5 segundos, la Portenta debe publicar el estado de checklist.
+6. La OLED debe mostrar únicamente el enlace con Portenta y la conexión de cámara.
+7. Con ambos enlaces correctos y el control conectado, `X` confirma la checklist y abre el menú.
+8. Ninguna calibración se ejecuta obligatoriamente durante el arranque.
+9. Al solicitar calibración de cámara, la ESP32 abre Tag Recognition, espera 3 s,
+   toma las muestras, calcula la homografía, abre el modelo 128, espera 8 s y
+   confirma una lectura antes de publicar que la cámara está lista.
+10. Si ocurre un error crítico, se mantienen los motores detenidos y se permite un reintento seguro.
 
 La espera de 5 segundos debe comenzar después de confirmar comunicación I²C válida, no simplemente desde el encendido si todavía no existe comunicación.
 
@@ -186,18 +178,14 @@ La espera de 5 segundos debe comenzar después de confirmar comunicación I²C v
 
 ## 6. Checklist final requerido
 
-Antes de habilitar el menú, verificar como mínimo:
+Antes de habilitar el menú, verificar únicamente:
 
 - Comunicación I²C Portenta–ESP32 activa.
 - Paquetes I²C con versión, longitud y checksum válidos.
-- HUSKYLENS conectada por UART.
-- Homografía válida.
-- Modelo personalizado abierto.
-- Calibración X/Y válida.
-- Calibración Z válida.
-- Brazo detenido y en HOME.
-- Ausencia de error de calibración.
-- Control Bluetooth conectado.
+- HUSKYLENS conectada por UART y sin error de comunicación.
+
+El control debe estar conectado para confirmar con `X`. Homografía, modelo,
+brazo, HOME y encoder se validan cuando el usuario entra al modo que los necesita.
 - Finales de carrera disponibles y sin condición incoherente.
 
 El checklist debe reportar claramente qué elemento falla.

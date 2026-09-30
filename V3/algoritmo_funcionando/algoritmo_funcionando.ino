@@ -47,7 +47,7 @@ HuskylensV2 huskylens;
 // 0 = primer modelo instalado -> algoritmo 128
 // 1 = segundo modelo         -> algoritmo 129
 // 2 = tercer modelo          -> algoritmo 130
-constexpr uint8_t CUSTOM_MODEL_INDEX = 1;
+constexpr uint8_t CUSTOM_MODEL_INDEX = 0;
 
 const eAlgorithm_t PIECE_MODEL =
   static_cast<eAlgorithm_t>(

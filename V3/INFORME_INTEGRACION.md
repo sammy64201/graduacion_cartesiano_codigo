@@ -107,12 +107,9 @@ esté conectado.
 flowchart LR
     A["BOOT seguro"] --> B["Esperar paquete I2C válido"]
     B --> C["Estabilizar 5 s"]
-    C --> D["Calibrar cámara"]
-    D --> E["Calibrar X, Y y Z"]
-    E --> F["Llegar a HOME"]
-    F --> G["Esperar control Bluetooth"]
-    G --> H["Checklist final"]
-    H --> I["Menú principal"]
+    C --> D["Checklist Portenta + cámara"]
+    D --> E["Esperar control y X"]
+    E --> F["Menú principal"]
     B -. fallo .-> X["Motores detenidos"]
     C -. fallo .-> X
     D -. error .-> X
@@ -125,13 +122,12 @@ flowchart LR
 3. La Portenta no considera establecido el enlace por un ACK de dirección. Exige
    un paquete de 32 bytes con magic, versión, longitud, semántica y CRC válidos.
 4. La espera de 5 s comienza exactamente al entrar ese primer paquete válido.
-5. La Portenta emite `CAM_CMD_CALIBRAR` con una secuencia y lo retransmite hasta
-   observar el acuse correspondiente.
-6. La ESP32 conecta la cámara, abre tags, calcula la homografía y abre el modelo.
-7. Al recibir cámara conectada, homografía válida y modelo listo, la Portenta
-   inicia automáticamente la calibración X/Y/Z.
-8. El brazo realiza HOME al centro y define X=Y=Z=0.
-9. Solo entonces espera el control y ejecuta el checklist final.
+5. La Portenta publica `SISTEMA_CHECKLIST`; la OLED muestra solo Portenta y cámara.
+6. Con ambos enlaces correctos, el usuario confirma con `X` y entra al menú.
+7. Las calibraciones se ejecutan únicamente al elegirlas o al entrar a un modo
+   que las necesite.
+8. La calibración de cámara abre Tags, espera su carga, calcula la homografía y
+   finalmente abre y confirma el modelo personalizado 128.
 
 Una pérdida de enlace durante la espera de 5 s reinicia esa espera. Una pérdida
 posterior detiene motores y entra al estado seguro de error.
@@ -194,7 +190,7 @@ Se conservaron los parámetros y la matemática del programa funcional:
 - aluminio por lado: 60 mm;
 - centros laterales de tags: X = aproximadamente ±176 mm;
 - distancia entre filas: 382 mm;
-- modelo personalizado: índice 1, `ALGORITHM_CUSTOM_BEGIN + 1`;
+- modelo personalizado: índice 0, `ALGORITHM_CUSTOM_BEGIN + 0` (ID 128);
 - X de cámara positivo hacia la derecha;
 - Y de cámara positivo hacia abajo;
 - origen en el centro geométrico de los cuatro tags.
