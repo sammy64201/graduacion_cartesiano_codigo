@@ -40,13 +40,14 @@ necesitar correccion despues del cambio de rueda.
 - `PORTENTA/PORTENTA.ino`: calibración X/Y/Z, encoder ABZ, motores y máquina
   de estados de interceptación.
 - Los dos archivos `ProtocoloI2C.h` son copias idénticas del protocolo de
-  prueba versión 9. Ambos paquetes miden exactamente 32 bytes y terminan con
-  CRC-8/ATM.
+  prueba versión 12. Ambos paquetes miden exactamente 32 bytes y terminan con
+  CRC-8/ATM. Los 14 bits superiores de `nmPorCuentaEncoder` llevan los pasos
+  de Z desde DIN04; los 18 inferiores mantienen la escala del encoder.
 - `registrar_v2.ps1`: abre simultáneamente los USB de ambas placas y crea un
   registro combinado continuo desde el arranque, además de un CSV sincronizado
-  por cada entrada a Automático V2.
+  por cada entrada a Automático V2 o Enseñanza ML/ML V2.
 
-Después de este cambio se deben cargar **ambos** sketches: la versión 9 del
+Después de este cambio se deben cargar **ambos** sketches: la versión 12 del
 protocolo rechaza una placa que todavía ejecute una versión anterior.
 
 ## Arranque y menú
@@ -67,6 +68,7 @@ Ninguna de las tres calibraciones se ejecuta por obligación al arrancar.
 
 El menú contiene `MANUAL`, `AUTOMATICO`, `AUTOMATICO V2`,
 `REGISTRAR ANGULO`, `CALIBRACIONES`, `PRUEBA SERVOS`, `ENSENANZA ML`,
+`ENSENANZA ML V2`, `SEGUIMIENTO Y`,
 `PRUEBA DE ENCODER` y `CHECKLIST`. Se navega con el joystick izquierdo vertical,
 X entra y triángulo regresa. Al elegir un modo se ejecutan, una sola vez por
 sesión, las calibraciones que todavía falten:
@@ -78,14 +80,16 @@ sesión, las calibraciones que todavía falten:
 | Automático V2 | Brazo, cámara y encoder |
 | Registrar ángulo | Brazo y cámara |
 | Enseñanza ML | Brazo, cámara y encoder |
+| Enseñanza ML V2 | Brazo, cámara y encoder |
+| Seguimiento Y | Brazo, cámara y encoder |
 
 En **Manual**, el boton **cuadrado** devuelve el brazo al HOME que fijo la
 calibracion (`X=0, Y=0, Z=0`). Detiene el movimiento manual actual, lleva Z
 a 0 y despues X/Y a 0. Los joysticks quedan ignorados durante el retorno y
 deben soltarse antes de volver al control continuo. Triangulo o la perdida del
-control cancelan el retorno. El OLED muestra `CUAD:HOME` y Portenta informa
-inicio, etapas y final por la terminal. Cargue las versiones ESP y Portenta
-juntas porque el boton nuevo usa la version 10 del protocolo I2C.
+control cancelan el retorno. Portenta informa inicio, etapas y final por la
+terminal. Cargue las versiones ESP y Portenta juntas porque comparten la
+version 13 del protocolo I2C.
 
 Al volver al menú y reentrar, una calibración válida se conserva. `CALIBRACIONES`
 permite repetir independientemente brazo, cámara o encoder. La calibración de
@@ -186,7 +190,8 @@ antes. Mantenga la distancia fisica camara-catch separada de estos ajustes.
 
 `CATCH_ADELANTO_EXTRA_MS` suma tiempo al adelanto del cierre en V2 y ML.
 Por ejemplo, 100 ms extra adelantan 10 mm a 100 mm/s y 20 mm a 200 mm/s.
-El calculo es `umbralY = catchY - velocidad * anticipacionSegundos`.
+El calculo del disparo ahora incluye el descenso final de Z:
+`umbralY = catchY - velocidad * (tiempoZFinal + tiempoCierre)`.
 Los valores iniciales siguen siendo 450 ms mecanicos + 50 ms de transporte,
 con adelanto extra en cero hasta medirlo. El filtro de velocidad responde ahora
 con alpha 0.5 y la posicion usa el contador vivo. La orden I2C se envia antes
@@ -238,21 +243,20 @@ cámara→brazo y el encoder entrega velocidad y pulsos válidos. Su ciclo es:
 
 1. La cámara confirma una pieza en movimiento y conserva su clase, coordenadas
    X/Y y el conteo de encoder asociado a la imagen.
-2. El brazo alinea X con la detección, lleva Y a la estación trasera `Y=0` y
-   baja Z simultáneamente hasta confirmar físicamente DIN04. Los tres motores
-   arrancan juntos; el sistema espera al último que termine. Durante este
-   recorrido el encoder actualiza continuamente la posición estimada de la pieza.
+2. El brazo alinea X con la detección, lleva Y a `Y=0` y baja Z en paralelo
+   hasta la precaptura, actualmente 3000 pasos por encima del final inferior
+   DIN04. La OLED muestra la distancia real `Z-DIN04` en pasos mientras Z se
+   mueve. El encoder sigue estimando la pieza.
 3. La camara aplica una sugerencia inicial de giro si la caja es claramente
    ancha o alta (solo clase 0). El operador puede corregir el giro con el eje
    horizontal del joystick derecho desde que se acepta la pieza, durante el
-   traslado y el descenso. Con Z abajo tambien corrige X/Y con el joystick
+   traslado y el descenso. Con Z en precaptura tambien corrige X/Y con el joystick
    izquierdo. La pinza permanece abierta hasta el catch.
-4. Desde la detección, la Portenta calcula continuamente el avance. Cuando Z
-   está abajo, la primera condición entre el umbral automático del encoder y
-   una pulsación de X ordena el cierre. X funciona como catch manual inmediato;
-   si no se pulsa, el encoder lo hace solo.
-5. El disparo automático adelanta la orden 500 ms (450 ms de recorrido de la
-   garra + 50 ms de comunicación). La línea `ML_SAMPLE` registra si el cierre
+4. La primera condición entre el umbral automático del encoder y una pulsación
+   de X inicia el descenso final. Al confirmar DIN04 se envía la orden de cierre;
+   si DIN04 no aparece, el intento se cancela. El umbral automático adelanta
+   tanto el descenso final como el tiempo de cierre. X conserva el disparo manual.
+5. La línea `ML_SAMPLE` registra si el cierre
     fue disparado por `X` o por `ENCODER`, junto al angulo final y el error
     temporal respecto al umbral automatico. `ML_GRIP_APPLIED` confirma que
     la ESP ordeno el pulso; `ML_CLOSE` es el fin estimado de su recorrido,
@@ -273,10 +277,66 @@ operador. Si la pieza rebasa el catch, se detiene o pierde una lectura válida,
 el intento se cancela, la garra se abre y Z se retira de forma segura. Triángulo
 cancela el ciclo y vuelve al menú.
 
+### Enseñanza ML V2
+
+`ENSENANZA ML V2` es una opción nueva del menú. Conserva la detección estable,
+la alineación X/Y, la bajada automática a precaptura, la orientación de la
+garra y la entrega de `ENSENANZA ML`. En la fase 3 espera exclusivamente el
+flanco de **X**: el encoder sigue estimando la posición y el umbral que habría
+disparado el catch, pero no ordena el descenso final. Al pulsar X, registra
+`ML_BUTTON_CATCH` con tiempo, conteo y posición estimada de la pieza, baja Z
+hasta DIN04, ordena cerrar la pinza y hace la entrega completa. Tras subir Z,
+se detiene en la fase 14 `ESPERANDO_CONFIRMACION`. Pulse **X** si realmente
+agarró la pieza o **cuadrado** si no. Solo entonces se registra `ML_SAMPLE`
+con `physical_result=EXITO/FALLO` y el modo se rearma para otra pieza.
+
+El CSV `ml_v2_*.csv` contiene las columnas previas de enseñanza más
+`catch_button_ms`, `catch_button_encoder`, `catch_button_piece_y_mm`,
+`z_bottom_ms`, `catch_command_ms`, `button_to_grip_ms` y `physical_result`.
+La ESP registra `ML_GRIP_APPLIED` con su propio reloj; `session_esp` y
+`objective_seq` permiten relacionar los eventos de ambas placas.
+
+Para verificar la velocidad, la ESP calcula en cada objetivo una estimación
+independiente a partir del desplazamiento Y de la misma pieza entre consultas
+de cámara y el tiempo transcurrido. El evento `CAMERA_SPEED` conserva esa
+velocidad, el recorrido y periodo observados, la velocidad del encoder en la
+misma ventana y su diferencia. `camera_speed_valid=0` indica que faltó tiempo,
+recorrido o tres posiciones Y distintas para una medición útil; las lecturas
+repetidas de cámara se conservan con `camera_unique_y`. Por ahora esta medición sirve para
+comparar y depurar; el control de movimiento continúa usando el encoder hasta
+validar la cámara con los CSV de pruebas.
+
+### Prueba de seguimiento Y
+
+`SEGUIMIENTO Y` usa la detección de cámara y el encoder de Enseñanza ML V2.
+Después de preposicionar X y bajar Z a la precaptura, mueve Y hacia la
+posición estimada de la pieza. La fase 15 de la OLED indica que está siguiendo.
+El joystick derecho horizontal permite ajustar el ángulo de la garra. X inicia
+el descenso final; Y continúa siguiendo durante ese descenso y el tiempo
+estimado de cierre. Al finalizar se entrega la pieza y se confirma con X
+(éxito) o cuadrado (fallo), como en Enseñanza ML V2.
+
+La Portenta limita Y a 6 mm de cada extremo físico y desestima X si no queda
+recorrido para completar el descenso y el cierre. Al llegar al límite cancela
+el intento, detiene Y y retira Z. Triángulo cancela y sale del modo.
+El registro `ml_track_*.csv` incluye `ML_TRACK` cada 200 ms con la posición
+estimada de la pieza, la posición real del brazo y su diferencia. La muestra
+final conserva el resultado físico y `track_error_button_mm`,
+`track_error_bottom_mm` y `track_error_close_mm`. Estos errores dependen de
+la posición inicial de cámara y de la escala del encoder; la confirmación
+física del operador determina si hubo agarre.
+
 En `MANUAL` se mueven X/Y con el joystick izquierdo y Z con el eje vertical del
 derecho. El eje horizontal del joystick derecho mueve la rotación (GPIO25) por
 ángulos de 0–180 grados. Cada pulsación de círculo alterna la garra (GPIO26)
 entre abierta y cerrada usando los pulsos calibrados de 937 µs y 1816 µs.
+Para medir la altura de precaptura, entre en `MANUAL`, deje la pinza abierta y
+mueva Z con el eje vertical del joystick derecho hasta que la pieza pueda pasar
+sin rozar. Al soltar el joystick, lea `Z-DIN04: Np` en la OLED: `0p` corresponde
+al final inferior DIN04 y `N` es la separacion en pasos, no milimetros. Esta
+lectura requiere que la calibracion Z haya terminado; de lo contrario la OLED
+muestra `Z:CALIBRAR`. El valor medido puede usarse después para reemplazar el
+margen actual de 3000 pasos compartido por Automatico V2 y Ensenanza ML.
 En `PRUEBA SERVOS` se usa el mismo control: joystick derecho horizontal para
 rotación y círculo para alternar la garra.
 El OLED muestra ambos ángulos y el pulso de la garra. Fuera de Manual y Prueba
@@ -469,7 +529,7 @@ faltaban aproximadamente `125 mm` de recorrido. Por eso `ajusteCatch` pasa de
 cambiar la escala del encoder.
 
 Después preposiciona X con la coordenada detectada, lleva Y hacia atrás hasta
-la estación de catch (`Y=0 mm`) y baja Z al mismo tiempo. El
+la estación de catch (`Y=0 mm`) y baja Z al mismo tiempo hasta la precaptura. El
 encoder actualiza la posición estimada de la pieza, pero ya no gobierna la
 velocidad del eje Y. La Portenta calcula el tiempo mecánico de descenso Z y lo
 convierte en distancia usando la velocidad actual de la banda. Las pruebas del
@@ -477,25 +537,19 @@ convierte en distancia usando la velocidad actual de la banda. Las pruebas del
 no era una variación de Z, sino que llegaba abajo prácticamente al mismo tiempo
 que la pieza (`-2 a +8 mm` alrededor de `Y=0`) y no dejaba tiempo para pulsar X.
 
-El umbral conserva una reserva manual mínima de `0.50 s` además del tiempo de
-descenso. La reserva se escala con la velocidad: representa unos `36 mm` a
-`72 mm/s`, `70 mm` a `140 mm/s` y `85 mm` a `170 mm/s`. Antes de aceptar el
-objetivo comprueba que la pieza todavía esté antes del límite seguro. Si hay
-espacio, inicia X/Y/Z juntos; si ya está demasiado cerca, cancela el intento en
-vez de iniciar un movimiento tardío. De esta manera Z puede quedar abajo antes
-de que terminen XY, especialmente cuando la banda trabaja despacio. El sistema
-espera a que los tres ejes terminen y exige que el final físico
-`DIN04` confirme `Z abajo`. Si el conteo termina antes del sensor, realiza una
-búsqueda lenta adicional de hasta 600 pasos; solo después cancela. Al confirmar
-DIN04 congela X/Y/Z, registra `READY_CATCH` y entra en la fase 6. La cámara
-permanece bloqueada y solamente el encoder actualiza la posición estimada de la
-pieza. La pantalla muestra `ESPERA CATCH AUTO`.
+El umbral inicial conserva una reserva de `0.50 s` para completar la
+preposicion. Z espera `Z_MARGEN_PRECAPTURA_PASOS = 3000` pasos sobre DIN04;
+este valor compartido por Portenta y ESP debe ajustarse con la lectura real
+de la OLED en `MANUAL`. A 5000 pasos/s, el tramo final nominal dura
+unos 600 ms. La camara permanece bloqueada y el encoder actualiza la posicion
+estimada mientras Z espera elevado.
 
-Cuando la pieza se aproxima a `Y=0`, la Portenta calcula el instante de cierre
-con la velocidad real del encoder. Adelanta la orden por el tiempo configurado
-de la garra (450 ms) y el margen I²C (50 ms), y envía
-`ACK_OBJ_CERRAR_PINZA`. La ESP32 cierra físicamente GPIO26 con el pulso calibrado
-de 1816 us. Solo después de completar esos 450 ms, Z se retira verticalmente
+Cuando la pieza se aproxima a `Y=0`, la Portenta adelanta el descenso final por
+el tiempo nominal de Z mas 450 ms de garra y 50 ms de margen I²C. Solo al
+confirmar DIN04 envia `ACK_OBJ_CERRAR_PINZA`. Si el conteo termina antes del
+sensor, hace una busqueda lenta adicional; si DIN04 no aparece, cancela sin
+ordenar el cierre. La ESP32 cierra GPIO26 con el pulso calibrado de 1816 us.
+Tras completar el tiempo de cierre, Z se retira verticalmente
 hasta HOME. No se requiere X. Si se pulsa, queda un evento diagnóstico
 `BUTTON_X`, pero se ignora y no modifica la trayectoria.
 
@@ -627,7 +681,7 @@ la sesión de arranque de la ESP y nunca permite reanudar motores por sí solo.
 
 ## Diagnóstico de reinicios y pérdidas I²C
 
-El protocolo versión 9 conserva ambos paquetes en 32 bytes. La ESP publica en
+El protocolo versión 12 conserva ambos paquetes en 32 bytes. La ESP publica en
 cada paquete la causa de su último reset y la Portenta distingue un reinicio
 real de una recuperación del periférico I²C.
 

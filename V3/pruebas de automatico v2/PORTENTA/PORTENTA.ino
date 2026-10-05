@@ -77,6 +77,8 @@ constexpr float ENCODER_MM_POR_CUENTA =
     ENCODER_PI * ENCODER_DIAMETRO_RUEDA_MM /
     (static_cast<float>(ENCODER_CUENTAS_X2_POR_VUELTA) *
      ENCODER_RELACION_ENCODER_RUEDA);
+static_assert(ENCODER_MM_POR_CUENTA * 1000000.0f <= MASCARA_ESCALA_ENCODER_NM,
+    "La escala del encoder no cabe en los 18 bits del protocolo I2C");
 
 constexpr unsigned long ENC_TIEMPO_ESTABILIZACION_MS = 2000UL;
 constexpr unsigned long ENC_TIEMPO_MEDICION_MS = 5000UL;
@@ -84,7 +86,6 @@ constexpr unsigned long ENC_PERIODO_VENTANA_MS = 200UL;
 constexpr unsigned long ENC_TIMEOUT_PARO_MS = 30000UL;
 constexpr int32_t ENC_CUENTAS_MINIMAS_MEDICION = 100;
 constexpr uint8_t ENC_VENTANAS_MINIMAS = 20;
-constexpr float ENC_VARIACION_MAXIMA = 0.10f;
 
 static_assert(CAMERA_SIGN_X == 1 || CAMERA_SIGN_X == -1, "CAMERA_SIGN_X debe ser +/-1");
 static_assert(CAMERA_SIGN_Y == 1 || CAMERA_SIGN_Y == -1, "CAMERA_SIGN_Y debe ser +/-1");
@@ -186,7 +187,8 @@ enum FaseAutomaticoV2 : uint8_t {
     V2_COMPLETADO = 7,
     V2_CANCELANDO = 8,
     V2_PREPARANDO_ESPERA = 9,
-    V2_CERRANDO_PINZA = 10
+    V2_CERRANDO_PINZA = 10,
+    V2_BAJANDO_CATCH = 11
 };
 
 enum FaseEntrenamientoML : uint8_t {
@@ -202,7 +204,10 @@ enum FaseEntrenamientoML : uint8_t {
     ML_SUBIENDO_FINAL = 9,
     ML_LISTO = 10,
     ML_CANCELANDO = 11,
-    ML_PREPARANDO_ESPERA = 12
+    ML_PREPARANDO_ESPERA = 12,
+    ML_BAJANDO_CATCH = 13,
+    ML_ESPERANDO_CONFIRMACION = 14,
+    ML_SEGUIMIENTO = 15
 };
 
 enum FaseCalibracionEncoder : uint8_t {
@@ -432,7 +437,6 @@ struct ContextoCalibracionEncoder {
     unsigned long inicioVentana;
     int32_t conteoInicioFase;
     int32_t conteoInicioVentana;
-    float sumaCuentasS;
     float minimoCuentasS;
     float maximoCuentasS;
     uint8_t ventanasValidas;
@@ -470,6 +474,9 @@ constexpr unsigned long V2_PERIODO_LOG_TELEMETRIA_MS = 50UL;
 constexpr float ML_MARGEN_FINAL_DERECHO_MM = 10.0f;
 constexpr unsigned long ML_TIEMPO_SERVO_MS = 450UL;
 constexpr unsigned long ML_TIEMPO_LISTO_MS = 700UL;
+constexpr float ML_SEGUIMIENTO_MARGEN_Y_MM = 4.0f;
+constexpr float ML_SEGUIMIENTO_RESERVA_S = 0.20f;
+constexpr unsigned long ML_SEGUIMIENTO_LOG_MS = 200UL;
 
 struct ContextoAutomaticoV2 {
     FaseAutomaticoV2 fase;
@@ -529,11 +536,36 @@ struct ContextoEntrenamientoML {
     float diferenciaDisparoMm;
     unsigned long instanteOrdenCierre;
     unsigned long instanteDeteccion;
+    unsigned long instanteBotonCatch;
+    unsigned long instanteDin04Catch;
+    int32_t conteoBotonCatch;
+    int32_t conteoOrdenCierre;
+    float piezaYBotonCatch;
     const char *disparadorCatch;
+    float errorSeguimientoBoton;
+    float errorSeguimientoDin04;
+    float errorSeguimientoCierre;
+    float brazoYBoton;
+    float brazoYDin04;
+    float brazoYCierre;
+    unsigned long inicioSeguimiento;
+    unsigned long ultimoLogSeguimiento;
 };
 
 ContextoEntrenamientoML entrenamientoML = {};
 uint32_t muestrasEntrenamientoML = 0;
+
+bool ensenanzaMLV2Seleccionada() {
+    return opcionMenu == MENU_ENTRENAMIENTO_ML_V2;
+}
+
+bool pruebaSeguimientoSeleccionada() {
+    return opcionMenu == MENU_PRUEBA_SEGUIMIENTO;
+}
+
+bool entrenamientoConResultadoSeleccionado() {
+    return ensenanzaMLV2Seleccionada() || pruebaSeguimientoSeleccionada();
+}
 
 // Solo observacion: no reinicia el contador hardware ni acciona motores/servos.
 struct ContextoPruebaEncoder {
@@ -576,6 +608,7 @@ void cancelarMovimientoPosicionado(const char *motivo, bool posicionPerdida);
 void registrarEventoPortentaV2(const char *evento, const char *mensaje);
 void reiniciarAutomaticoV2();
 long posicionCapturaZV2();
+long posicionPrecapturaZV2();
 void avanzarEntradaModo();
 void terminarCalibracionSolicitada();
 void iniciarCancelacionAutomaticoV2(
@@ -1744,7 +1777,6 @@ void procesarCalibracionEncoder() {
                     fallarCalibracionEncoder("No se detecto movimiento continuo al 50 %");
                     return;
                 }
-                calibracionEncoder.sumaCuentasS = 0.0f;
                 calibracionEncoder.minimoCuentasS = INFINITY;
                 calibracionEncoder.maximoCuentasS = 0.0f;
                 calibracionEncoder.ventanasValidas = 0;
@@ -1770,7 +1802,6 @@ void procesarCalibracionEncoder() {
                 } else {
                     const float cuentasS = fabsf(static_cast<float>(deltaVentana)) *
                         1000.0f / static_cast<float>(dt);
-                    calibracionEncoder.sumaCuentasS += cuentasS;
                     if (cuentasS < calibracionEncoder.minimoCuentasS)
                         calibracionEncoder.minimoCuentasS = cuentasS;
                     if (cuentasS > calibracionEncoder.maximoCuentasS)
@@ -1794,16 +1825,13 @@ void procesarCalibracionEncoder() {
                     return;
                 }
 
+                // El promedio de los 5 s absorbe las perturbaciones breves de
+                // velocidad. Las ventanas siguen detectando paro o inversion,
+                // pero sus extremos no invalidan una medicion continua.
                 const float mediaCuentasS = fabsf(static_cast<float>(deltaTotal)) *
                     1000.0f / static_cast<float>(dtTotal);
-                const float limiteInferior = mediaCuentasS *
-                    (1.0f - ENC_VARIACION_MAXIMA);
-                const float limiteSuperior = mediaCuentasS *
-                    (1.0f + ENC_VARIACION_MAXIMA);
-                if (!isfinite(mediaCuentasS) || mediaCuentasS <= 0.0f ||
-                    calibracionEncoder.minimoCuentasS < limiteInferior ||
-                    calibracionEncoder.maximoCuentasS > limiteSuperior) {
-                    fallarCalibracionEncoder("Velocidad inestable: variacion mayor al 10 %");
+                if (!isfinite(mediaCuentasS) || mediaCuentasS <= 0.0f) {
+                    fallarCalibracionEncoder("Promedio de velocidad invalido");
                     return;
                 }
 
@@ -1821,13 +1849,17 @@ void procesarCalibracionEncoder() {
                 Serial.print(velocidadMaximaEstimadaMmS, 2);
                 Serial.print(F(" mm/s; signo="));
                 Serial.println(signoEncoderAvance);
-                Serial.print(F("[ENC][CAL] ventanas min/media/max="));
+                Serial.print(F("[ENC][CAL] ventanas min/promedio5s/max="));
                 Serial.print(calibracionEncoder.minimoCuentasS, 1);
                 Serial.print('/');
                 Serial.print(mediaCuentasS, 1);
                 Serial.print('/');
                 Serial.print(calibracionEncoder.maximoCuentasS, 1);
                 Serial.println(F(" cuentas/s"));
+                Serial.print(F("[ENC][CAL] ventanas validas="));
+                Serial.print(calibracionEncoder.ventanasValidas);
+                Serial.print(F(" invalidas="));
+                Serial.println(calibracionEncoder.ventanasInvalidas);
                 cambiarFaseCalibracionEncoder(ENC_CAL_ESPERA_PARO);
                 Serial.println(F("[ENC][CAL] Detenga ahora la banda"));
             }
@@ -1932,7 +1964,11 @@ void registrarPaqueteValido(const PaqueteESPAPortenta &nuevo) {
     }
     if (botonCirculo && !botonCirculoAnterior) eventoBotonCirculo = true;
     if (botonTriangulo && !botonTrianguloAnterior) eventoBotonTriangulo = true;
-    if (estadoGeneral == EST_MANUAL && botonCuadrado &&
+    if ((estadoGeneral == EST_MANUAL ||
+         (estadoGeneral == EST_ENTRENAMIENTO_ML &&
+           entrenamientoConResultadoSeleccionado() &&
+          entrenamientoML.fase == ML_ESPERANDO_CONFIRMACION)) &&
+        botonCuadrado &&
         !botonCuadradoAnterior) eventoBotonCuadrado = true;
     botonXAnterior = botonX;
     botonCirculoAnterior = botonCirculo;
@@ -2078,9 +2114,15 @@ void construirPaquetePortenta(PaquetePortentaAESP &p) {
         static_cast<double>(velocidadBandaMmS) * 1000000.0,
         static_cast<double>(INT32_MIN), static_cast<double>(INT32_MAX)
     ));
-    p.nmPorCuentaEncoder = escalaEncoderMmPorCuenta > 0.0f
+    const uint32_t nmPorCuentaEncoder = escalaEncoderMmPorCuenta > 0.0f
         ? static_cast<uint32_t>(lroundf(escalaEncoderMmPorCuenta * 1000000.0f))
         : 0U;
+    const long zDesdeDin04 = calibracionZValida
+        ? constrain(leerPasosZ() - limiteMinimoZPasos(),
+                    0L, static_cast<long>(MAX_Z_DESDE_DIN04_PASOS))
+        : 0L;
+    p.nmPorCuentaEncoder = empacarEscalaEncoderYZ(
+        nmPorCuentaEncoder, static_cast<uint16_t>(zDesdeDin04));
     p.secuenciaEncoder = secuenciaEncoder;
     p.estadoEncoder = estadoEncoderBanda;
     p.signoEncoder = signoEncoderAvance;
@@ -2150,12 +2192,16 @@ void mantenerBusI2CMaestroRecuperable() {
 // CAMBIOS DE ESTADO, COMANDOS DE CAMARA Y ERRORES
 //-------------------------------------------------------------------------------------------------
 void registrarEventoPortentaV2(const char *evento, const char *mensaje) {
+    const bool esML = opcionMenu == MENU_ENTRENAMIENTO_ML ||
+                       entrenamientoConResultadoSeleccionado();
     Serial.print(F("V2LOG|P|ms="));
     Serial.print(millis());
     if (opcionMenu == MENU_REGISTRO_ANGULO) {
         Serial.print(F("|mode=ANGLE_LABEL"));
-    } else if (opcionMenu == MENU_ENTRENAMIENTO_ML) {
-        Serial.print(F("|mode=ML"));
+    } else if (esML) {
+        Serial.print(pruebaSeguimientoSeleccionada()
+            ? F("|mode=ML_TRACK")
+            : (ensenanzaMLV2Seleccionada() ? F("|mode=ML_V2") : F("|mode=ML")));
     }
     Serial.print(F("|session="));
     Serial.print(sesionESPConocida ? sesionArranqueESP : 0);
@@ -2164,7 +2210,7 @@ void registrarEventoPortentaV2(const char *evento, const char *mensaje) {
     Serial.print(F("|obj="));
     Serial.print(opcionMenu == MENU_REGISTRO_ANGULO
         ? registroAngulo.secuencia
-        : (opcionMenu == MENU_ENTRENAMIENTO_ML
+        : (esML
             ? entrenamientoML.secuencia
         : (automaticoV2.secuencia != 0
             ? automaticoV2.secuencia : secuenciaObjetivoRecibida)));
@@ -2175,20 +2221,20 @@ void registrarEventoPortentaV2(const char *evento, const char *mensaje) {
     Serial.print(F("|ref_enc="));
     Serial.print(opcionMenu == MENU_REGISTRO_ANGULO
         ? 0
-        : (opcionMenu == MENU_ENTRENAMIENTO_ML
+        : (esML
             ? entrenamientoML.conteoReferencia
         : (automaticoV2.secuencia != 0
             ? automaticoV2.conteoReferencia : conteoReferenciaObjetivoRecibido)));
     Serial.print(F("|phase="));
     Serial.print(opcionMenu == MENU_REGISTRO_ANGULO
         ? static_cast<uint8_t>(registroAngulo.fase)
-        : (opcionMenu == MENU_ENTRENAMIENTO_ML
+        : (esML
             ? static_cast<uint8_t>(entrenamientoML.fase)
             : static_cast<uint8_t>(automaticoV2.fase)));
     Serial.print(F("|class="));
     Serial.print(opcionMenu == MENU_REGISTRO_ANGULO
         ? registroAngulo.clase
-        : (opcionMenu == MENU_ENTRENAMIENTO_ML
+        : (esML
             ? entrenamientoML.clase
         : (automaticoV2.clase != 0
             ? automaticoV2.clase : claseObjetivo)));
@@ -2200,21 +2246,26 @@ void registrarEventoPortentaV2(const char *evento, const char *mensaje) {
     Serial.print(leerPasosZ());
     Serial.print(F("|target_x="));
     Serial.print(opcionMenu == MENU_REGISTRO_ANGULO
-        ? objetivoXmm : (opcionMenu == MENU_ENTRENAMIENTO_ML
+        ? objetivoXmm : (esML
             ? entrenamientoML.xInicial : automaticoV2.objetivoBrazoX), 3);
     Serial.print(F("|target_y="));
     Serial.print(opcionMenu == MENU_REGISTRO_ANGULO
-        ? objetivoYmm : (opcionMenu == MENU_ENTRENAMIENTO_ML
-            ? entrenamientoML.yInicial : automaticoV2.objetivoBrazoY), 3);
+        ? objetivoYmm : (esML
+            ? (pruebaSeguimientoSeleccionada()
+                ? entrenamientoML.piezaYEstimada
+                : entrenamientoML.yInicial)
+            : automaticoV2.objetivoBrazoY), 3);
     Serial.print(F("|error_x="));
     Serial.print(opcionMenu == MENU_REGISTRO_ANGULO
-        ? objetivoXmm - posicionXmm() : (opcionMenu == MENU_ENTRENAMIENTO_ML
+        ? objetivoXmm - posicionXmm() : (esML
             ? entrenamientoML.xInicial - posicionXmm()
             : automaticoV2.ultimoErrorX), 3);
     Serial.print(F("|error_y="));
     Serial.print(opcionMenu == MENU_REGISTRO_ANGULO
-        ? objetivoYmm - posicionYmm() : (opcionMenu == MENU_ENTRENAMIENTO_ML
-            ? entrenamientoML.yInicial - posicionYmm()
+        ? objetivoYmm - posicionYmm() : (esML
+            ? (pruebaSeguimientoSeleccionada()
+                ? entrenamientoML.piezaYEstimada
+                : entrenamientoML.yInicial) - posicionYmm()
             : automaticoV2.ultimoErrorY), 3);
     Serial.print(F("|vel="));
     Serial.print(velocidadBandaMmS, 3);
@@ -2396,7 +2447,12 @@ void cambiarEstadoGeneral(EstadoGeneral nuevoEstado) {
     }
     if (estadoAnterior != EST_ENTRENAMIENTO_ML &&
         nuevoEstado == EST_ENTRENAMIENTO_ML) {
-        registrarEventoPortentaV2("SESSION_START", "Ensenanza ML; catch X o encoder");
+        registrarEventoPortentaV2("SESSION_START",
+            pruebaSeguimientoSeleccionada()
+                ? "Prueba seguimiento Y; X inicia catch, X/cuadrado confirma"
+                : (ensenanzaMLV2Seleccionada()
+                    ? "Ensenanza ML V2; catch solo X, resultado X/cuadrado"
+                    : "Ensenanza ML; catch X o encoder"));
     }
 }
 
@@ -2501,7 +2557,8 @@ void avanzarEntradaModo() {
             return;
         }
         if (!posicionZSeguraV2(V2_Z_SEGURO_PASOS) ||
-            !posicionZSeguraV2(posicionCapturaZV2())) {
+            !posicionZSeguraV2(posicionCapturaZV2()) ||
+            !posicionZSeguraV2(posicionPrecapturaZV2())) {
             Serial.println(F("[MENU] Geometria Z de V2 fuera del rango calibrado"));
             cambiarEstadoGeneral(EST_USER_ARM_CALIBRATION);
             return;
@@ -2546,13 +2603,15 @@ void procesarMenuPrincipal() {
         MENU_MODO_MANUAL, MENU_MODO_AUTOMATICO,
         MENU_MODO_AUTOMATICO_V2, MENU_REGISTRO_ANGULO,
         MENU_CALIBRACIONES,
-        MENU_PRUEBA_SERVOS, MENU_ENTRENAMIENTO_ML, MENU_PRUEBA_ENCODER,
+        MENU_PRUEBA_SERVOS, MENU_ENTRENAMIENTO_ML,
+        MENU_ENTRENAMIENTO_ML_V2, MENU_PRUEBA_SEGUIMIENTO,
+        MENU_PRUEBA_ENCODER,
         MENU_DIAGNOSTICO
     };
     if (joystickY != 0 && entradaMenuYAnterior == 0) {
         int nueva = static_cast<int>(indiceMenu) - joystickY;
-        if (nueva < 0) nueva = 8;
-        if (nueva > 8) nueva = 0;
+        if (nueva < 0) nueva = 10;
+        if (nueva > 10) nueva = 0;
         indiceMenu = static_cast<uint8_t>(nueva);
         opcionMenu = opciones[indiceMenu];
         Serial.print(F("[MENU] Opcion="));
@@ -2587,6 +2646,8 @@ void procesarMenuPrincipal() {
             cambiarEstadoGeneral(EST_PRUEBA_SERVOS);
             break;
         case MENU_ENTRENAMIENTO_ML:
+        case MENU_ENTRENAMIENTO_ML_V2:
+        case MENU_PRUEBA_SEGUIMIENTO:
             modoPendiente = EST_ENTRENAMIENTO_ML;
             avanzarEntradaModo();
             break;
@@ -3119,7 +3180,8 @@ const char *nombreFaseAutomaticoV2(FaseAutomaticoV2 fase) {
         case V2_PREPOSICIONANDO: return "PREPOSICIONANDO";
         case V2_ESPERANDO_LLEGADA: return "PREPARANDO DESCENSO";
         case V2_DISPARANDO_CATCH: return "DISPARANDO CATCH";
-        case V2_BAJANDO_Z: return "BAJANDO Z";
+        case V2_BAJANDO_Z: return "BAJANDO PRECAPTURA";
+        case V2_BAJANDO_CATCH: return "BAJANDO CATCH";
         case V2_SUBIENDO_Z: return "SUBIENDO Z";
         case V2_ESPERANDO_CATCH_AUTOMATICO: return "ESPERANDO CATCH AUTO";
         case V2_COMPLETADO: return "COMPLETADO";
@@ -3213,6 +3275,10 @@ long posicionCapturaZV2() {
     return limiteMinimoZPasos();
 }
 
+long posicionPrecapturaZV2() {
+    return posicionCapturaZV2() + Z_MARGEN_PRECAPTURA_PASOS;
+}
+
 bool actualizarObjetivoMovilV2() {
     // La posicion usa el contador vivo; la velocidad conserva su ventana de 10 ms.
     conteoEncoderBanda = static_cast<int32_t>(encoders[0].getPulses());
@@ -3264,6 +3330,13 @@ float tiempoDescensoZV2Segundos() {
     )) / pasosZPorSegundo;
 }
 
+float tiempoDescensoFinalZV2Segundos() {
+    const float pasosZPorSegundo = 1.0f / (2.0f * velocidadMotores);
+    if (pasosZPorSegundo <= 0.0f) return 0.0f;
+    return static_cast<float>(Z_MARGEN_PRECAPTURA_PASOS) /
+        pasosZPorSegundo;
+}
+
 float calcularUmbralDisparoYV2() {
     // El brazo permanece quieto en Y. La velocidad solo convierte el tiempo
     // mecanico de descenso y la reserva manual en distancia; no gobierna Y.
@@ -3281,7 +3354,8 @@ float anticipacionCierreCatchSegundos() {
 
 float calcularUmbralCierrePinzaYV2() {
     return posicionCatchYV2() - fmaxf(0.0f, velocidadBandaMmS) *
-        anticipacionCierreCatchSegundos();
+        (tiempoDescensoFinalZV2Segundos() +
+         anticipacionCierreCatchSegundos());
 }
 
 void enviarOrdenCierreCatchAhora() {
@@ -3345,8 +3419,8 @@ void aceptarObjetivoAutomaticoV2() {
         reiniciarAutomaticoV2();
         return;
     }
-    const long capturaZ = posicionCapturaZV2();
-    if (!posicionZSeguraV2(capturaZ)) {
+    const long precapturaZ = posicionPrecapturaZV2();
+    if (!posicionZSeguraV2(precapturaZ)) {
         rechazarObjetivoFueraDeRango(
             secuenciaObjetivoRecibida,
             "altura Z de captura fuera de rango"
@@ -3373,13 +3447,12 @@ void aceptarObjetivoAutomaticoV2() {
         reiniciarAutomaticoV2();
         return;
     }
-    // X, Y y Z arrancan juntos. La fase de captura no avanza hasta confirmar
-    // que XY terminaron y que DIN04 valido fisicamente el descenso de Z.
-    moverZHasta(capturaZ, DIV_POSICION);
+    // XY y Z arrancan juntos, pero Z espera sobre DIN04 hasta el catch.
+    moverZHasta(precapturaZ, DIV_POSICION);
     secuenciaObjetivoEnMovimiento = secuenciaObjetivoRecibida;
     ackSecuenciaObjetivo = secuenciaObjetivoRecibida;
     codigoAckObjetivo = ACK_OBJ_ACEPTADO;
-    registrarEventoPortentaV2("ACCEPT", "objetivo aceptado; XYZ simultaneo");
+    registrarEventoPortentaV2("ACCEPT", "objetivo aceptado; Z a precaptura");
     registrarAckPortentaV2("objetivo aceptado");
     cambiarFaseAutomaticoV2(V2_PREPOSICIONANDO);
 }
@@ -3430,8 +3503,7 @@ void procesarModoAutomaticoV2() {
         return;
     }
     const bool finalZAbajoEsperado =
-        (automaticoV2.fase == V2_PREPOSICIONANDO ||
-         automaticoV2.fase == V2_BAJANDO_Z) &&
+        automaticoV2.fase == V2_BAJANDO_CATCH &&
         movZ < 0 && limiteZabajo;
     const bool finalInesperado =
         (movX > 0 && limiteXmas) || (movX < 0 && limiteXmenos) ||
@@ -3447,6 +3519,8 @@ void procesarModoAutomaticoV2() {
     const bool prediccionLlegadaActivaV2 =
         (automaticoV2.fase >= V2_PREPOSICIONANDO &&
          automaticoV2.fase <= V2_DISPARANDO_CATCH) ||
+        automaticoV2.fase == V2_BAJANDO_Z ||
+        automaticoV2.fase == V2_BAJANDO_CATCH ||
         automaticoV2.fase == V2_ESPERANDO_CATCH_AUTOMATICO ||
         automaticoV2.fase == V2_CERRANDO_PINZA;
     if (!camaraListaCompleta()) {
@@ -3518,15 +3592,9 @@ void procesarModoAutomaticoV2() {
                     "pieza rebaso el catch antes de terminar la preposicion", false);
                 return;
             }
-            if (limiteZabajo) {
-                detenerZ();
-                fijarPasosZ(limiteMinimoZPasos());
-                automaticoV2.busquedaFinalZActiva = false;
-            }
             if (!movimientoPosicionadoActivo && !objetivoXEnCurso() &&
                 !objetivoYEnCurso() && movX == 0 && movY == 0) {
-                // Z se inicio junto con XY. Esta fase termina el descenso o
-                // realiza la busqueda lenta de DIN04 si fuera necesaria.
+                // Z se inicio junto con XY y termina en la altura de espera.
                 cambiarFaseAutomaticoV2(V2_BAJANDO_Z);
             }
             break;
@@ -3547,17 +3615,15 @@ void procesarModoAutomaticoV2() {
                     "pieza rebaso la estacion de catch", false);
                 return;
             }
-            // La fase 2 ya no espera a que la pieza alcance el umbral. Si la
-            // preposicion termino con espacio suficiente, Z baja de inmediato
-            // y espera abajo. Esto evita que una banda lenta haga parecer que
-            // el catch o la respuesta de X estan retrasados.
+            // Si esta ruta de preparacion se usa, Z baja solo hasta
+            // precaptura y espera elevado hasta el disparo final.
             if (automaticoV2.objetivoBrazoY >
                 automaticoV2.umbralDisparoY) {
                 iniciarCancelacionAutomaticoV2(
                     "pieza demasiado cerca para prebajar Z con seguridad", false);
                 return;
             }
-            Serial.print(F("[AUTO V2] Prebajada Z inmediata piezaY="));
+            Serial.print(F("[AUTO V2] Precaptura Z inmediata piezaY="));
             Serial.print(automaticoV2.objetivoBrazoY, 2);
             Serial.print(F(" limite_seguro="));
             Serial.print(automaticoV2.umbralDisparoY, 2);
@@ -3568,21 +3634,20 @@ void procesarModoAutomaticoV2() {
             Serial.print(F(" reservaX="));
             Serial.println(V2_RESERVA_MANUAL_CATCH_S, 3);
             registrarEventoPortentaV2(
-                "TRIGGER", "preposicion lista; Z baja y espera la pieza"
+                "TRIGGER", "preposicion lista; Z espera sobre DIN04"
             );
             cambiarFaseAutomaticoV2(V2_DISPARANDO_CATCH);
             break;
 
         case V2_DISPARANDO_CATCH: {
             detenerY();
-            const long capturaZ = posicionCapturaZV2();
-            if (!posicionZSeguraV2(capturaZ)) {
+            const long precapturaZ = posicionPrecapturaZV2();
+            if (!posicionZSeguraV2(precapturaZ)) {
                 iniciarCancelacionAutomaticoV2(
-                    "altura Z de captura fuera de rango", false);
+                    "altura Z de precaptura fuera de rango", false);
                 return;
             }
-            automaticoV2.busquedaFinalZActiva = false;
-            moverZHasta(capturaZ, DIV_POSICION);
+            moverZHasta(precapturaZ, DIV_POSICION);
             cambiarFaseAutomaticoV2(V2_BAJANDO_Z);
             break;
         }
@@ -3590,35 +3655,19 @@ void procesarModoAutomaticoV2() {
         case V2_BAJANDO_Z:
             detenerY();
             if (limiteZabajo) {
-                detenerZ();
-                fijarPasosZ(limiteMinimoZPasos());
-                automaticoV2.busquedaFinalZActiva = false;
+                iniciarCancelacionAutomaticoV2(
+                    "DIN04 activo antes del catch", false);
+                return;
             }
             if (!objetivoZEnCurso() && movZ == 0) {
-                if (!limiteZabajo) {
-                    if (!automaticoV2.busquedaFinalZActiva) {
-                        automaticoV2.busquedaFinalZActiva = true;
-                        Serial.println(F(
-                            "[AUTO V2] Buscando DIN04 debajo del conteo calibrado"
-                        ));
-                        registrarEventoPortentaV2(
-                            "Z_SEARCH", "busqueda lenta del final inferior DIN04"
-                        );
-                        moverZHasta(
-                            limiteMinimoZPasos() -
-                                V2_BUSQUEDA_FINAL_Z_EXTRA_PASOS,
-                            V2_DIV_BUSQUEDA_FINAL_Z
-                        );
-                        return;
-                    }
+                if (leerPasosZ() != posicionPrecapturaZV2()) {
                     iniciarCancelacionAutomaticoV2(
-                        "DIN04 no aparecio dentro del margen de busqueda Z", false);
+                        "Z no alcanzo la precaptura", false);
                     return;
                 }
                 automaticoV2.ultimoErrorX =
                     automaticoV2.objetivoBrazoX - posicionXmm();
-                // Actualiza una ultima vez la prediccion con el encoder. Ahora
-                // debe quedar aproximadamente velocidad*reserva antes de Y=0.
+                // El encoder seguira la pieza mientras Z espera sobre DIN04.
                 if (encoderListoAutomaticoV2()) {
                     actualizarObjetivoMovilV2();
                 }
@@ -3644,12 +3693,13 @@ void procesarModoAutomaticoV2() {
                 Serial.print(velocidadBandaMmS, 2);
                 Serial.print(F(" encoder="));
                 Serial.print(conteoEncoderBanda);
-                Serial.println(F(
-                    " final_z_abajo=1 | ESPERANDO CRUCE DE PIEZA Y=0"
-                ));
+                Serial.print(F(" z_espera="));
+                Serial.print(leerPasosZ());
+                Serial.print(F(" margen_DIN04="));
+                Serial.println(Z_MARGEN_PRECAPTURA_PASOS);
                 registrarEventoPortentaV2(
                     "READY_CATCH",
-                    "DIN04 confirmado; esperando catch automatico en Y=0"
+                    "Z en precaptura; esperando descenso final por encoder"
                 );
                 cambiarFaseAutomaticoV2(V2_ESPERANDO_CATCH_AUTOMATICO);
             }
@@ -3669,17 +3719,16 @@ void procesarModoAutomaticoV2() {
             break;
 
         case V2_ESPERANDO_CATCH_AUTOMATICO: {
-            // Z permanece abajo. La camara sigue bloqueada y el encoder mueve
-            // exclusivamente la estimacion. El cierre se ordena antes de Y=0
-            // para compensar el tiempo mecanico de la garra y la latencia I2C.
+            // Z espera sobre DIN04; el disparo incluye el tiempo del ultimo
+            // descenso y del cierre para alcanzar la pieza en Y=0.
             detenerX();
             detenerY();
             detenerZ();
             // X queda ignorada: ya no es confirmacion ni cambia la trayectoria.
             eventoBotonX = false;
-            if (!limiteZabajo) {
+            if (limiteZabajo || leerPasosZ() != posicionPrecapturaZV2()) {
                 iniciarCancelacionAutomaticoV2(
-                    "se perdio DIN04 esperando el catch automatico", false);
+                    "Z salio de la altura de precaptura", false);
                 return;
             }
             if (!actualizarObjetivoMovilV2()) {
@@ -3693,33 +3742,68 @@ void procesarModoAutomaticoV2() {
             if (automaticoV2.objetivoBrazoY <
                 automaticoV2.umbralCierrePinzaY) break;
 
+            automaticoV2.busquedaFinalZActiva = false;
+            moverZHasta(posicionCapturaZV2(), DIV_POSICION);
+            Serial.print(F("[AUTO V2] Descenso final Z por encoder piezaY="));
+            Serial.print(automaticoV2.objetivoBrazoY, 3);
+            Serial.print(F(" umbral_cierre="));
+            Serial.print(automaticoV2.umbralCierrePinzaY, 3);
+            Serial.print(F(" tZ="));
+            Serial.println(tiempoDescensoFinalZV2Segundos(), 3);
+            cambiarFaseAutomaticoV2(V2_BAJANDO_CATCH);
+            break;
+        }
+
+        case V2_BAJANDO_CATCH: {
+            detenerX();
+            detenerY();
+            eventoBotonX = false;
+            if (!actualizarObjetivoMovilV2()) {
+                iniciarCancelacionAutomaticoV2(
+                    "prediccion invalida durante descenso final", false);
+                return;
+            }
+            if (automaticoV2.objetivoBrazoY >
+                posicionCatchYV2() + V2_ERROR_ESTABLE_MM) {
+                iniciarCancelacionAutomaticoV2(
+                    "pieza rebaso el catch antes de DIN04", false);
+                return;
+            }
+            if (limiteZabajo) {
+                detenerZ();
+                fijarPasosZ(limiteMinimoZPasos());
+                automaticoV2.busquedaFinalZActiva = false;
+            }
+            if (objetivoZEnCurso() || movZ != 0) break;
+            if (!limiteZabajo) {
+                if (!automaticoV2.busquedaFinalZActiva) {
+                    automaticoV2.busquedaFinalZActiva = true;
+                    moverZHasta(limiteMinimoZPasos() -
+                        V2_BUSQUEDA_FINAL_Z_EXTRA_PASOS,
+                        V2_DIV_BUSQUEDA_FINAL_Z);
+                    registrarEventoPortentaV2(
+                        "Z_SEARCH", "busqueda DIN04 durante catch");
+                    break;
+                }
+                iniciarCancelacionAutomaticoV2(
+                    "DIN04 no aparecio durante catch", false);
+                return;
+            }
             automaticoV2.catchAutomaticoDisparado = true;
             automaticoV2.anguloCatch = posServoRot;
             ++intentosV2;
-            const unsigned long esperaMs =
-                millis() - automaticoV2.instanteListoCatch;
-            const int32_t deltaEncoder = diferenciaConteosConWrap(
-                conteoEncoderBanda, automaticoV2.conteoListoCatch);
-            const float avancePiezaMm =
-                static_cast<float>(signoEncoderAvance) *
-                static_cast<float>(deltaEncoder) * escalaEncoderMmPorCuenta;
+            automaticoV2.ultimoErrorY =
+                automaticoV2.objetivoBrazoY - posicionCatchYV2();
             automaticoV2.fase = V2_CERRANDO_PINZA;
             automaticoV2.inicioFase = millis();
             enviarOrdenCierreCatchAhora();
-            Serial.print(F("[AUTO V2] ORDEN CERRAR PINZA POR ENCODER espera_ms="));
-            Serial.print(esperaMs);
-            Serial.print(F(" delta_encoder="));
-            Serial.print(deltaEncoder);
-            Serial.print(F(" avance_pieza_mm="));
-            Serial.print(avancePiezaMm, 3);
-            Serial.print(F(" pieza_y_estimada_catch="));
+            Serial.print(F("[AUTO V2] DIN04; ORDEN CERRAR piezaY="));
             Serial.print(automaticoV2.objetivoBrazoY, 3);
-            Serial.print(F(" umbral_cierre="));
-            Serial.println(automaticoV2.umbralCierrePinzaY, 3);
+            Serial.print(F(" espera_ms="));
+            Serial.println(millis() - automaticoV2.instanteListoCatch);
             registrarEventoPortentaV2(
-                "GRIP_COMMAND", "CERRAR PINZA ANTICIPADO POR ENCODER");
+                "GRIP_COMMAND", "DIN04 confirmado; cerrar pinza");
             registrarAckPortentaV2("orden cerrar pinza");
-            Serial.println(F("[AUTO V2] Fase -> CERRANDO PINZA"));
             break;
         }
 
@@ -3771,7 +3855,8 @@ const char *nombreFaseEntrenamientoML(FaseEntrenamientoML fase) {
     switch (fase) {
         case ML_ESPERANDO_PIEZA: return "ESPERANDO PIEZA";
         case ML_PREPOSICIONANDO: return "ALINEANDO CAMARA";
-        case ML_BAJANDO_CAPTURA: return "BAJANDO CAPTURA";
+        case ML_BAJANDO_CAPTURA: return "BAJANDO PRECAPTURA";
+        case ML_BAJANDO_CATCH: return "BAJANDO CATCH";
         case ML_ALINEACION_MANUAL: return "CORRECCION MANUAL";
         case ML_CERRANDO_PINZA: return "CERRANDO PINZA";
         case ML_SUBIENDO_CON_PIEZA: return "SUBIENDO PIEZA";
@@ -3782,6 +3867,8 @@ const char *nombreFaseEntrenamientoML(FaseEntrenamientoML fase) {
         case ML_LISTO: return "LISTO";
         case ML_CANCELANDO: return "CANCELANDO";
         case ML_PREPARANDO_ESPERA: return "PREPARANDO ESPERA";
+        case ML_ESPERANDO_CONFIRMACION: return "ESPERANDO CONFIRMACION";
+        case ML_SEGUIMIENTO: return "SIGUIENDO PIEZA EN Y";
         default: return "DESCONOCIDA";
     }
 }
@@ -3839,13 +3926,20 @@ void terminarCancelacionEntrenamientoML() {
     }
 }
 
-void registrarMuestraEntrenamientoML(const char *disparador) {
+void registrarMuestraEntrenamientoML(
+    const char *disparador, const char *resultadoFisico = nullptr) {
     const bool catchManual = strcmp(disparador, "X") == 0;
+    const bool esV2 = entrenamientoConResultadoSeleccionado();
     ++muestrasEntrenamientoML;
-    entrenamientoML.xCorregida = posicionXmm();
-    entrenamientoML.yCorregida = posicionYmm();
-    entrenamientoML.rotacionCorregida = posServoRot;
-    Serial.print(F("ML_SAMPLE|mode=ML|ms="));
+    if (!esV2) {
+        entrenamientoML.xCorregida = posicionXmm();
+        entrenamientoML.yCorregida = posicionYmm();
+        entrenamientoML.rotacionCorregida = posServoRot;
+    }
+    Serial.print(pruebaSeguimientoSeleccionada()
+        ? F("ML_SAMPLE|mode=ML_TRACK|ms=")
+        : (esV2 ? F("ML_SAMPLE|mode=ML_V2|ms=")
+                : F("ML_SAMPLE|mode=ML|ms=")));
     Serial.print(millis());
     Serial.print(F("|session="));
     Serial.print(sesionESPConocida ? sesionArranqueESP : 0);
@@ -3874,17 +3968,20 @@ void registrarMuestraEntrenamientoML(const char *disparador) {
     Serial.print(F("|label_rot="));
     Serial.print(entrenamientoML.rotacionCorregida);
     Serial.print(F("|piece_y="));
-    Serial.print(entrenamientoML.piezaYEstimada, 3);
+    Serial.print(esV2 ? entrenamientoML.piezaYDisparo
+                      : entrenamientoML.piezaYEstimada, 3);
     Serial.print(F("|catch_y="));
     Serial.print(entrenamientoML.catchYConfirmada, 3);
     Serial.print(F("|close_threshold_y="));
     Serial.print(entrenamientoML.umbralCierreY, 3);
     Serial.print(F("|belt_mm_s="));
-    Serial.print(velocidadBandaMmS, 3);
+    Serial.print(esV2 ? entrenamientoML.velocidadDisparo
+                      : velocidadBandaMmS, 3);
     Serial.print(F("|encoder_ref="));
     Serial.print(entrenamientoML.conteoReferencia);
     Serial.print(F("|encoder="));
-    Serial.print(conteoEncoderBanda);
+    Serial.print(esV2 ? entrenamientoML.conteoOrdenCierre
+                      : conteoEncoderBanda);
     Serial.print(F("|trigger="));
     Serial.print(disparador);
     Serial.print(F("|catch_type="));
@@ -3917,7 +4014,41 @@ void registrarMuestraEntrenamientoML(const char *disparador) {
     Serial.print(DESFASE_CAMARA_X_MM, 3);
     Serial.print(F("|desfase_y_mm="));
     Serial.print(DESFASE_CAMARA_Y_MM, 3);
-    Serial.println(F("|error_fisico_medido=NO"));
+    if (esV2) {
+        Serial.print(F("|catch_button_ms="));
+        Serial.print(entrenamientoML.instanteBotonCatch);
+        Serial.print(F("|catch_button_encoder="));
+        Serial.print(entrenamientoML.conteoBotonCatch);
+        Serial.print(F("|catch_button_piece_y="));
+        Serial.print(entrenamientoML.piezaYBotonCatch, 3);
+        Serial.print(F("|z_bottom_ms="));
+        Serial.print(entrenamientoML.instanteDin04Catch);
+        Serial.print(F("|button_to_grip_ms="));
+        Serial.print(entrenamientoML.instanteOrdenCierre -
+                     entrenamientoML.instanteBotonCatch);
+        Serial.print(F("|physical_result="));
+        if (resultadoFisico == nullptr) Serial.print(F("SIN_CONFIRMAR"));
+        else Serial.print(resultadoFisico);
+        if (pruebaSeguimientoSeleccionada()) {
+            Serial.print(F("|track_arm_y_button="));
+            Serial.print(entrenamientoML.brazoYBoton, 3);
+            Serial.print(F("|track_error_button="));
+            Serial.print(entrenamientoML.errorSeguimientoBoton, 3);
+            Serial.print(F("|track_arm_y_bottom="));
+            Serial.print(entrenamientoML.brazoYDin04, 3);
+            Serial.print(F("|track_error_bottom="));
+            Serial.print(entrenamientoML.errorSeguimientoDin04, 3);
+            Serial.print(F("|track_arm_y_close="));
+            Serial.print(entrenamientoML.brazoYCierre, 3);
+            Serial.print(F("|track_error_close="));
+            Serial.print(entrenamientoML.errorSeguimientoCierre, 3);
+            Serial.print(F("|track_before_button_ms="));
+            Serial.print(entrenamientoML.instanteBotonCatch -
+                         entrenamientoML.inicioSeguimiento);
+        }
+    }
+    Serial.println(esV2 ? F("|error_fisico_medido=SI")
+                        : F("|error_fisico_medido=NO"));
     Serial.print(F("[ML][MEDICION] servo_rot="));
     Serial.print(entrenamientoML.rotacionCorregida);
     Serial.print(F(" grados; catch="));
@@ -3945,6 +4076,51 @@ bool actualizarPiezaEntrenamientoML() {
         static_cast<float>(delta) * escalaEncoderMmPorCuenta;
     if (!isfinite(piezaY)) return false;
     entrenamientoML.piezaYEstimada = piezaY;
+    return true;
+}
+
+bool seguirPiezaYEntrenamientoML() {
+    // La camara fija la posicion inicial; el encoder mueve esa referencia
+    // durante este intento. Y se mantiene sobre la pieza incluso en Z final.
+    const float yMin = -RANGO_FISICO_Y_MM * 0.5f +
+        MARGEN_SEGURIDAD_MM + ML_SEGUIMIENTO_MARGEN_Y_MM;
+    const float yMax = RANGO_FISICO_Y_MM * 0.5f -
+        MARGEN_SEGURIDAD_MM - ML_SEGUIMIENTO_MARGEN_Y_MM;
+    const float piezaY = entrenamientoML.piezaYEstimada;
+    if (!isfinite(piezaY) || piezaY > yMax || limiteYmas || limiteYmenos) {
+        detenerY();
+        return false;
+    }
+    const float destinoMm = fmaxf(yMin, fminf(yMax, piezaY));
+    const long destino = lroundf(destinoMm * pasosPorMmY);
+    const long actual = leerPasosY();
+    const long tolerancia = lroundf(1.5f * pasosPorMmY);
+    const int8_t direccion = destino > actual ? 1 : -1;
+    if (labs(destino - actual) <= tolerancia) {
+        detenerY();
+    } else {
+        noInterrupts();
+        const bool continuar = objetivoYActivo && movY == direccion &&
+            divisorY == DIV_POSICION;
+        if (continuar) objetivoY = destino;
+        interrupts();
+        if (!continuar) moverYHasta(destino, DIV_POSICION);
+    }
+    const unsigned long ahora = millis();
+    if (ahora - entrenamientoML.ultimoLogSeguimiento >=
+        ML_SEGUIMIENTO_LOG_MS) {
+        entrenamientoML.ultimoLogSeguimiento = ahora;
+        Serial.print(F("V2LOG|P|mode=ML_TRACK|event=ML_TRACK|session="));
+        Serial.print(sesionESPConocida ? sesionArranqueESP : 0);
+        Serial.print(F("|ms=")); Serial.print(ahora);
+        Serial.print(F("|obj=")); Serial.print(entrenamientoML.secuencia);
+        Serial.print(F("|piece_y=")); Serial.print(piezaY, 3);
+        Serial.print(F("|arm_y=")); Serial.print(posicionYmm(), 3);
+        Serial.print(F("|target_y=")); Serial.print(destinoMm, 3);
+        Serial.print(F("|error_y="));
+        Serial.print(piezaY - posicionYmm(), 3);
+        Serial.print(F("|vel=")); Serial.println(velocidadBandaMmS, 3);
+    }
     return true;
 }
 
@@ -3987,6 +4163,8 @@ void procesarEntrenamientoML() {
         entrenamientoML.fase == ML_PREPOSICIONANDO ||
         entrenamientoML.fase == ML_BAJANDO_CAPTURA ||
         entrenamientoML.fase == ML_ALINEACION_MANUAL ||
+        entrenamientoML.fase == ML_SEGUIMIENTO ||
+        entrenamientoML.fase == ML_BAJANDO_CATCH ||
         entrenamientoML.fase == ML_CERRANDO_PINZA;
     if (!encoderListoAutomaticoV2()) {
         if (entrenamientoML.fase == ML_ESPERANDO_PIEZA) {
@@ -4004,6 +4182,8 @@ void procesarEntrenamientoML() {
     }
     if (entrenamientoML.fase != ML_ESPERANDO_PIEZA &&
         entrenamientoML.fase != ML_ALINEACION_MANUAL &&
+        entrenamientoML.fase != ML_SEGUIMIENTO &&
+        entrenamientoML.fase != ML_ESPERANDO_CONFIRMACION &&
         entrenamientoML.fase != ML_LISTO &&
         millis() - entrenamientoML.inicioFase > V2_TIMEOUT_FASE_MS) {
         cancelarEntrenamientoML("timeout de fase", false, false);
@@ -4068,7 +4248,8 @@ void procesarEntrenamientoML() {
                 return;
             }
             const float umbralDescenso = calcularUmbralDisparoYV2();
-            if (entrenamientoML.piezaYEstimada > umbralDescenso) {
+            if (!pruebaSeguimientoSeleccionada() &&
+                entrenamientoML.piezaYEstimada > umbralDescenso) {
                 rechazarObjetivoFueraDeRango(
                     secuenciaObjetivoRecibida,
                     "pieza demasiado cerca para posicionar XYZ en ML"
@@ -4076,8 +4257,8 @@ void procesarEntrenamientoML() {
                 reiniciarEntrenamientoML();
                 return;
             }
-            const long capturaZ = posicionCapturaZV2();
-            if (!posicionZSeguraV2(capturaZ)) {
+            const long precapturaZ = posicionPrecapturaZV2();
+            if (!posicionZSeguraV2(precapturaZ)) {
                 rechazarObjetivoFueraDeRango(
                     secuenciaObjetivoRecibida,
                     "altura Z de captura ML fuera de rango"
@@ -4094,7 +4275,7 @@ void procesarEntrenamientoML() {
                 reiniciarEntrenamientoML();
                 return;
             }
-            moverZHasta(capturaZ, DIV_POSICION);
+            moverZHasta(precapturaZ, DIV_POSICION);
             ackSecuenciaObjetivo = secuenciaObjetivoRecibida;
             codigoAckObjetivo = ACK_OBJ_ACEPTADO;
             secuenciaObjetivoEnMovimiento = secuenciaObjetivoRecibida;
@@ -4104,7 +4285,8 @@ void procesarEntrenamientoML() {
             Serial.print(entrenamientoML.piezaYEstimada, 2);
             Serial.print(F(" encoder_ref="));
             Serial.print(entrenamientoML.conteoReferencia);
-            Serial.println(F(" | XYZ simultaneo"));
+            Serial.print(F(" | Z precaptura +"));
+            Serial.println(Z_MARGEN_PRECAPTURA_PASOS);
             cambiarFaseEntrenamientoML(ML_PREPOSICIONANDO);
             registrarEventoPortentaV2("ML_ACCEPT", "pieza aceptada para catch ML");
             break;
@@ -4116,16 +4298,17 @@ void procesarEntrenamientoML() {
                     "prediccion invalida durante preposicion", false, false);
                 return;
             }
-            if (entrenamientoML.piezaYEstimada >
+            if (!pruebaSeguimientoSeleccionada() &&
+                entrenamientoML.piezaYEstimada >
                 posicionCatchYV2() + V2_ERROR_ESTABLE_MM) {
                 cancelarEntrenamientoML(
                     "pieza rebaso el catch durante preposicion", false, false);
                 return;
             }
             if (limiteZabajo) {
-                detenerZ();
-                fijarPasosZ(limiteMinimoZPasos());
-                entrenamientoML.busquedaFinalZActiva = false;
+                cancelarEntrenamientoML(
+                    "DIN04 activo antes del catch ML", false, false);
+                return;
             }
             if (!movimientoPosicionadoActivo && !objetivoXEnCurso() &&
                 !objetivoYEnCurso() && movX == 0 && movY == 0) {
@@ -4137,22 +4320,53 @@ void procesarEntrenamientoML() {
             break;
 
         case ML_BAJANDO_CAPTURA:
+            detenerX();
+            detenerY();
+            if (!actualizarPiezaEntrenamientoML()) {
+                cancelarEntrenamientoML(
+                    "prediccion invalida durante precaptura", false, false);
+                return;
+            }
+            if (!pruebaSeguimientoSeleccionada() &&
+                entrenamientoML.piezaYEstimada >
+                posicionCatchYV2() + V2_ERROR_ESTABLE_MM) {
+                cancelarEntrenamientoML(
+                    "pieza rebaso el catch durante precaptura", false, false);
+                return;
+            }
+            if (limiteZabajo) {
+                cancelarEntrenamientoML(
+                    "DIN04 activo en precaptura ML", false, false);
+                return;
+            }
+            if (objetivoZEnCurso() || movZ != 0) break;
+            if (leerPasosZ() != posicionPrecapturaZV2()) {
+                cancelarEntrenamientoML(
+                    "Z no alcanzo la precaptura ML", false, false);
+                return;
+            }
+            if (entrenamientoConResultadoSeleccionado()) {
+                eventoBotonX = false; // exige una pulsacion nueva despues de quedar listo
+                Serial.println(pruebaSeguimientoSeleccionada()
+                    ? F("[ML TRACK] Z en precaptura; Y sigue pieza; X inicia catch")
+                    : F("[ML V2] Z en precaptura; X inicia catch manual"));
+            } else {
+                Serial.println(F(
+                    "[ML] Ajuste X/Y y rotacion con Z sobre DIN04; catch por encoder o X"
+                ));
+            }
+            if (pruebaSeguimientoSeleccionada()) {
+                entrenamientoML.inicioSeguimiento = millis();
+                entrenamientoML.ultimoLogSeguimiento = 0;
+                cambiarFaseEntrenamientoML(ML_SEGUIMIENTO);
+            } else {
+                cambiarFaseEntrenamientoML(ML_ALINEACION_MANUAL);
+            }
+            break;
+
         case ML_BAJANDO_ENTREGA: {
             detenerX();
             detenerY();
-            if (entrenamientoML.fase == ML_BAJANDO_CAPTURA) {
-                if (!actualizarPiezaEntrenamientoML()) {
-                    cancelarEntrenamientoML(
-                        "prediccion invalida durante descenso", false, false);
-                    return;
-                }
-                if (entrenamientoML.piezaYEstimada >
-                    posicionCatchYV2() + V2_ERROR_ESTABLE_MM) {
-                    cancelarEntrenamientoML(
-                        "pieza rebaso el catch durante descenso", false, false);
-                    return;
-                }
-            }
             if (limiteZabajo) {
                 detenerZ();
                 fijarPasosZ(limiteMinimoZPasos());
@@ -4172,38 +4386,50 @@ void procesarEntrenamientoML() {
                     "DIN04 no aparecio durante descenso", false, false);
                 return;
             }
-            if (entrenamientoML.fase == ML_BAJANDO_CAPTURA) {
-                Serial.println(F(
-                    "[ML] Ajuste X/Y y rotacion; catch por encoder o X, el primero"
-                ));
-                cambiarFaseEntrenamientoML(ML_ALINEACION_MANUAL);
-            } else {
-                codigoAckObjetivo = ACK_OBJ_COMPLETADO;
-                secuenciaObjetivoEnMovimiento = 0;
-                cambiarFaseEntrenamientoML(ML_ABRIENDO_PINZA);
-            }
+            codigoAckObjetivo = ACK_OBJ_COMPLETADO;
+            secuenciaObjetivoEnMovimiento = 0;
+            cambiarFaseEntrenamientoML(ML_ABRIENDO_PINZA);
             break;
         }
 
-        case ML_ALINEACION_MANUAL: {
+        case ML_ALINEACION_MANUAL:
+        case ML_SEGUIMIENTO: {
             if (!actualizarPiezaEntrenamientoML()) {
                 cancelarEntrenamientoML(
                     "prediccion invalida durante alineacion", false, false);
                 return;
             }
-            int8_t x = joystickX;
-            int8_t y = joystickY;
-            if ((x > 0 && limiteXmas) || (x < 0 && limiteXmenos)) x = 0;
-            if ((y > 0 && limiteYmas) || (y < 0 && limiteYmenos)) y = 0;
-            moverXContinuo(x, DIV_MANUAL);
-            moverYContinuo(y, DIV_MANUAL);
+            if (pruebaSeguimientoSeleccionada()) {
+                detenerX();
+                if (!seguirPiezaYEntrenamientoML()) {
+                    cancelarEntrenamientoML(
+                        "pieza salio del recorrido Y de seguimiento",
+                        false, false);
+                    return;
+                }
+            } else {
+                int8_t x = joystickX;
+                int8_t y = joystickY;
+                if ((x > 0 && limiteXmas) || (x < 0 && limiteXmenos)) x = 0;
+                if ((y > 0 && limiteYmas) || (y < 0 && limiteYmenos)) y = 0;
+                moverXContinuo(x, DIV_MANUAL);
+                moverYContinuo(y, DIV_MANUAL);
+            }
             detenerZ();
+            if (limiteZabajo || leerPasosZ() != posicionPrecapturaZV2()) {
+                cancelarEntrenamientoML(
+                    "Z salio de la precaptura ML", false, false);
+                return;
+            }
             entrenamientoML.catchYConfirmada = posicionYmm();
-            const float anticipacionCierreS = anticipacionCierreCatchSegundos();
+            const float anticipacionCierreS =
+                tiempoDescensoFinalZV2Segundos() +
+                anticipacionCierreCatchSegundos();
             entrenamientoML.umbralCierreY =
                 entrenamientoML.catchYConfirmada -
                 fmaxf(0.0f, velocidadBandaMmS) * anticipacionCierreS;
-            if (entrenamientoML.piezaYEstimada >
+            if (!entrenamientoConResultadoSeleccionado() &&
+                entrenamientoML.piezaYEstimada >
                 entrenamientoML.catchYConfirmada + V2_ERROR_ESTABLE_MM) {
                 cancelarEntrenamientoML(
                     "pieza rebaso la posicion corregida", false, false);
@@ -4211,28 +4437,143 @@ void procesarEntrenamientoML() {
             }
             const bool disparoPorX = eventoBotonX;
             const bool disparoPorEncoder =
+                !entrenamientoConResultadoSeleccionado() &&
                 entrenamientoML.piezaYEstimada >=
                 entrenamientoML.umbralCierreY;
             if (!disparoPorX && !disparoPorEncoder) break;
 
             eventoBotonX = false;
+            if (pruebaSeguimientoSeleccionada()) {
+                const float limiteY = RANGO_FISICO_Y_MM * 0.5f -
+                    MARGEN_SEGURIDAD_MM - ML_SEGUIMIENTO_MARGEN_Y_MM;
+                const float recorridoRestante = fmaxf(0.0f, velocidadBandaMmS) *
+                    (tiempoDescensoFinalZV2Segundos() +
+                     anticipacionCierreCatchSegundos() +
+                     ML_SEGUIMIENTO_RESERVA_S);
+                if (posicionYmm() + recorridoRestante > limiteY) {
+                    registrarEventoPortentaV2(
+                        "ML_TRACK_REJECT", "X sin recorrido Y para bajar y cerrar");
+                    break;
+                }
+            }
+            if (entrenamientoConResultadoSeleccionado()) {
+                entrenamientoML.instanteBotonCatch = millis();
+                entrenamientoML.conteoBotonCatch = conteoEncoderBanda;
+                entrenamientoML.piezaYBotonCatch = entrenamientoML.piezaYEstimada;
+                entrenamientoML.brazoYBoton = posicionYmm();
+                entrenamientoML.errorSeguimientoBoton =
+                    entrenamientoML.piezaYBotonCatch -
+                    entrenamientoML.brazoYBoton;
+                entrenamientoML.xCorregida = posicionXmm();
+                entrenamientoML.yCorregida = posicionYmm();
+                entrenamientoML.rotacionCorregida = posServoRot;
+                Serial.print(pruebaSeguimientoSeleccionada()
+                    ? F("V2LOG|P|mode=ML_TRACK|event=ML_BUTTON_CATCH|session=")
+                    : F("V2LOG|P|mode=ML_V2|event=ML_BUTTON_CATCH|session="));
+                Serial.print(sesionESPConocida ? sesionArranqueESP : 0);
+                Serial.print(F("|ms=")); Serial.print(entrenamientoML.instanteBotonCatch);
+                Serial.print(F("|obj=")); Serial.print(entrenamientoML.secuencia);
+                Serial.print(F("|enc=")); Serial.print(entrenamientoML.conteoBotonCatch);
+                Serial.print(F("|piece_y="));
+                Serial.print(entrenamientoML.piezaYBotonCatch, 3);
+                if (pruebaSeguimientoSeleccionada()) {
+                    Serial.print(F("|arm_y="));
+                    Serial.print(entrenamientoML.brazoYBoton, 3);
+                    Serial.print(F("|error_y="));
+                    Serial.print(entrenamientoML.errorSeguimientoBoton, 3);
+                }
+                Serial.print(F("|belt_mm_s=")); Serial.println(velocidadBandaMmS, 3);
+            }
             detenerX();
-            detenerY();
+            if (!pruebaSeguimientoSeleccionada()) detenerY();
             entrenamientoML.catchYConfirmada = posicionYmm();
             entrenamientoML.umbralCierreY =
                 entrenamientoML.catchYConfirmada -
                 fmaxf(0.0f, velocidadBandaMmS) * anticipacionCierreS;
             const char *disparador = disparoPorX ? "X" : "ENCODER";
+            entrenamientoML.disparadorCatch = disparador;
+            entrenamientoML.busquedaFinalZActiva = false;
+            moverZHasta(posicionCapturaZV2(), DIV_POSICION);
+            cambiarFaseEntrenamientoML(ML_BAJANDO_CATCH);
+            registrarEventoPortentaV2("ML_Z_FINAL", "descenso final para catch");
+            break;
+        }
+
+        case ML_BAJANDO_CATCH: {
+            detenerX();
+            if (!pruebaSeguimientoSeleccionada()) detenerY();
+            eventoBotonX = false;
+            if (!actualizarPiezaEntrenamientoML()) {
+                cancelarEntrenamientoML(
+                    "prediccion invalida durante descenso final ML", false, false);
+                return;
+            }
+            if (pruebaSeguimientoSeleccionada() &&
+                !seguirPiezaYEntrenamientoML()) {
+                cancelarEntrenamientoML(
+                    "fin del recorrido Y durante descenso final", false, false);
+                return;
+            }
+            if (!pruebaSeguimientoSeleccionada() &&
+                entrenamientoML.piezaYEstimada >
+                entrenamientoML.catchYConfirmada + V2_ERROR_ESTABLE_MM) {
+                cancelarEntrenamientoML(
+                    "pieza rebaso el catch antes de DIN04 ML", false, false);
+                return;
+            }
+            if (limiteZabajo) {
+                detenerZ();
+                fijarPasosZ(limiteMinimoZPasos());
+                entrenamientoML.busquedaFinalZActiva = false;
+                entrenamientoML.instanteDin04Catch = millis();
+                if (pruebaSeguimientoSeleccionada()) {
+                    entrenamientoML.brazoYDin04 = posicionYmm();
+                    entrenamientoML.errorSeguimientoDin04 =
+                        entrenamientoML.piezaYEstimada -
+                        entrenamientoML.brazoYDin04;
+                }
+            }
+            if (objetivoZEnCurso() || movZ != 0) break;
+            if (!limiteZabajo) {
+                if (!entrenamientoML.busquedaFinalZActiva) {
+                    entrenamientoML.busquedaFinalZActiva = true;
+                    moverZHasta(limiteMinimoZPasos() -
+                        V2_BUSQUEDA_FINAL_Z_EXTRA_PASOS,
+                        V2_DIV_BUSQUEDA_FINAL_Z);
+                    registrarEventoPortentaV2(
+                        "ML_Z_SEARCH", "busqueda DIN04 durante catch ML");
+                    break;
+                }
+                cancelarEntrenamientoML(
+                    "DIN04 no aparecio durante catch ML", false, false);
+                return;
+            }
+            const char *disparador = entrenamientoML.disparadorCatch;
+            const bool disparoPorX = strcmp(disparador, "X") == 0;
+            if (pruebaSeguimientoSeleccionada()) {
+                entrenamientoML.catchYConfirmada = posicionYmm();
+            }
+            entrenamientoML.umbralCierreY =
+                entrenamientoML.catchYConfirmada -
+                fmaxf(0.0f, velocidadBandaMmS) *
+                anticipacionCierreCatchSegundos();
             entrenamientoML.velocidadDisparo = velocidadBandaMmS;
             entrenamientoML.piezaYDisparo = entrenamientoML.piezaYEstimada;
-            entrenamientoML.diferenciaDisparoMm = entrenamientoML.piezaYEstimada -
-                entrenamientoML.umbralCierreY;
+            entrenamientoML.diferenciaDisparoMm =
+                entrenamientoML.piezaYEstimada -
+                (pruebaSeguimientoSeleccionada()
+                    ? entrenamientoML.catchYConfirmada
+                    : entrenamientoML.umbralCierreY);
             entrenamientoML.instanteOrdenCierre = millis();
-            entrenamientoML.disparadorCatch = disparador;
+            entrenamientoML.conteoOrdenCierre = conteoEncoderBanda;
             entrenamientoML.fase = ML_CERRANDO_PINZA;
             entrenamientoML.inicioFase = entrenamientoML.instanteOrdenCierre;
             enviarOrdenCierreCatchAhora();
-            Serial.print(F("V2LOG|P|mode=ML|event=ML_CATCH_TRIGGER|session="));
+            Serial.print(pruebaSeguimientoSeleccionada()
+                ? F("V2LOG|P|mode=ML_TRACK|event=ML_CATCH_TRIGGER|session=")
+                : (ensenanzaMLV2Seleccionada()
+                    ? F("V2LOG|P|mode=ML_V2|event=ML_CATCH_TRIGGER|session=")
+                    : F("V2LOG|P|mode=ML|event=ML_CATCH_TRIGGER|session=")));
             Serial.print(sesionESPConocida ? sesionArranqueESP : 0);
             Serial.print(F("|ms=")); Serial.print(entrenamientoML.instanteOrdenCierre);
             Serial.print(F("|obj=")); Serial.print(entrenamientoML.secuencia);
@@ -4240,6 +4581,18 @@ void procesarEntrenamientoML() {
             Serial.print(F("|catch_type="));
             Serial.print(disparoPorX ? F("MANUAL") : F("AUTOMATICO"));
             Serial.print(F("|enc=")); Serial.print(conteoEncoderBanda);
+            if (entrenamientoConResultadoSeleccionado()) {
+                Serial.print(F("|catch_button_ms="));
+                Serial.print(entrenamientoML.instanteBotonCatch);
+                Serial.print(F("|z_bottom_ms="));
+                Serial.print(entrenamientoML.instanteDin04Catch);
+                if (pruebaSeguimientoSeleccionada()) {
+                    Serial.print(F("|arm_y="));
+                    Serial.print(posicionYmm(), 3);
+                    Serial.print(F("|error_y="));
+                    Serial.print(entrenamientoML.piezaYDisparo - posicionYmm(), 3);
+                }
+            }
             Serial.print(F("|piece_y=")); Serial.print(entrenamientoML.piezaYDisparo, 3);
             Serial.print(F("|catch_y=")); Serial.print(entrenamientoML.catchYConfirmada, 3);
             Serial.print(F("|close_threshold_y="));
@@ -4251,7 +4604,9 @@ void procesarEntrenamientoML() {
             Serial.println(entrenamientoML.velocidadDisparo > 0.0f
                 ? 1000.0f * entrenamientoML.diferenciaDisparoMm /
                   entrenamientoML.velocidadDisparo : NAN, 3);
-            registrarMuestraEntrenamientoML(disparador);
+            if (!entrenamientoConResultadoSeleccionado()) {
+                registrarMuestraEntrenamientoML(disparador);
+            }
             Serial.print(F("[ML] ORDEN CERRAR disparador="));
             Serial.print(disparador);
             Serial.print(F(" piezaY="));
@@ -4265,7 +4620,12 @@ void procesarEntrenamientoML() {
         }
 
         case ML_CERRANDO_PINZA:
-            detenerTodos();
+            if (pruebaSeguimientoSeleccionada()) {
+                detenerX();
+                detenerZ();
+            } else {
+                detenerTodos();
+            }
             eventoBotonX = false;
             if (!limiteZabajo) {
                 cancelarEntrenamientoML(
@@ -4277,8 +4637,21 @@ void procesarEntrenamientoML() {
                     "prediccion invalida durante cierre", false, false);
                 return;
             }
+            if (pruebaSeguimientoSeleccionada() &&
+                !seguirPiezaYEntrenamientoML()) {
+                cancelarEntrenamientoML(
+                    "fin del recorrido Y cerrando pinza", false, false);
+                return;
+            }
             if (millis() - entrenamientoML.inicioFase <
                 V2_TIEMPO_CIERRE_PINZA_MS + V2_LATENCIA_ORDEN_PINZA_MS) break;
+            if (pruebaSeguimientoSeleccionada()) {
+                entrenamientoML.brazoYCierre = posicionYmm();
+                entrenamientoML.errorSeguimientoCierre =
+                    entrenamientoML.piezaYEstimada -
+                    entrenamientoML.brazoYCierre;
+                entrenamientoML.yCorregida = entrenamientoML.brazoYCierre;
+            }
             Serial.print(F("[ML] PINZA CERRADA piezaY="));
             Serial.print(entrenamientoML.piezaYEstimada, 3);
             Serial.print(F(" errorY="));
@@ -4287,7 +4660,11 @@ void procesarEntrenamientoML() {
                 entrenamientoML.catchYConfirmada,
                 3
             );
-            Serial.print(F("V2LOG|P|mode=ML|event=ML_CLOSE|session="));
+            Serial.print(pruebaSeguimientoSeleccionada()
+                ? F("V2LOG|P|mode=ML_TRACK|event=ML_CLOSE|session=")
+                : (ensenanzaMLV2Seleccionada()
+                    ? F("V2LOG|P|mode=ML_V2|event=ML_CLOSE|session=")
+                    : F("V2LOG|P|mode=ML|event=ML_CLOSE|session=")));
             Serial.print(sesionESPConocida ? sesionArranqueESP : 0);
             Serial.print(F("|ms=")); Serial.print(millis());
             Serial.print(F("|obj="));
@@ -4306,8 +4683,16 @@ void procesarEntrenamientoML() {
             Serial.print(entrenamientoML.piezaYEstimada -
                          entrenamientoML.piezaYDisparo, 3);
             Serial.print(F("|error_y_estimado_mm="));
-            Serial.print(entrenamientoML.piezaYEstimada -
-                         entrenamientoML.catchYConfirmada, 3);
+            Serial.print(pruebaSeguimientoSeleccionada()
+                ? entrenamientoML.errorSeguimientoCierre
+                : entrenamientoML.piezaYEstimada -
+                  entrenamientoML.catchYConfirmada, 3);
+            if (pruebaSeguimientoSeleccionada()) {
+                Serial.print(F("|arm_y="));
+                Serial.print(entrenamientoML.brazoYCierre, 3);
+                Serial.print(F("|error_y="));
+                Serial.print(entrenamientoML.errorSeguimientoCierre, 3);
+            }
             Serial.print(F("|belt_mm_s="));
             Serial.print(velocidadBandaMmS, 3);
             Serial.println(F("|error_fisico_medido=NO"));
@@ -4356,6 +4741,40 @@ void procesarEntrenamientoML() {
             if (!objetivoZEnCurso() && movZ == 0) {
                 Serial.print(F("[ML] Pieza entregada; muestras="));
                 Serial.println(muestrasEntrenamientoML);
+                if (entrenamientoConResultadoSeleccionado()) {
+                    eventoBotonX = false;
+                    eventoBotonCuadrado = false;
+                    cambiarFaseEntrenamientoML(ML_ESPERANDO_CONFIRMACION);
+                    registrarEventoPortentaV2("ML_AWAIT_FEEDBACK",
+                        "X=agarro; cuadrado=no agarro");
+                } else {
+                    cambiarFaseEntrenamientoML(ML_LISTO);
+                }
+            }
+            break;
+
+        case ML_ESPERANDO_CONFIRMACION:
+            detenerTodos();
+            if (!eventoBotonX && !eventoBotonCuadrado) break;
+            {
+                const bool exitoFisico = eventoBotonX;
+                eventoBotonX = false;
+                eventoBotonCuadrado = false;
+                registrarMuestraEntrenamientoML(
+                    "X",
+                    exitoFisico ? "EXITO" : "FALLO");
+                Serial.print(pruebaSeguimientoSeleccionada()
+                    ? F("V2LOG|P|mode=ML_TRACK|event=ML_RESULT|session=")
+                    : F("V2LOG|P|mode=ML_V2|event=ML_RESULT|session="));
+                Serial.print(sesionESPConocida ? sesionArranqueESP : 0);
+                Serial.print(F("|ms=")); Serial.print(millis());
+                Serial.print(F("|obj=")); Serial.print(entrenamientoML.secuencia);
+                Serial.print(F("|physical_result="));
+                Serial.print(exitoFisico ? F("EXITO") : F("FALLO"));
+                Serial.print(F("|catch_button_ms="));
+                Serial.print(entrenamientoML.instanteBotonCatch);
+                Serial.print(F("|catch_command_ms="));
+                Serial.println(entrenamientoML.instanteOrdenCierre);
                 cambiarFaseEntrenamientoML(ML_LISTO);
             }
             break;

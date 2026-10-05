@@ -1818,6 +1818,9 @@ void procesarCalibracionBrazoEnCurso(bool iniciadaDesdeArranque) {
 void vigilarSeguridadComunicacion() {
     if (cambioSesionESPPendiente) {
         cambioSesionESPPendiente = false;
+        if (estadoGeneral == EST_I2C_SETTLE) {
+            Serial.println(F("[I2C][ESTABILIZACION] Reiniciada: cambio de sesion de ESP32"));
+        }
         if (estadoGeneral == EST_WAIT_I2C || estadoGeneral == EST_I2C_SETTLE ||
             estadoGeneral == EST_BOOT_SAFE) {
             cambiarEstadoGeneral(EST_WAIT_I2C);
@@ -1846,7 +1849,27 @@ void vigilarSeguridadComunicacion() {
         if (estadoGeneral == EST_I2C_SETTLE ||
             estadoGeneral == EST_FINAL_CHECKLIST) {
             checklistInicialCompletado = false;
-            Serial.println(F("[I2C] Enlace perdido antes de confirmar checklist"));
+            if (estadoGeneral == EST_I2C_SETTLE) {
+                const unsigned long ahora = millis();
+                const unsigned long edadPaquete = ahora - ultimoPaqueteValidoMs;
+                const unsigned long edadSecuencia = ahora - ultimoCambioSecuenciaESPMs;
+                Serial.print(F("[I2C][ESTABILIZACION] Reiniciada: "));
+                if (!existePaqueteValido || !secuenciaPaqueteESPConocida) {
+                    Serial.print(F("sin paquete valido de ESP32"));
+                } else if (edadPaquete > TIMEOUT_I2C_MS) {
+                    Serial.print(F("ultimo paquete valido vencido"));
+                } else {
+                    Serial.print(F("secuencia de ESP32 sin avanzar"));
+                }
+                Serial.print(F("; edadPaquete="));
+                Serial.print(edadPaquete);
+                Serial.print(F("ms edadSecuencia="));
+                Serial.print(edadSecuencia);
+                Serial.print(F("ms fallosConsecutivos="));
+                Serial.println(fallosPaqueteConsecutivos);
+            } else {
+                Serial.println(F("[I2C] Enlace perdido antes de confirmar checklist"));
+            }
             cambiarEstadoGeneral(EST_WAIT_I2C);
         } else {
             entrarErrorSistema(ERROR_TIMEOUT_I2C, "Timeout de comunicacion I2C");

@@ -16,10 +16,31 @@
 namespace ProtocoloI2C {
 
 constexpr uint8_t DIRECCION_ESP32 = 0x40;
-constexpr uint8_t VERSION_PROTOCOLO = 10;
+constexpr uint8_t VERSION_PROTOCOLO = 13;
 constexpr uint8_t MAGIC_ESP_A_PORTENTA = 0xE3;
 constexpr uint8_t MAGIC_PORTENTA_A_ESP = 0xA7;
 constexpr size_t MAX_BYTES_WIRE = 32;
+// Separacion de Z sobre DIN04 mientras la pieza se aproxima al catch.
+constexpr long Z_MARGEN_PRECAPTURA_PASOS = 3000L;
+// El paquete ya ocupa los 32 bytes de Wire: los 18 bits bajos conservan la
+// escala del encoder (nm/cuenta) y los 14 altos llevan Z desde DIN04 (pasos).
+constexpr uint32_t MASCARA_ESCALA_ENCODER_NM = 0x0003FFFFUL;
+constexpr uint16_t MAX_Z_DESDE_DIN04_PASOS = 0x3FFFU;
+constexpr uint8_t DESPLAZAMIENTO_Z_DESDE_DIN04 = 18;
+
+inline uint32_t empacarEscalaEncoderYZ(uint32_t nmPorCuenta, uint16_t pasosZ) {
+    return (nmPorCuenta & MASCARA_ESCALA_ENCODER_NM) |
+        (static_cast<uint32_t>(pasosZ & MAX_Z_DESDE_DIN04_PASOS)
+         << DESPLAZAMIENTO_Z_DESDE_DIN04);
+}
+
+inline uint32_t extraerEscalaEncoderNm(uint32_t campo) {
+    return campo & MASCARA_ESCALA_ENCODER_NM;
+}
+
+inline uint16_t extraerZDesdeDin04Pasos(uint32_t campo) {
+    return static_cast<uint16_t>(campo >> DESPLAZAMIENTO_Z_DESDE_DIN04);
+}
 
 enum EstadoSistemaWire : uint8_t {
     SISTEMA_ARRANQUE_SEGURO = 0,
@@ -53,7 +74,9 @@ enum OpcionMenuWire : uint8_t {
     MENU_DIAGNOSTICO = 7,
     MENU_ENTRENAMIENTO_ML = 8,
     MENU_PRUEBA_ENCODER = 9,
-    MENU_REGISTRO_ANGULO = 10
+    MENU_REGISTRO_ANGULO = 10,
+    MENU_ENTRENAMIENTO_ML_V2 = 11,
+    MENU_PRUEBA_SEGUIMIENTO = 12
 };
 
 enum FlagsEncoder : uint8_t {
@@ -246,7 +269,7 @@ struct __attribute__((packed)) PaquetePortentaAESP {
     uint8_t codigoAckObjetivo;
     int32_t conteoEncoder;
     int32_t velocidadEncoderUmS;
-    uint32_t nmPorCuentaEncoder;
+    uint32_t nmPorCuentaEncoder; // escala 18 bits + Z desde DIN04 14 bits
     uint16_t secuenciaEncoder;
     uint8_t estadoEncoder;
     int8_t signoEncoder;

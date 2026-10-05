@@ -52,7 +52,16 @@ $script:Columnas = @(
     'detection_to_command_ms', 'close_elapsed_ms', 'advance_mm',
     'estimated_close_error_mm', 'anticipation_ms',
     'predicted_close_y_mm', 'suggested_advance_extra_ms',
-    'physical_error_measured'
+    'physical_error_measured', 'catch_button_ms', 'catch_button_encoder',
+    'catch_button_piece_y_mm', 'z_bottom_ms', 'button_to_grip_ms',
+    'camera_speed_valid', 'camera_speed_mm_s', 'camera_vy_mm_s',
+    'encoder_window_mm_s', 'speed_error_mm_s', 'camera_travel_mm',
+    'encoder_travel_mm', 'camera_interval_ms', 'camera_y_first_mm',
+    'camera_y_last_mm', 'camera_unique_y',
+    'track_arm_y_button_mm', 'track_error_button_mm',
+    'track_arm_y_bottom_mm', 'track_error_bottom_mm',
+    'track_arm_y_close_mm', 'track_error_close_mm',
+    'track_before_button_ms'
 )
 
 $script:MapaCampos = @{
@@ -67,6 +76,7 @@ $script:MapaCampos = @{
     'ref_enc'     = 'objective_encoder_count'
     'age'         = 'encoder_age_ms'
     'vel'         = 'encoder_velocity_mm_s'
+    'encoder_velocity_mm_s' = 'encoder_velocity_mm_s'
     'flags'       = 'encoder_flags'
     'husky'       = 'husky_results'
     'valid'       = 'candidates_valid'
@@ -170,6 +180,29 @@ $script:MapaCampos = @{
     'cierre_y_predicha' = 'predicted_close_y_mm'
     'adelanto_extra_sugerido_ms' = 'suggested_advance_extra_ms'
     'error_fisico_medido' = 'physical_error_measured'
+    'catch_button_ms' = 'catch_button_ms'
+    'catch_button_encoder' = 'catch_button_encoder'
+    'catch_button_piece_y' = 'catch_button_piece_y_mm'
+    'z_bottom_ms' = 'z_bottom_ms'
+    'button_to_grip_ms' = 'button_to_grip_ms'
+    'camera_speed_valid' = 'camera_speed_valid'
+    'camera_speed_mm_s' = 'camera_speed_mm_s'
+    'camera_vy_mm_s' = 'camera_vy_mm_s'
+    'encoder_window_mm_s' = 'encoder_window_mm_s'
+    'speed_error_mm_s' = 'speed_error_mm_s'
+    'camera_travel_mm' = 'camera_travel_mm'
+    'encoder_travel_mm' = 'encoder_travel_mm'
+    'camera_interval_ms' = 'camera_interval_ms'
+    'camera_y_first_mm' = 'camera_y_first_mm'
+    'camera_y_last_mm' = 'camera_y_last_mm'
+    'camera_unique_y' = 'camera_unique_y'
+    'track_arm_y_button' = 'track_arm_y_button_mm'
+    'track_error_button' = 'track_error_button_mm'
+    'track_arm_y_bottom' = 'track_arm_y_bottom_mm'
+    'track_error_bottom' = 'track_error_bottom_mm'
+    'track_arm_y_close' = 'track_arm_y_close_mm'
+    'track_error_close' = 'track_error_close_mm'
+    'track_before_button_ms' = 'track_before_button_ms'
 }
 
 $script:Reloj = [System.Diagnostics.Stopwatch]::StartNew()
@@ -283,13 +316,36 @@ function Nombre-FaseV2([string]$Fase) {
         '1' { return 'PREPOSICIONANDO' }
         '2' { return 'PREPARANDO_DESCENSO' }
         '3' { return 'DISPARANDO_CATCH' }
-        '4' { return 'BAJANDO_Z' }
+        '4' { return 'BAJANDO_PRECAPTURA' }
         '5' { return 'SUBIENDO_Z' }
         '6' { return 'ESPERANDO_CATCH_AUTOMATICO' }
         '7' { return 'COMPLETADO' }
         '8' { return 'CANCELANDO' }
         '9' { return 'PREPARANDO_ESPERA' }
         '10' { return 'CERRANDO_PINZA' }
+        '11' { return 'BAJANDO_CATCH' }
+        default { return '' }
+    }
+}
+
+function Nombre-FaseML([string]$Fase) {
+    switch ($Fase) {
+        '0' { return 'ESPERANDO_PIEZA' }
+        '1' { return 'PREPOSICIONANDO' }
+        '2' { return 'BAJANDO_PRECAPTURA' }
+        '3' { return 'ALINEACION_MANUAL' }
+        '4' { return 'CERRANDO_PINZA' }
+        '5' { return 'SUBIENDO_CON_PIEZA' }
+        '6' { return 'MOVIENDO_ENTREGA' }
+        '7' { return 'BAJANDO_ENTREGA' }
+        '8' { return 'ABRIENDO_PINZA' }
+        '9' { return 'SUBIENDO_FINAL' }
+        '10' { return 'LISTO' }
+        '11' { return 'CANCELANDO' }
+        '12' { return 'PREPARANDO_ESPERA' }
+        '13' { return 'BAJANDO_CATCH' }
+        '14' { return 'ESPERANDO_CONFIRMACION' }
+        '15' { return 'SIGUIENDO_PIEZA_EN_Y' }
         default { return '' }
     }
 }
@@ -324,7 +380,9 @@ function Describir-Evento([object]$Analizada, [string]$Linea) {
     if (-not $Analizada.Structured) { return $Linea }
     $evento = Obtener-Dato $Analizada 'event'
     $causa = Obtener-Dato $Analizada 'cause'
-    $fase = if ((Obtener-Dato $Analizada 'mode') -eq 'ANGLE_LABEL') {
+    $fase = if ((Obtener-Dato $Analizada 'mode') -in @('ML', 'ML_V2', 'ML_TRACK')) {
+        Nombre-FaseML (Obtener-Dato $Analizada 'phase')
+    } elseif ((Obtener-Dato $Analizada 'mode') -eq 'ANGLE_LABEL') {
         Nombre-FaseAngulo (Obtener-Dato $Analizada 'phase')
     } else { Nombre-FaseV2 (Obtener-Dato $Analizada 'phase') }
     $mensaje = Obtener-Dato $Analizada 'message'
@@ -355,7 +413,32 @@ function Describir-Evento([object]$Analizada, [string]$Linea) {
             $disparador = Obtener-Dato $Analizada 'trigger'
             $servo = Obtener-Dato $Analizada 'servo_rot_deg'
             $errorMs = Obtener-Dato $Analizada 'error_disparo_ms'
-            return "CATCH $tipo ($disparador) | objetivo #$obj | velocidad=$vel mm/s | orientacion=$servo grados | diferencia con prediccion=$errorMs ms (no confirma agarre)"
+            $resultado = Obtener-Dato $Analizada 'physical_result'
+            if ($resultado -eq '') { $resultado = 'SIN CONFIRMAR' }
+            return "CATCH $tipo ($disparador) | objetivo #$obj | velocidad=$vel mm/s | orientacion=$servo grados | diferencia con prediccion=$errorMs ms | agarre=$resultado"
+        }
+        'ML_BUTTON_CATCH' {
+            return "ML X CATCH #$obj | Portenta ms=" +
+                (Obtener-Dato $Analizada 'board_ms') + ' | encoder=' + $enc +
+                ' | error seguimiento=' + (Obtener-Dato $Analizada 'error_y') + ' mm'
+        }
+        'ML_TRACK' {
+            return "SEGUIMIENTO #$obj | pieza Y=" +
+                (Obtener-Dato $Analizada 'piece_y') + ' mm | brazo Y=' +
+                (Obtener-Dato $Analizada 'arm_y') + ' mm | error=' +
+                (Obtener-Dato $Analizada 'error_y') + ' mm'
+        }
+        'ML_TRACK_REJECT' { return "X IGNORADA #$obj | falta recorrido Y para terminar el catch" }
+        'ML_AWAIT_FEEDBACK' { return "ML V2 #$obj | confirme agarre: X=si, cuadrado=no" }
+        'ML_RESULT' {
+            return "ML V2 #$obj | resultado fisico=" +
+                (Obtener-Dato $Analizada 'physical_result')
+        }
+        'CAMERA_SPEED' {
+            return "CAMARA VS ENCODER #$obj | camara=" +
+                (Obtener-Dato $Analizada 'camera_speed_mm_s') +
+                ' mm/s | encoder=' + (Obtener-Dato $Analizada 'encoder_window_mm_s') +
+                ' mm/s | valida=' + (Obtener-Dato $Analizada 'camera_speed_valid')
         }
         'ML_ANGLE_SUGGESTION' {
             return "ML PIEZA #$obj | angulo sugerido=" +
@@ -401,6 +484,12 @@ function Describir-Evento([object]$Analizada, [string]$Linea) {
         'SESSION_START' {
             if ((Obtener-Dato $Analizada 'mode') -eq 'ML') {
                 return 'ENTRADA A ENSENANZA ML | catch con X o encoder; giro ajustable'
+            }
+            if ((Obtener-Dato $Analizada 'mode') -eq 'ML_TRACK') {
+                return 'ENTRADA A SEGUIMIENTO Y | X inicia catch; giro ajustable'
+            }
+            if ((Obtener-Dato $Analizada 'mode') -eq 'ML_V2') {
+                return 'ENTRADA A ENSENANZA ML V2 | catch con X'
             }
             if ((Obtener-Dato $Analizada 'mode') -eq 'ANGLE_LABEL') {
                 return 'ENTRADA A REGISTRAR ANGULO | banda detenida'
@@ -684,7 +773,9 @@ function Escribir-Fila([object]$Envoltura, [object]$Analizada) {
         $fila['message'] = $Envoltura.Line
     }
     $fila['description_es'] = Describir-Evento $Analizada $Envoltura.Line
-    $fila['phase_name_es'] = if ($fila['mode'] -eq 'ANGLE_LABEL') {
+    $fila['phase_name_es'] = if ($fila['mode'] -eq 'ML') {
+        Nombre-FaseML $fila['phase']
+    } elseif ($fila['mode'] -eq 'ANGLE_LABEL') {
         Nombre-FaseAngulo $fila['phase']
     } else { Nombre-FaseV2 $fila['phase'] }
 
@@ -722,7 +813,7 @@ try {
     $serialPortenta = Abrir-Puerto $PuertoPortenta 115200 $true
     Write-Host "Estado: Portenta conectada en $PuertoPortenta a 115200"
     Iniciar-DiagnosticoContinuo
-    Write-Host 'Estado: esperando entrada a Automatico V2'
+    Write-Host 'Estado: esperando Automatico V2, Ensenanza ML o Seguimiento Y'
     $lecturaIniciada = $true
 
     while ($true) {
@@ -752,7 +843,9 @@ try {
                 'SESSION_START', 'TELEMETRY', 'PHASE', 'ACCEPT', 'REJECT',
                 'ACK', 'TRIGGER', 'READY_CATCH', 'GRIP_COMMAND', 'BUTTON_X', 'CAPTURE',
                 'RESULT', 'CANCEL', 'ERROR', 'READY_ANGLE', 'ANGLE_SAMPLE',
-                'ML_ACCEPT', 'ML_CATCH_TRIGGER', 'ML_CLOSE', 'ML_SAMPLE'
+                'ML_ACCEPT', 'ML_CATCH_TRIGGER', 'ML_CLOSE', 'ML_SAMPLE',
+                'ML_BUTTON_CATCH', 'ML_AWAIT_FEEDBACK', 'ML_RESULT',
+                'ML_TRACK', 'ML_TRACK_REJECT'
             )
             $eventoConfirmaV2 = $eventosQueConfirmanV2 -contains $evento
             $estadoGeneralLegado = $null
@@ -786,7 +879,7 @@ try {
                 $null -ne $estadoGeneralLegado -and
                 $estadoGeneralLegado -ne $(if ($script:TipoSesion -eq 'encoder') { 17 }
                     elseif ($script:TipoSesion -eq 'angulo') { 9 }
-                    elseif ($script:TipoSesion -eq 'ml') { 16 } else { 11 })
+                    elseif ($script:TipoSesion -in @('ml', 'ml_v2', 'ml_track')) { 16 } else { 11 })
             $esCancelacionLegada = $analizada.Source -eq 'P' -and
                 $envoltura.Line -match '\[AUTO V2\]\s+Cancelando:'
 
@@ -802,6 +895,8 @@ try {
                 }
                 $script:TipoSesion = if ($esInicioEncoder) { 'encoder' }
                     elseif ((Obtener-Dato $analizada 'mode') -eq 'ANGLE_LABEL') { 'angulo' }
+                    elseif ((Obtener-Dato $analizada 'mode') -eq 'ML_V2') { 'ml_v2' }
+                    elseif ((Obtener-Dato $analizada 'mode') -eq 'ML_TRACK') { 'ml_track' }
                     elseif ((Obtener-Dato $analizada 'mode') -eq 'ML') { 'ml' }
                     else { 'v2' }
                 Iniciar-Sesion
@@ -809,10 +904,10 @@ try {
                     Escribir-Fila $anterior (Analizar-Linea $anterior.Line $anterior.Source)
                 }
                 if ($analizada.Structured -and $evento -eq 'CANCEL' -and
-                     $script:TipoSesion -notin @('angulo', 'ml')) {
+                     $script:TipoSesion -notin @('angulo', 'ml', 'ml_v2', 'ml_track')) {
                     $script:BloqueadoHastaSalirV2 = $true
                     Cerrar-Sesion 'CANCEL'
-                } elseif ($esCancelacionLegada -and $script:TipoSesion -notin @('angulo', 'ml')) {
+                } elseif ($esCancelacionLegada -and $script:TipoSesion -notin @('angulo', 'ml', 'ml_v2', 'ml_track')) {
                     $script:BloqueadoHastaSalirV2 = $true
                     Cerrar-Sesion 'CANCEL legado'
                 }
@@ -823,13 +918,13 @@ try {
                 Escribir-Fila $envoltura $analizada
                 if ($analizada.Structured -and $analizada.Source -eq 'P' -and
                     ($evento -eq 'SESSION_END' -or
-                      ($evento -eq 'CANCEL' -and $script:TipoSesion -notin @('angulo', 'ml')) -or
+                       ($evento -eq 'CANCEL' -and $script:TipoSesion -notin @('angulo', 'ml', 'ml_v2', 'ml_track')) -or
                      $evento -eq 'ENCODER_TEST_END')) {
                     if ($evento -eq 'CANCEL') {
                         $script:BloqueadoHastaSalirV2 = $true
                     }
                     Cerrar-Sesion $evento
-                } elseif ($esCancelacionLegada -and $script:TipoSesion -notin @('angulo', 'ml')) {
+                } elseif ($esCancelacionLegada -and $script:TipoSesion -notin @('angulo', 'ml', 'ml_v2', 'ml_track')) {
                     $script:BloqueadoHastaSalirV2 = $true
                     Cerrar-Sesion 'CANCEL legado'
                 } elseif ($esSalidaEstadoLegado) {
