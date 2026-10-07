@@ -1,0 +1,10 @@
+{
+  "additionalFiles": "..\\..,..\\..,..\\..\\..",
+  "builtInLibrariesFolders": "C:\\Users\\samue\\AppData\\Local\\Arduino15\\libraries",
+  "compiler.optimization_flags": "-Os",
+  "customBuildProperties": "",
+  "fqbn": "esp32-bluepad32:esp32:esp32",
+  "hardwareFolders": "C:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\esp32-bluepad32\\hardware\\esp32\\4.1.0,C:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\esp32-bluepad32\\hardware\\esp32\\4.1.0",
+  "otherLibrariesFolders": "c:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries",
+  "sketchLocation": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\tests\\HUSKYLENS2_SEGMENTACION"
+}

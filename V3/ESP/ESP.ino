@@ -29,6 +29,7 @@
 #include "freertos/task.h"
 
 #include "ProtocoloI2C.h"
+#include "VisionModelo129.h"
 
 using namespace ProtocoloI2C;
 
@@ -605,8 +606,8 @@ constexpr double TAG_X_FROM_CENTER_MM =
 constexpr double TAG_ROWS_DISTANCE_MM = 382.0;
 constexpr uint16_t SAMPLES_PER_TAG = 25;
 constexpr uint8_t NUMBER_OF_TAGS = 4;
-// 0 = modelo personalizado 128, confirmado para esta instalacion.
-constexpr uint8_t CUSTOM_MODEL_INDEX = 0;
+// Modelo actualizado: indice 1, algoritmo 129.
+constexpr uint8_t CUSTOM_MODEL_INDEX = VisionModelo129::INDICE_MODELO;
 
 const eAlgorithm_t PIECE_MODEL = static_cast<eAlgorithm_t>(
   static_cast<uint8_t>(ALGORITHM_CUSTOM_BEGIN) + CUSTOM_MODEL_INDEX
@@ -868,6 +869,26 @@ bool isInsideCalibrationArea(const Point2D &position) {
     position.y <=  halfCalibrationHeight;
 }
 
+uint8_t estimarEjeCaja(const Result *result, bool homografiaValida) {
+  if (result->width <= 0 || result->height <= 0) return 0;
+  const double izquierda = result->xCenter - result->width * 0.5;
+  const double derecha = result->xCenter + result->width * 0.5;
+  const double arriba = result->yCenter - result->height * 0.5;
+  const double abajo = result->yCenter + result->height * 0.5;
+  Point2D esquinas[4];
+  if (!pixelToMillimeters(izquierda, arriba, homografiaValida, esquinas[0]) ||
+      !pixelToMillimeters(derecha, arriba, homografiaValida, esquinas[1]) ||
+      !pixelToMillimeters(izquierda, abajo, homografiaValida, esquinas[2]) ||
+      !pixelToMillimeters(derecha, abajo, homografiaValida, esquinas[3])) return 0;
+  double minX = esquinas[0].x, maxX = minX;
+  double minY = esquinas[0].y, maxY = minY;
+  for (uint8_t i = 1; i < 4; ++i) {
+    minX = fmin(minX, esquinas[i].x); maxX = fmax(maxX, esquinas[i].x);
+    minY = fmin(minY, esquinas[i].y); maxY = fmax(maxY, esquinas[i].y);
+  }
+  return VisionModelo129::ejePorDimensiones(maxX - minX, maxY - minY);
+}
+
 bool isOverWhiteBelt(const Point2D &position) {
   return
     fabs(position.x) <= BELT_WIDTH_MM / 2.0 &&
@@ -901,6 +922,8 @@ struct FiltroDeteccion {
   double maximoX;
   double minimoY;
   double maximoY;
+  uint8_t votosEjeX;
+  uint8_t votosEjeY;
 };
 
 struct ContextoCamara {
@@ -1155,7 +1178,8 @@ bool mismaDeteccionEstable(
 void incorporarDeteccion(
   ContextoCamara &ctx,
   uint8_t clase,
-  const Point2D &posicion
+  const Point2D &posicion,
+  uint8_t ejeCaja
 ) {
   FiltroDeteccion &filtro = ctx.filtro;
   if (!mismaDeteccionEstable(filtro, clase, posicion)) {
@@ -1169,12 +1193,16 @@ void incorporarDeteccion(
     filtro.maximoX = posicion.x;
     filtro.minimoY = posicion.y;
     filtro.maximoY = posicion.y;
+    filtro.votosEjeX = static_cast<uint8_t>(ejeCaja == 1);
+    filtro.votosEjeY = static_cast<uint8_t>(ejeCaja == 2);
     return;
   }
 
   if (filtro.consecutivas < UINT8_MAX) {
     ++filtro.consecutivas;
   }
+  if (ejeCaja == 1 && filtro.votosEjeX < UINT8_MAX) ++filtro.votosEjeX;
+  if (ejeCaja == 2 && filtro.votosEjeY < UINT8_MAX) ++filtro.votosEjeY;
   filtro.sumaX += posicion.x;
   filtro.sumaY += posicion.y;
   filtro.promedioX = filtro.sumaX / filtro.consecutivas;
@@ -1207,6 +1235,15 @@ void publicarObjetivoEstable(ContextoCamara &ctx) {
   ctx.objetivoX10 = static_cast<int16_t>(x10);
   ctx.objetivoY10 = static_cast<int16_t>(y10);
   ctx.rearmada = false;
+  const bool ejeX = ctx.filtro.votosEjeX >= 2 && ctx.filtro.votosEjeY == 0;
+  const bool ejeY = ctx.filtro.votosEjeY >= 2 && ctx.filtro.votosEjeX == 0;
+  Serial.print(F("[AUTO] Orientacion aproximada modelo129 eje="));
+  Serial.print(ejeX ? F("X") : (ejeY ? F("Y") : F("INDETERMINADO")));
+  Serial.print(F(" angulo_plano_deg="));
+  if (ejeX || ejeY) Serial.print(ejeX ? 0 : 90); else Serial.print(F("NA"));
+  Serial.print(F(" servo_sugerido_deg="));
+  if (ejeX || ejeY) Serial.print(ejeX ? 90 : 0); else Serial.print(F("NA"));
+  Serial.println();
   reiniciarFiltro(ctx);
 
   Serial.print(F("[AUTO] Objetivo seq="));
@@ -1234,9 +1271,11 @@ bool leerPiezasUnaVez(
   bool hayPrimera = false;
   uint8_t clasePrimera = 0;
   Point2D posicionPrimera = {};
+  uint8_t ejePrimera = 0;
   bool hayCoincidente = false;
   uint8_t claseCoincidente = 0;
   Point2D posicionCoincidente = {};
+  uint8_t ejeCoincidente = 0;
   double distanciaCoincidente = HUGE_VAL;
 
   while (huskylens.available(PIECE_MODEL)) {
@@ -1244,6 +1283,10 @@ bool leerPiezasUnaVez(
     if (result == nullptr) {
       continue;
     }
+
+    const uint8_t clase = VisionModelo129::clasePermitida(result->name.c_str());
+    if (clase == 0 || result->type != COMMAND_RETURN_BLOCK ||
+        result->width <= 0 || result->height <= 0) continue;
 
     Point2D posicion;
     if (!pixelToMillimeters(
@@ -1256,10 +1299,11 @@ bool leerPiezasUnaVez(
     }
 
     hayPiezaValida = true;
+    const uint8_t ejeCaja = estimarEjeCaja(result, ctx.homografiaValida);
 
     if (
       ctx.esperandoDesaparicion &&
-      result->ID == ctx.claseEsperandoDesaparicion &&
+      clase == ctx.claseEsperandoDesaparicion &&
       fabs(posicion.x - ctx.xEsperandoDesaparicion) <= TOLERANCIA_REARME_MM &&
       fabs(posicion.y - ctx.yEsperandoDesaparicion) <= TOLERANCIA_REARME_MM
     ) {
@@ -1268,11 +1312,12 @@ bool leerPiezasUnaVez(
 
     if (!hayPrimera) {
       hayPrimera = true;
-      clasePrimera = result->ID;
+      clasePrimera = clase;
       posicionPrimera = posicion;
+      ejePrimera = ejeCaja;
     }
 
-    if (mismaDeteccionEstable(ctx.filtro, result->ID, posicion)) {
+    if (mismaDeteccionEstable(ctx.filtro, clase, posicion)) {
       const double dx = posicion.x - ctx.filtro.promedioX;
       const double dy = posicion.y - ctx.filtro.promedioY;
       const double distancia2 = dx * dx + dy * dy;
@@ -1281,8 +1326,9 @@ bool leerPiezasUnaVez(
       ) {
         distanciaCoincidente = distancia2;
         hayCoincidente = true;
-        claseCoincidente = result->ID;
+        claseCoincidente = clase;
         posicionCoincidente = posicion;
+        ejeCoincidente = ejeCaja;
       }
     }
   }
@@ -1312,9 +1358,9 @@ bool leerPiezasUnaVez(
   }
 
   if (hayCoincidente) {
-    incorporarDeteccion(ctx, claseCoincidente, posicionCoincidente);
+    incorporarDeteccion(ctx, claseCoincidente, posicionCoincidente, ejeCoincidente);
   } else {
-    incorporarDeteccion(ctx, clasePrimera, posicionPrimera);
+    incorporarDeteccion(ctx, clasePrimera, posicionPrimera, ejePrimera);
   }
   publicarObjetivoEstable(ctx);
   return true;
@@ -1645,7 +1691,7 @@ void procesarEstadoCamara(
         ctx.plazoEstado = millis() + CAM_MODEL_LOAD_MS;
       } else if (plazoCumplido(ahora, ctx.plazoEstado)) {
         // No se publica MODELO_LISTO solo por haber esperado. Una lectura
-        // valida (tambien con cero detecciones) confirma que el modelo 128
+        // valida (tambien con cero detecciones) confirma que el modelo 129
         // termino de cargar y responde por UART.
         const int8_t resultados = huskylens.getResult(PIECE_MODEL);
         if (resultados < 0) {
@@ -1662,7 +1708,7 @@ void procesarEstadoCamara(
         ctx.error = CAM_ERROR_NINGUNO;
         ctx.proximaLectura = ahora;
         cambiarEstadoCamara(ctx, CAMARA_LISTA);
-        Serial.println(F("[CAM] Modelo 128 confirmado; deteccion habilitada"));
+        Serial.println(F("[CAM] Modelo 129 confirmado; solo pieza6/pieza7 habilitadas"));
       }
       break;
 

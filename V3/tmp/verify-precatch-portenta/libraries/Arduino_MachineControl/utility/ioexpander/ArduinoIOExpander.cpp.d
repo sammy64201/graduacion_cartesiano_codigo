@@ -1,6 +1,6 @@
 C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\tmp\verify-precatch-portenta\libraries\Arduino_MachineControl\utility\ioexpander\ArduinoIOExpander.cpp.o: \
- C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\ioexpander\ArduinoIOExpander.cpp \
- C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\ioexpander\ArduinoIOExpander.h \
+ c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\ioexpander\ArduinoIOExpander.cpp \
+ c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\ioexpander\ArduinoIOExpander.h \
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\cores\arduino/Arduino.h \
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\variants\PORTENTA_H7_M7/pinmode_arduino.h \
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\variants\PORTENTA_H7_M7/mbed_config.h \
@@ -176,8 +176,8 @@ C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\cores\arduino/api/HardwareSerial.h \
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\cores\arduino/timer.h \
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\cores\arduino/overloads.h \
- C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\ioexpander\TCA6424A.h \
- C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\ioexpander\I2Cdev.h \
+ c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\ioexpander\TCA6424A.h \
+ c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\ioexpander\I2Cdev.h \
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\libraries\Wire/Wire.h \
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\cores\arduino/api/HardwareI2C.h \
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\cores\arduino/api/deprecated/Print.h \

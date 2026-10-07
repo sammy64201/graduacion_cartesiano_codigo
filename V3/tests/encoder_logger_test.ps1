@@ -12,7 +12,7 @@ foreach ($nodo in $ast.FindAll({ param($n)
 }, $false)) { Invoke-Expression $nodo.Extent.Text }
 foreach ($nodo in $ast.FindAll({ param($n)
     $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
-    $n.Name -in @('Analizar-Linea', 'Obtener-Dato', 'Nombre-FaseV2',
+    $n.Name -in @('Analizar-Linea', 'Obtener-Dato', 'Nombre-FaseV2', 'Nombre-AckV2',
         'Describir-Evento', 'Convertir-CampoCsv', 'Escribir-Fila')
 }, $false)) { Invoke-Expression $nodo.Extent.Text }
 
@@ -76,4 +76,31 @@ if ($filas.Count -ne 2 -or ($filas.ensayo -join ',') -ne '1,2' -or
     throw 'El CSV encoder no contiene los dos ensayos completos con pulsos y segundos'
 }
 $script:EscritorSesion.Dispose()
+foreach ($fase in @('12','13','14','15','16','17')) {
+    if ([string]::IsNullOrWhiteSpace((Nombre-FaseV2 $fase))) {
+        throw "Fase nueva de integracion sin nombre: $fase"
+    }
+}
+if ((Nombre-AckV2 '6') -ne 'ABRIR_PINZA') { throw 'Apertura de entrega sin nombre' }
+$sugerencia = Analizar-Linea 'V2LOG|E|event=AUTO_ANGLE_SUGGESTION|obj=42|class=6|suggested_rot=155|suggestion_source=MLV2_EJES_20261005|servo_rot_deg=155' 'E'
+if ((Obtener-Dato $sugerencia 'suggested_rot') -ne '155' -or
+    (Describir-Evento $sugerencia '').Contains('155') -ne $true) {
+    throw 'Sugerencia automatica no reconocida por registrador'
+}
 Write-Output 'PASS: sintaxis, CSV por ensayo, filtrado de diagnostico y compatibilidad V2/ML'
+
+$script:TipoSesion = 'catch_cal'
+$script:EscritorSesion = New-Object System.IO.StringWriter
+$linea = 'V2LOG|P|mode=CATCH_CAL|event=CAL_SAMPLE|obj=42|phase=17|timing_result=CORRECTO|tested_offset_ms=-100|next_offset_ms=-100|adjust_step_ms=25|adjust_trials=3|adjust_success_streak=3|adjust_confirmed=1|adjust_limit=0|auto_reference_ms=1000|reference_status=OBSERVADA|catch_start_ms=1200|delta_reference_ms=200|z_bottom_ms=1800|catch_command_ms=1800|trigger_encoder=-100|trigger_arm_y=10|trigger_piece_y=11|scale_mm_count=0.075165|camera_x=3|camera_y=5'
+$analizada = Analizar-Linea $linea 'P'
+Escribir-Fila ([pscustomobject]@{Utc=[DateTime]::UtcNow;ElapsedMs=0;Source='P';Line=$linea}) $analizada
+$fila = $script:EscritorSesion.ToString() | ConvertFrom-Csv -Header $script:Columnas
+if ($fila.mode -ne 'CATCH_CAL' -or $fila.timing_result -ne 'CORRECTO' -or
+    $fila.delta_reference_ms -ne '200' -or $fila.trigger_arm_y_mm -ne '10' -or
+    $fila.tested_offset_ms -ne '-100' -or $fila.next_offset_ms -ne '-100' -or
+    $fila.adjust_confirmed -ne '1' -or $fila.adjust_trials -ne '3' -or
+    $fila.camera_y_mm -ne '5' -or $fila.phase_name_es -ne 'EVALUANDO_CATCH') {
+    throw 'El registrador pierde campos del ajuste de catch'
+}
+$script:EscritorSesion.Dispose()
+Write-Output 'PASS: CSV de ajuste independiente, etiqueta, referencia, tiempos, encoder y geometria'

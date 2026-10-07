@@ -29,6 +29,8 @@
 #include "freertos/task.h"
 
 #include "ProtocoloI2C.h"
+#include "VisionModelo129.h"
+#include "CalibracionAnguloMLV2.h"
 
 using namespace ProtocoloI2C;
 
@@ -131,7 +133,12 @@ constexpr int ANGULO_SERVO_INICIAL = 90;
 // entre los ejes X/Y del brazo y el eje de cierre de la garra.
 constexpr int ANGULO_GARRA_EJE_X = 90;
 constexpr int ANGULO_GARRA_EJE_Y = 0;
-constexpr double RELACION_MINIMA_ORIENTACION = 1.35;
+constexpr double RELACION_MINIMA_ORIENTACION = VisionModelo129::RELACION_MINIMA_EJE;
+// Modelo 129: la caja no distingue +theta/-theta ni confirma una pieza recta.
+// V2 integra la calibracion de montaje aprendida en ML V2 para consenso X/Y.
+// Sin consenso conserva el giro manual. No estima el giro de diagonales.
+// false permite repetir las pruebas anteriores con rotacion fija.
+constexpr bool AUTO_V2_APLICAR_GIRO_POR_CAJA = true;
 constexpr int ANGULO_PINZA_ABIERTA = 0;
 constexpr int ANGULO_PINZA_CERRADA = 130;
 constexpr int PULSO_PINZA_ABIERTA_US = 937;
@@ -224,6 +231,7 @@ struct ControlCamaraCompartido {
   bool entrenamientoML;
   bool entrenamientoMLV2;
   bool pruebaSeguimiento;
+  bool ajusteCatchV2;
   bool pruebaEncoderActiva;
   bool brazoOcupado;
   uint8_t comando;
@@ -485,6 +493,12 @@ bool encoderRemotoVigente(const EstadoEncoderCompartido &encoder) {
 
 void actualizarEncoderDesdePortenta(const PaquetePortentaAESP &paquete) {
   EstadoEncoderCompartido nuevo = {};
+  if (paquete.estadoSistema == SISTEMA_CAMBIOS_CATCH) {
+    // Datos de resumen: invalidar encoder remoto, sin publicar offsets como velocidad.
+    nuevo.recibidoMs = millis();
+    portENTER_CRITICAL(&encoderMux); estadoEncoder = nuevo; portEXIT_CRITICAL(&encoderMux);
+    return;
+  }
   nuevo.conteo = paquete.conteoEncoder;
   nuevo.velocidadMmS = static_cast<float>(paquete.velocidadEncoderUmS) / 1000000.0f;
   nuevo.nmPorCuenta = extraerEscalaEncoderNm(paquete.nmPorCuentaEncoder);
@@ -774,7 +788,8 @@ void procesarPinzaAutomaticaV2() {
     millis() - ultimoEstadoPortenta <= TIMEOUT_PORTENTA_MS;
   const bool automaticoV2Activo = enlaceVigente && (
     (estadoPortenta.estadoSistema == SISTEMA_MODO_AUTOMATICO_V2 &&
-     estadoPortenta.opcionMenu == MENU_MODO_AUTOMATICO_V2) ||
+     (estadoPortenta.opcionMenu == MENU_MODO_AUTOMATICO_V2 ||
+      estadoPortenta.opcionMenu == MENU_AJUSTE_CATCH_V2)) ||
     (estadoPortenta.estadoSistema == SISTEMA_MODO_AUTOMATICO &&
      estadoPortenta.opcionMenu == MENU_REGISTRO_ANGULO) ||
     (estadoPortenta.estadoSistema == SISTEMA_ENTRENAMIENTO_ML &&
@@ -807,6 +822,14 @@ void procesarPinzaAutomaticaV2() {
   ultimoCodigoPinzaV2 = estadoPortenta.codigoAckObjetivo;
   if (ultimoCodigoPinzaV2 == ACK_OBJ_CERRAR_PINZA) {
     escribirPinzaCalibrada(true);
+    if (estadoPortenta.opcionMenu == MENU_AJUSTE_CATCH_V2) {
+      Serial.print(F("V2LOG|E|mode=CATCH_CAL|event=CAL_GRIP_APPLIED|session="));
+      Serial.print(sesionArranque);
+      Serial.print(F("|ms=")); Serial.print(millis());
+      Serial.print(F("|obj=")); Serial.print(ultimaSecuenciaPinzaV2);
+      Serial.print(F("|servo_rot_deg=")); Serial.print(anguloServoRotacion);
+      Serial.print(F("|pulse_us=")); Serial.println(PULSO_PINZA_CERRADA_US);
+    }
     if (estadoPortenta.estadoSistema == SISTEMA_ENTRENAMIENTO_ML) {
       Serial.print(estadoPortenta.opcionMenu == MENU_PRUEBA_SEGUIMIENTO
         ? F("V2LOG|E|mode=ML_TRACK|event=ML_GRIP_APPLIED|session=")
@@ -851,7 +874,8 @@ void procesarPinzaAutomaticaV2() {
       }
       Serial.println();
     }
-  } else if (ultimoCodigoPinzaV2 == ACK_OBJ_CANCELADO ||
+  } else if (ultimoCodigoPinzaV2 == ACK_OBJ_ABRIR_PINZA ||
+             ultimoCodigoPinzaV2 == ACK_OBJ_CANCELADO ||
              ultimoCodigoPinzaV2 == ACK_OBJ_COMPLETADO) {
     // CANCELADO abre de inmediato; COMPLETADO llega cuando Z ya regreso a la
     // posicion segura, dejando la garra lista para la siguiente pieza.
@@ -936,6 +960,7 @@ void publicarControlCamaraDesdePortenta(const PaquetePortentaAESP &paquete) {
   // encoder tomada en el mismo momento que las coordenadas de camara.
   nuevo.automaticoV2Activo = (nuevo.automaticoActivo &&
     (paquete.opcionMenu == MENU_MODO_AUTOMATICO_V2 ||
+     paquete.opcionMenu == MENU_AJUSTE_CATCH_V2 ||
      paquete.opcionMenu == MENU_ENTRENAMIENTO_ML ||
       paquete.opcionMenu == MENU_ENTRENAMIENTO_ML_V2 ||
       paquete.opcionMenu == MENU_PRUEBA_SEGUIMIENTO));
@@ -944,7 +969,8 @@ void publicarControlCamaraDesdePortenta(const PaquetePortentaAESP &paquete) {
     paquete.opcionMenu == MENU_REGISTRO_ANGULO;
   nuevo.orientarGarraV2 = nuevo.automaticoV2Activo &&
     paquete.estadoSistema == SISTEMA_MODO_AUTOMATICO_V2 &&
-    paquete.opcionMenu == MENU_MODO_AUTOMATICO_V2;
+    (paquete.opcionMenu == MENU_MODO_AUTOMATICO_V2 ||
+     paquete.opcionMenu == MENU_AJUSTE_CATCH_V2);
   nuevo.entrenamientoML = nuevo.automaticoV2Activo &&
     paquete.estadoSistema == SISTEMA_ENTRENAMIENTO_ML &&
     (paquete.opcionMenu == MENU_ENTRENAMIENTO_ML ||
@@ -955,6 +981,8 @@ void publicarControlCamaraDesdePortenta(const PaquetePortentaAESP &paquete) {
      paquete.opcionMenu == MENU_PRUEBA_SEGUIMIENTO);
   nuevo.pruebaSeguimiento = nuevo.entrenamientoML &&
     paquete.opcionMenu == MENU_PRUEBA_SEGUIMIENTO;
+  nuevo.ajusteCatchV2 = nuevo.automaticoV2Activo &&
+    paquete.opcionMenu == MENU_AJUSTE_CATCH_V2;
   nuevo.brazoOcupado = (paquete.flagsSistema & SIS_FLAG_BRAZO_OCUPADO) != 0;
   nuevo.comando = paquete.comandoCamara;
   nuevo.secuenciaComando = paquete.secuenciaComandoCamara;
@@ -982,6 +1010,15 @@ void invalidarControlCamaraPorTimeout() {
 }
 
 bool paquetePortentaSemanticamenteValido(const PaquetePortentaAESP &p) {
+  if (p.estadoSistema == SISTEMA_CAMBIOS_CATCH) {
+    // El resumen usa campos del encoder con unidades/flags propios.
+    return p.opcionMenu == MENU_CAMBIOS_CATCH && p.faseCalibracionBrazo <= 1 &&
+      (p.estadoEncoder & 0xF0U) == 0 &&
+      ((p.estadoEncoder & 1U) != 0) == ((p.estadoEncoder >> 2) == 3) &&
+      p.nmPorCuentaEncoder >= 10 && p.nmPorCuentaEncoder <= 50 &&
+      p.codigoAckObjetivo <= ACK_OBJ_ABRIR_PINZA &&
+      (p.signoEncoder == 1 || p.signoEncoder == -1);
+  }
   const uint8_t mascaraEncoder = ENC_FLAG_HW_LISTO |
                                  ENC_FLAG_ESCALA_VALIDA |
                                  ENC_FLAG_PULSOS_VISTOS |
@@ -995,7 +1032,7 @@ bool paquetePortentaSemanticamenteValido(const PaquetePortentaAESP &p) {
     (p.estadoEncoder & ENC_FLAG_ESCALA_VALIDA) != 0
       ? extraerEscalaEncoderNm(p.nmPorCuentaEncoder) != 0
       : extraerEscalaEncoderNm(p.nmPorCuentaEncoder) == 0;
-  const bool ackValido = p.codigoAckObjetivo <= ACK_OBJ_CERRAR_PINZA;
+  const bool ackValido = p.codigoAckObjetivo <= ACK_OBJ_ABRIR_PINZA;
   return flagsValidos && signoValido && escalaCoherente && ackValido;
 }
 
@@ -1098,8 +1135,8 @@ constexpr double TAG_X_FROM_CENTER_MM =
 constexpr double TAG_ROWS_DISTANCE_MM = 382.0;
 constexpr uint16_t SAMPLES_PER_TAG = 25;
 constexpr uint8_t NUMBER_OF_TAGS = 4;
-// 0 = modelo personalizado 128, confirmado para esta instalacion.
-constexpr uint8_t CUSTOM_MODEL_INDEX = 0;
+// Modelo actualizado: indice 1, algoritmo 129.
+constexpr uint8_t CUSTOM_MODEL_INDEX = VisionModelo129::INDICE_MODELO;
 
 const eAlgorithm_t PIECE_MODEL = static_cast<eAlgorithm_t>(
   static_cast<uint8_t>(ALGORITHM_CUSTOM_BEGIN) + CUSTOM_MODEL_INDEX
@@ -1635,9 +1672,8 @@ uint8_t estimarEjeCajaV2(const CandidatoPiezaV2 &candidato) {
   }
   const double anchoMm = maxX - minX;
   const double altoMm = maxY - minY;
-  if (anchoMm >= RELACION_MINIMA_ORIENTACION * altoMm) return 1;
-  if (altoMm >= RELACION_MINIMA_ORIENTACION * anchoMm) return 2;
-  return 0;
+  return VisionModelo129::ejePorDimensiones(
+    anchoMm, altoMm, RELACION_MINIMA_ORIENTACION);
 }
 
 bool isInsideCalibrationArea(const Point2D &position) {
@@ -1810,9 +1846,39 @@ void reiniciarFiltro(ContextoCamara &ctx) {
   ctx.filtro = {};
 }
 
-void orientarGarraAutomatica(uint8_t votosX, uint8_t votosY, bool modoV2) {
-  const bool ejeX = votosX >= 2 && votosX > votosY;
-  const bool ejeY = votosY >= 2 && votosY > votosX;
+void orientarGarraAutomatica(uint8_t votosX, uint8_t votosY, bool modoV2,
+                            uint8_t clase = 0, uint16_t secuencia = 0) {
+  if (modoV2 && !AUTO_V2_APLICAR_GIRO_POR_CAJA) {
+    Serial.print(F("[AUTO V2] Giro por caja desactivado; conserva servo_deg="));
+    Serial.print(anguloServoRotacion);
+    Serial.print(F(" votos_x="));
+    Serial.print(votosX);
+    Serial.print(F(" votos_y="));
+    Serial.println(votosY);
+    return;
+  }
+  if (modoV2) {
+    const int16_t sugerencia = CalibracionAnguloMLV2::sugerir(clase, votosX, votosY);
+    if (sugerencia >= 0) {
+      anguloServoRotacion = sugerencia;
+      servoRotacion.write(anguloServoRotacion);
+    }
+    Serial.print(F("V2LOG|E|event=AUTO_ANGLE_SUGGESTION|session="));
+    Serial.print(sesionArranque);
+    Serial.print(F("|ms=")); Serial.print(millis());
+    Serial.print(F("|obj=")); Serial.print(secuencia);
+    Serial.print(F("|class=")); Serial.print(clase);
+    Serial.print(F("|suggested_rot="));
+    if (sugerencia >= 0) Serial.print(sugerencia);
+    else Serial.print(F("NA"));
+    Serial.print(F("|suggestion_source=MLV2_EJES_20261005|votes_x="));
+    Serial.print(votosX);
+    Serial.print(F("|votes_y=")); Serial.print(votosY);
+    Serial.print(F("|servo_rot_deg=")); Serial.println(anguloServoRotacion);
+    return;
+  }
+  const bool ejeX = votosX >= 2 && votosY == 0;
+  const bool ejeY = votosY >= 2 && votosX == 0;
   anguloServoRotacion = ejeX ? ANGULO_GARRA_EJE_X :
     (ejeY ? ANGULO_GARRA_EJE_Y : ANGULO_SERVO_INICIAL);
   servoRotacion.write(anguloServoRotacion);
@@ -2053,22 +2119,16 @@ void incorporarDeteccion(
   filtro.maximoY = fmax(filtro.maximoY, posicion.y);
 }
 
-// Regla experimental obtenida de cinco etiquetas manuales, todas clase 0.
-// Dos cajas anchas se etiquetaron 55/65 grados; una alta, 156 grados.
-// Las cajas intermedias son ambiguas y no reciben sugerencia.
-int16_t sugerirAnguloPorCaja(uint8_t clase, int16_t anchoPx, int16_t altoPx) {
-  if (clase != 0 || anchoPx <= 0 || altoPx <= 0) {
-    return -1;
-  }
-  const int32_t ancho = anchoPx;
-  const int32_t alto = altoPx;
-  if (2 * ancho >= 3 * alto) return 60;
-  if (4 * ancho <= 3 * alto) return 156;
+// El modelo 129 no transmite giro. Usar el consenso de cajas en el plano
+// calibrado tambien al registrar/ensenar; sin consenso conservar giro manual.
+int16_t sugerirAnguloPorVotos(uint8_t votosX, uint8_t votosY) {
+  if (votosX >= 2 && votosY == 0) return ANGULO_GARRA_EJE_X;
+  if (votosY >= 2 && votosX == 0) return ANGULO_GARRA_EJE_Y;
   return -1;
 }
 
 int16_t sugerirAnguloRegistro(const FiltroDeteccion &filtro) {
-  return sugerirAnguloPorCaja(filtro.clase, filtro.anchoPx, filtro.altoPx);
+  return sugerirAnguloPorVotos(filtro.votosEjeX, filtro.votosEjeY);
 }
 
 void publicarObjetivoEstable(ContextoCamara &ctx, bool registrarAngulo) {
@@ -2123,7 +2183,7 @@ void publicarObjetivoEstable(ContextoCamara &ctx, bool registrarAngulo) {
     Serial.print(F("|suggested_rot="));
     if (ctx.sugerenciaAngulo >= 0) Serial.print(ctx.sugerenciaAngulo);
     else Serial.print(F("NA"));
-    Serial.print(F("|suggestion_source=WIDTH_RATIO_V1"));
+    Serial.print(F("|suggestion_source=MODEL129_BOX_AXIS_MM"));
     // El modelo personalizado entrega -128 en el byte compartido con rfu1;
     // no presentarlo como una confianza de deteccion utilizable.
     Serial.print(F("|confidence="));
@@ -2134,10 +2194,10 @@ void publicarObjetivoEstable(ContextoCamara &ctx, bool registrarAngulo) {
     Serial.print(F("|votes_y=")); Serial.print(ctx.filtro.votosEjeY);
     const uint8_t anguloAproximado =
       ctx.filtro.votosEjeX >= 2 &&
-      ctx.filtro.votosEjeX > ctx.filtro.votosEjeY
+      ctx.filtro.votosEjeY == 0
         ? ANGULO_GARRA_EJE_X
         : (ctx.filtro.votosEjeY >= 2 &&
-           ctx.filtro.votosEjeY > ctx.filtro.votosEjeX
+           ctx.filtro.votosEjeX == 0
             ? ANGULO_GARRA_EJE_Y : ANGULO_SERVO_INICIAL);
     Serial.print(F("|approx_rot=")); Serial.print(anguloAproximado);
     Serial.print(F("|servo_rot_deg=")); Serial.println(anguloServoRotacion);
@@ -2415,7 +2475,8 @@ bool publicarObjetivoV2(
   bool orientarGarra,
   bool entrenamientoML,
   bool entrenamientoMLV2,
-  bool pruebaSeguimiento
+  bool pruebaSeguimiento,
+  bool ajusteCatch
 ) {
   FiltroDeteccionV2 &filtro = ctx.filtroV2;
   if (filtro.consecutivas < DETECCIONES_ESTABLES_V2) return false;
@@ -2451,7 +2512,7 @@ bool publicarObjetivoV2(
   ctx.objetivoY10 = static_cast<int16_t>(y10);
   ctx.conteoReferenciaObjetivo = conteoActual;
   ctx.rearmada = false;
-  if (entrenamientoMLV2) {
+  if (entrenamientoMLV2 || ajusteCatch) {
     const uint32_t intervaloMs = filtro.ultimoMs - filtro.primerMs;
     const double deltaCamaraY = filtro.ultimoYRaw - filtro.primerYRaw;
     const double recorridoCamaraMm = fabs(deltaCamaraY);
@@ -2464,9 +2525,11 @@ bool publicarObjetivoV2(
       ? 1000.0 * recorridoCamaraMm / intervaloMs : NAN;
     const double velocidadEncoderVentanaMmS = intervaloMs > 0
       ? 1000.0 * recorridoEncoderMm / intervaloMs : NAN;
-    Serial.print(pruebaSeguimiento
+    Serial.print(ajusteCatch
+      ? F("V2LOG|E|mode=CATCH_CAL|event=CAMERA_SPEED|session=")
+      : (pruebaSeguimiento
       ? F("V2LOG|E|mode=ML_TRACK|event=CAMERA_SPEED|session=")
-      : F("V2LOG|E|mode=ML_V2|event=CAMERA_SPEED|session="));
+      : F("V2LOG|E|mode=ML_V2|event=CAMERA_SPEED|session=")));
     Serial.print(sesionArranque);
     Serial.print(F("|ms=")); Serial.print(filtro.ultimoMs);
     Serial.print(F("|obj=")); Serial.print(ctx.secuenciaObjetivo);
@@ -2495,11 +2558,24 @@ bool publicarObjetivoV2(
     Serial.print(F("|camera_y_first_mm="));
     Serial.print(filtro.primerYRaw, 3);
     Serial.print(F("|camera_y_last_mm="));
-    Serial.println(filtro.ultimoYRaw, 3);
+    Serial.print(filtro.ultimoYRaw, 3);
+    if (ajusteCatch) {
+      const double relacionEscala = velocidadCamaraValida
+        ? recorridoCamaraMm / recorridoEncoderMm : NAN;
+      Serial.print(F("|scale_ratio_camera_encoder=")); Serial.print(relacionEscala, 6);
+      Serial.print(F("|scale_camera_suggested_mm_count="));
+      Serial.print(velocidadCamaraValida
+        ? escalaEncoderMm(encoder) * relacionEscala : NAN, 7);
+    }
+    Serial.println();
   }
-  ctx.sugerenciaAngulo = entrenamientoML
-    ? sugerirAnguloPorCaja(filtro.clase, filtro.ultimoAnchoPx,
-                          filtro.ultimoAltoPx) : -1;
+  const bool usarCalibracionEjes = entrenamientoML &&
+    (entrenamientoMLV2 || pruebaSeguimiento);
+  ctx.sugerenciaAngulo = !entrenamientoML ? -1 :
+    (usarCalibracionEjes
+      ? CalibracionAnguloMLV2::sugerir(
+          filtro.clase, filtro.votosEjeX, filtro.votosEjeY)
+      : sugerirAnguloPorVotos(filtro.votosEjeX, filtro.votosEjeY));
   if (entrenamientoML) {
     if (ctx.sugerenciaAngulo >= 0) {
       anguloServoRotacion = ctx.sugerenciaAngulo;
@@ -2519,12 +2595,20 @@ bool publicarObjetivoV2(
     Serial.print(F("|suggested_rot="));
     if (ctx.sugerenciaAngulo >= 0) Serial.print(ctx.sugerenciaAngulo);
     else Serial.print(F("NA"));
-    Serial.print(F("|suggestion_source=WIDTH_RATIO_V1"));
+    Serial.print(usarCalibracionEjes
+      ? F("|suggestion_source=MLV2_EJES_20261005")
+      : F("|suggestion_source=MODEL129_BOX_AXIS_MM"));
+    Serial.print(F("|votes_x=")); Serial.print(filtro.votosEjeX);
+    Serial.print(F("|votes_y=")); Serial.print(filtro.votosEjeY);
     Serial.print(F("|servo_rot_deg="));
     Serial.println(anguloServoRotacion);
   }
   if (orientarGarra) {
-    orientarGarraAutomatica(filtro.votosEjeX, filtro.votosEjeY, true);
+    ctx.sugerenciaAngulo = AUTO_V2_APLICAR_GIRO_POR_CAJA
+      ? CalibracionAnguloMLV2::sugerir(filtro.clase, filtro.votosEjeX, filtro.votosEjeY)
+      : -1;
+    orientarGarraAutomatica(filtro.votosEjeX, filtro.votosEjeY, true,
+                            filtro.clase, ctx.secuenciaObjetivo);
   }
   reiniciarFiltroV2(ctx);
 
@@ -2600,7 +2684,9 @@ bool leerPiezasV2UnaVez(
     if (indiceResultado < UINT8_MAX) ++indiceResultado;
     CandidatoPiezaV2 candidato = {};
     candidato.grupoDuplicado = UINT8_MAX;
-    candidato.clase = result->ID;
+    candidato.clase = VisionModelo129::clasePermitida(result->name.c_str());
+    if (candidato.clase == 0 || result->type != COMMAND_RETURN_BLOCK ||
+        result->width <= 0 || result->height <= 0) continue;
     candidato.confianza = result->confidence;
     candidato.centroXpx = result->xCenter;
     candidato.centroYpx = result->yCenter;
@@ -2921,7 +3007,7 @@ bool leerPiezasV2UnaVez(
   if (publicarObjetivoV2(
         ctx, encoder.conteo, encoder, control.orientarGarraV2,
         control.entrenamientoML, control.entrenamientoMLV2,
-        control.pruebaSeguimiento)) {
+        control.pruebaSeguimiento, control.ajusteCatchV2)) {
     diag.secuenciaPublicada = ctx.secuenciaObjetivo;
     publicarYRegistrarDiagnosticoV2(
       diag, V2_DIAG_PUBLICADO, encoder, consulta, indiceElegido
@@ -2970,6 +3056,10 @@ bool leerPiezasUnaVez(
       continue;
     }
 
+    const uint8_t clase = VisionModelo129::clasePermitida(result->name.c_str());
+    if (clase == 0 || result->type != COMMAND_RETURN_BLOCK ||
+        result->width <= 0 || result->height <= 0) continue;
+
     Point2D posicion;
     if (!pixelToMillimeters(
           result->xCenter,
@@ -2991,7 +3081,7 @@ bool leerPiezasUnaVez(
 
     if (
       ctx.esperandoDesaparicion &&
-      result->ID == ctx.claseEsperandoDesaparicion &&
+      clase == ctx.claseEsperandoDesaparicion &&
       fabs(posicion.x - ctx.xEsperandoDesaparicion) <= TOLERANCIA_REARME_MM &&
       fabs(posicion.y - ctx.yEsperandoDesaparicion) <= TOLERANCIA_REARME_MM
     ) {
@@ -3000,13 +3090,13 @@ bool leerPiezasUnaVez(
 
     if (!hayPrimera) {
       hayPrimera = true;
-      clasePrimera = result->ID;
+      clasePrimera = clase;
       posicionPrimera = posicion;
       ejePrimera = ejeCaja;
       cajaPrimera = caja;
     }
 
-    if (mismaDeteccionEstable(ctx.filtro, result->ID, posicion)) {
+    if (mismaDeteccionEstable(ctx.filtro, clase, posicion)) {
       const double dx = posicion.x - ctx.filtro.promedioX;
       const double dy = posicion.y - ctx.filtro.promedioY;
       const double distancia2 = dx * dx + dy * dy;
@@ -3015,7 +3105,7 @@ bool leerPiezasUnaVez(
       ) {
         distanciaCoincidente = distancia2;
         hayCoincidente = true;
-        claseCoincidente = result->ID;
+        claseCoincidente = clase;
         posicionCoincidente = posicion;
         ejeCoincidente = ejeCaja;
         cajaCoincidente = caja;
@@ -3195,12 +3285,13 @@ void procesarHandshakeObjetivo(
     control.codigoAckObjetivo != ACK_OBJ_NINGUNO &&
     control.ackObjetivo == ctx.secuenciaObjetivo
   ) {
-    // En V2 y en Registro Angulo, ACEPTADO reserva la pieza y CERRAR_PINZA
-    // mantiene la reserva mientras Z se retira. Solo un resultado terminal
+    // ACEPTADO, CERRAR_PINZA y ABRIR_PINZA mantienen la reserva durante
+    // captura, entrega y retirada. Solo un resultado terminal
     // libera el objetivo y permite el rearme del detector.
     const bool objetivoReservado = ctx.objetivoV2 &&
       (control.codigoAckObjetivo == ACK_OBJ_ACEPTADO ||
-       control.codigoAckObjetivo == ACK_OBJ_CERRAR_PINZA);
+       control.codigoAckObjetivo == ACK_OBJ_CERRAR_PINZA ||
+       control.codigoAckObjetivo == ACK_OBJ_ABRIR_PINZA);
     if (!objetivoReservado) {
       if (control.registrarAngulo) {
         Serial.print(F("[ANGULO] Objetivo liberado seq="));
@@ -3412,7 +3503,7 @@ void procesarEstadoCamara(
         ctx.plazoEstado = millis() + CAM_MODEL_LOAD_MS;
       } else if (plazoCumplido(ahora, ctx.plazoEstado)) {
         // No se publica MODELO_LISTO solo por haber esperado. Una lectura
-        // valida (tambien con cero detecciones) confirma que el modelo 128
+        // valida (tambien con cero detecciones) confirma que el modelo 129
         // termino de cargar y responde por UART.
         const int8_t resultados = huskylens.getResult(PIECE_MODEL);
         if (resultados < 0) {
@@ -3429,7 +3520,7 @@ void procesarEstadoCamara(
         ctx.error = CAM_ERROR_NINGUNO;
         ctx.proximaLectura = ahora;
         cambiarEstadoCamara(ctx, CAMARA_LISTA);
-        Serial.println(F("[CAM] Modelo 128 confirmado; deteccion habilitada"));
+        Serial.println(F("[CAM] Modelo 129 confirmado; solo pieza6/pieza7 habilitadas"));
       }
       break;
 
@@ -3684,21 +3775,22 @@ void mostrarCalibracionCamara() {
 
 void mostrarMenuPrincipal(const PaquetePortentaAESP &p) {
   dibujarTitulo(F("MENU PRINCIPAL"));
-  const char *opciones[11] = {
-    "MANUAL", "AUTOMATICO", "AUTOMATICO V2",
+  const char *opciones[13] = {
+    "MANUAL", "AUTOMATICO", "AUTOMATICO V2", "AJUSTE CATCH V2", "CAMBIOS CATCH",
     "REGISTRAR ANGULO", "CALIBRACIONES", "PRUEBA SERVOS",
     "ENSENANZA ML", "ENSENANZA ML V2", "SEGUIMIENTO Y",
     "PRUEBA DE ENCODER", "CHECKLIST"
   };
-  const uint8_t valores[11] = {
+  const uint8_t valores[13] = {
     MENU_MODO_MANUAL, MENU_MODO_AUTOMATICO, MENU_MODO_AUTOMATICO_V2,
+    MENU_AJUSTE_CATCH_V2, MENU_CAMBIOS_CATCH,
     MENU_REGISTRO_ANGULO, MENU_CALIBRACIONES, MENU_PRUEBA_SERVOS,
     MENU_ENTRENAMIENTO_ML, MENU_ENTRENAMIENTO_ML_V2,
     MENU_PRUEBA_SEGUIMIENTO,
     MENU_PRUEBA_ENCODER, MENU_DIAGNOSTICO
   };
   uint8_t seleccion = 0;
-  for (uint8_t i = 0; i < 11; ++i) {
+  for (uint8_t i = 0; i < 13; ++i) {
     if (p.opcionMenu == valores[i]) seleccion = i;
   }
   const uint8_t inicio = seleccion >= 5 ? seleccion - 4 : 0;
@@ -3879,11 +3971,25 @@ void mostrarModoAutomatico(const PaquetePortentaAESP &p) {
 
 void mostrarModoAutomaticoV2(const PaquetePortentaAESP &p) {
   const DiagnosticoDeteccionV2 diag = copiarDiagnosticoV2();
+  const bool ajusteCatch = p.opcionMenu == MENU_AJUSTE_CATCH_V2;
   dibujarTitulo(p.opcionMenu == MENU_REGISTRO_ANGULO
-    ? F("REGISTRO ANGULO") : F("AUTOMATICO V2"));
+    ? F("REGISTRO ANGULO") : (ajusteCatch ? F("AJUSTE CATCH V2") : F("AUTOMATICO V2")));
+  if (ajusteCatch && p.faseCalibracionBrazo == 17) {
+    pantalla.setCursor(0, 13); pantalla.print(F("RESULTADO CATCH?"));
+    pantalla.setCursor(0, 25); pantalla.print(F("X: LA AGARRO"));
+    pantalla.setCursor(0, 37); pantalla.print(F("CUAD: ANTES"));
+    pantalla.setCursor(0, 49); pantalla.print(F("CIRC: DESPUES"));
+    pantalla.setCursor(0, 57); pantalla.print(F("TRI: DESCARTAR/SALIR"));
+    return;
+  }
   pantalla.setCursor(0, 12);
   pantalla.print(F("FASE: "));
-  pantalla.println(p.faseCalibracionBrazo);
+  pantalla.print(p.faseCalibracionBrazo);
+  if (p.opcionMenu == MENU_MODO_AUTOMATICO_V2 || ajusteCatch) {
+    pantalla.print(AUTO_V2_APLICAR_GIRO_POR_CAJA ? F(" ROT:") : F(" FIJA:"));
+    pantalla.print(anguloServoRotacion);
+  }
+  pantalla.println();
   if (p.faseCalibracionBrazo == 0) {
     pantalla.setCursor(0, 23);
     pantalla.print(F("BLOQ: "));
@@ -3948,10 +4054,41 @@ void mostrarModoAutomaticoV2(const PaquetePortentaAESP &p) {
   } else if (p.faseCalibracionBrazo == 11) {
     pantalla.print(F("Z FINAL + CATCH"));
   } else if (p.faseCalibracionBrazo == 7) {
-    pantalla.print(F("CATCH AUTOMATICO"));
+    pantalla.print(F("CICLO ENTREGADO"));
+  } else if (p.faseCalibracionBrazo == 12) {
+    pantalla.print(F("ENTREGA DERECHA"));
+  } else if (p.faseCalibracionBrazo == 13) {
+    pantalla.print(F("Z ENTREGA"));
+  } else if (p.faseCalibracionBrazo == 14) {
+    pantalla.print(F("SOLTANDO PIEZA"));
+  } else if (p.faseCalibracionBrazo == 15) {
+    pantalla.print(F("Z REGRESANDO"));
+  } else if (p.faseCalibracionBrazo == 16) {
+    pantalla.print(ajusteCatch ? F("Y SIGUE CATCH AUTO") : F("Y SIGUE PIEZA"));
   } else {
     pantalla.print(F("TRI:CANCELAR"));
   }
+}
+
+void mostrarCambiosCatch(const PaquetePortentaAESP &p) {
+  dibujarTitulo(F("CAMBIOS CATCH"));
+  if (p.secuenciaEncoder == 0) {
+    pantalla.setCursor(0, 20); pantalla.print(F("SIN ENSAYOS"));
+    pantalla.setCursor(0, 35); pantalla.print(F("USAR AJUSTE CATCH V2"));
+  } else if (p.faseCalibracionBrazo == 0) {
+    pantalla.setCursor(0, 13); pantalla.print(F("PROBADO:")); pantalla.print(p.velocidadEncoderUmS); pantalla.print(F(" ms"));
+    pantalla.setCursor(0, 23); pantalla.print(F("PROXIMO:")); pantalla.print(p.conteoEncoder); pantalla.print(F(" ms"));
+    pantalla.setCursor(0, 33); pantalla.print(F("AGARRES:")); pantalla.print(p.estadoEncoder >> 2);
+    pantalla.print(F("/3 N:")); pantalla.print(p.secuenciaEncoder);
+    pantalla.setCursor(0, 43); pantalla.print((p.estadoEncoder & 2) ? F("LIMITE:REVISAR MEDIDAS") :
+      ((p.estadoEncoder & 1) ? F("REPETIDO 3/3") : F("EN PRUEBA")));
+  } else {
+    pantalla.setCursor(0, 13); pantalla.print(F("PORTENTA.ino"));
+    pantalla.setCursor(0, 23); pantalla.print(F("V2_AJUSTE_DISPARO_"));
+    pantalla.setCursor(0, 33); pantalla.print(F("CATCH_MS = ")); pantalla.print(p.velocidadEncoderUmS); pantalla.print(F(";"));
+    pantalla.setCursor(0, 43); pantalla.print(F("DETALLE EN TERMINAL"));
+  }
+  pantalla.setCursor(0, 57); pantalla.print(F("X:PAGINA TRI:SALIR"));
 }
 
 void mostrarEntrenamientoML(const PaquetePortentaAESP &p) {
@@ -4214,6 +4351,10 @@ void actualizarPantallaESP32(const PaquetePortentaAESP &p) {
 
     case SISTEMA_PRUEBA_SERVOS:
       mostrarPruebaServos();
+      break;
+
+    case SISTEMA_CAMBIOS_CATCH:
+      mostrarCambiosCatch(p);
       break;
 
     case SISTEMA_DIAGNOSTICO:

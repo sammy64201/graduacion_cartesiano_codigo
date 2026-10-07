@@ -73,8 +73,8 @@ etc. Las lineas que comienzan con `{` son JSON independientes y se pueden
 procesar una por una. Ejemplo ilustrativo, no capturado de la camara:
 
 ```json
-{"tipo":"frame","frame":12,"ms":25000,"algoritmo":129,"resultados":1}
-{"tipo":"segmentacion","frame":12,"ms":25000,"algoritmo":129,"indice":0,"id":1,"nombre":"pieza","contenido":"","tipo_resultado_raw":28,"level_raw":0,"u_px":350,"v_px":220,"ancho_px":60,"alto_px":35,"x_mm":20.50,"y_mm":-15.20,"coordenadas_validas":true,"en_calibracion":true,"en_banda":true}
+{"tipo":"frame","frame":12,"ms":25000,"algoritmo":129,"resultados":3,"permitidos":1,"ignorados":2}
+{"tipo":"segmentacion","frame":12,"ms":25000,"algoritmo":129,"indice":0,"id":0,"nombre":"pieza6","contenido":"","tipo_resultado_raw":28,"level_raw":0,"u_px":350,"v_px":220,"ancho_px":60,"alto_px":35,"x_mm":20.50,"y_mm":-15.20,"coordenadas_validas":true,"en_calibracion":true,"en_banda":true,"clase_pieza":6,"recogible":true,"eje_aprox":"X","orientacion_valida":true,"orientacion_aprox_deg":0,"servo_sugerido_deg":90,"metodo_angulo":"MODEL129_BOX_AXIS_MM"}
 ```
 
 | Campo | Significado |
@@ -92,15 +92,28 @@ procesar una por una. Ejemplo ilustrativo, no capturado de la camara:
 | `coordenadas_validas` | Bloque con ancho/alto positivos y conversion finita. No implica estar dentro de la banda. |
 | `en_calibracion` | Centro dentro del rectangulo fisico de los cuatro tags. |
 | `en_banda` | Centro dentro de la banda blanca y del area calibrada. No valida que toda la pieza quede dentro. |
+| `permitidos`, `ignorados` | Bloques pieza6/pieza7 e informacion descartada en la consulta. |
+| `clase_pieza` | Clase interna 6 o 7 a partir del nombre exacto. El `id` raw se conserva. |
+| `recogible` | Pieza permitida con centro valido sobre la banda. No ejecuta un agarre. |
+| `eje_aprox`, `orientacion_valida` | Eje dominante X/Y de la caja en mm, o INDETERMINADO/false. |
+| `orientacion_aprox_deg` | 0 para X, 90 para Y; `null` si ambiguo. Angulo del eje aproximado en el plano, no giro de la silueta. |
+| `servo_sugerido_deg` | Montaje actual de la maqueta: X -> 90, Y -> 0; `null` si ambiguo. Esta prueba no mueve servos. |
+| `metodo_angulo` | `MODEL129_BOX_AXIS_MM`: comparacion de extensiones de las cuatro esquinas de la caja transformadas con homografia. |
 
-Se imprimen todos los resultados disponibles, incluso los que quedan fuera
-de la banda o tienen ID=0, para inspeccionar exactamente que entrega el modelo.
+Solo se imprimen bloques de nombre exacto `pieza6` o `pieza7` y tamano positivo.
+Los demas se consumen y descartan antes de calcular coordenadas/orientacion.
+En la captura real `captura_COM14_20261005_113358_eeb17b.csv`, todas las clases
+llegaron con ID=0; no usar ID=6/7 como filtro ni como fallback ante nombre ausente.
+Las piezas permitidas fuera de la banda se muestran con `recogible=false`.
 La biblioteca instalada limita la cache a 10 resultados por consulta.
 
 **Alcance de la segmentacion:** el `Result` de la biblioteca instalada expone
 ID, nombre, centro, ancho/alto, contenido y el byte adicional. No ofrece una
-mascara ni un contorno de segmentacion. Este sketch tampoco calcula area de
-mascara, orientacion ni centroide de la silueta. El centro convertido a mm es
+mascara ni un contorno de segmentacion. La estimacion de eje exige una relacion
+mayor/menor de al menos 1.35 en mm. Una caja casi cuadrada queda indeterminada.
+No se puede deducir un giro continuo firmado (por ejemplo 35 o 145 grados)
+de estos datos, ni validar una diagonal por la caja sola. Tampoco se calcula
+area de mascara ni centroide de silueta. El centro convertido a mm es
 el del bloque recibido. El comportamiento real del modelo personalizado se
 debe confirmar con las lecturas de esta prueba. La documentacion de
 [DFRobot_HuskylensV2](https://github.com/DFRobot/DFRobot_HuskylensV2) describe
@@ -110,10 +123,23 @@ adicionales de los modelos personalizados.
 ## Verificacion
 
 Compilacion verificada el 2026-10-05 con `esp32-bluepad32:esp32:esp32`,
-core 4.1.0 y la biblioteca instalada: 734041 bytes de programa (56%) y
+core 4.1.0 y la biblioteca instalada, despues del filtro/orientacion:
+735609 bytes de programa (56%) y
 89524 bytes de variables globales (27%). Se verifico que las siete funciones
 copiadas de geometria, lectura del codigo del tag, homografia y conversion
 coinciden con las del algoritmo funcional.
+
+`tests/vision_modelo129_test.py` compila y prueba las funciones de geometria
+reales de los tres sketches: escala anisotropica, caja ambigua, caja vacia y
+homografia invalida. Reproduce tambien el filtro sobre 84 detecciones con
+nombre de la captura real: acepta 17 pieza6 y 16 pieza7, descarta otras 51.
+La prueba del registrador confirma la conservacion de clases, orientacion,
+ceros y nulos en CSV. Ejecutar desde la raiz con Python y un compilador C++:
+
+```text
+python tests/vision_modelo129_test.py --compiler RUTA_A_g++.exe
+powershell -ExecutionPolicy Bypass -File tests/registrador_un_com_test.ps1
+```
 
 No se cargo el firmware ni se realizo una prueba fisica. La calibracion y los
 datos reales requieren ejecutar el sketch con la ESP32 y la HUSKYLENS conectadas.

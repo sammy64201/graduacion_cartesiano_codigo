@@ -51,7 +51,7 @@
     "missing_include_h": "Arduino_MachineControl.h"
   },
   {
-    "added_include_path": "C:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src"
+    "added_include_path": "c:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src"
   },
   {
     "compile": {
@@ -83,7 +83,7 @@
         "-DARDUINO_LIBRARY_DISCOVERY_PHASE=1",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\variants\\PORTENTA_H7_M7",
-        "-IC:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
+        "-Ic:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
         "-DCM4_BINARY_START=0x08100000",
         "-DCM4_BINARY_END=0x08200000",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino/api/deprecated",
@@ -132,7 +132,7 @@
         "-DARDUINO_LIBRARY_DISCOVERY_PHASE=1",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\variants\\PORTENTA_H7_M7",
-        "-IC:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
+        "-Ic:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\libraries\\SPI",
         "-DCM4_BINARY_START=0x08100000",
         "-DCM4_BINARY_END=0x08200000",
@@ -150,7 +150,7 @@
     "missing_include_h": "ArduinoRS485.h"
   },
   {
-    "added_include_path": "C:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src"
+    "added_include_path": "c:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src"
   },
   {
     "compile": {
@@ -182,9 +182,9 @@
         "-DARDUINO_LIBRARY_DISCOVERY_PHASE=1",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\variants\\PORTENTA_H7_M7",
-        "-IC:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
+        "-Ic:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\libraries\\SPI",
-        "-IC:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src",
+        "-Ic:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src",
         "-DCM4_BINARY_START=0x08100000",
         "-DCM4_BINARY_END=0x08200000",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino/api/deprecated",
@@ -233,9 +233,9 @@
         "-DARDUINO_LIBRARY_DISCOVERY_PHASE=1",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\variants\\PORTENTA_H7_M7",
-        "-IC:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
+        "-Ic:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\libraries\\SPI",
-        "-IC:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src",
+        "-Ic:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\libraries\\Wire",
         "-DCM4_BINARY_START=0x08100000",
         "-DCM4_BINARY_END=0x08200000",
@@ -254,7 +254,7 @@
   },
   {
     "compile": {
-      "source_path": "C:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\Objects.cpp",
+      "source_path": "c:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\Objects.cpp",
       "object_path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\tmp\\verify-precatch-portenta\\libraries\\Arduino_MachineControl\\Objects.cpp.o",
       "depfile_path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\tmp\\verify-precatch-portenta\\libraries\\Arduino_MachineControl\\Objects.cpp.d"
     },
@@ -282,9 +282,9 @@
         "-DARDUINO_LIBRARY_DISCOVERY_PHASE=1",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\variants\\PORTENTA_H7_M7",
-        "-IC:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
+        "-Ic:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\libraries\\SPI",
-        "-IC:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src",
+        "-Ic:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\libraries\\Wire",
         "-DCM4_BINARY_START=0x08100000",
         "-DCM4_BINARY_END=0x08200000",
@@ -292,7 +292,7 @@
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino/api/deprecated-avr-comp",
         "-iprefixC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino",
         "@C:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\variants\\PORTENTA_H7_M7/../PORTENTA_H7_M7/includes.txt",
-        "C:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\Objects.cpp",
+        "c:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\Objects.cpp",
         "-o",
         "nul"
       ]
@@ -303,7 +303,7 @@
   },
   {
     "compile": {
-      "source_path": "C:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\utility\\MAX31865\\MAX31865.cpp",
+      "source_path": "c:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\utility\\MAX31865\\MAX31865.cpp",
       "object_path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\tmp\\verify-precatch-portenta\\libraries\\Arduino_MachineControl\\utility\\MAX31865\\MAX31865.cpp.o",
       "depfile_path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\tmp\\verify-precatch-portenta\\libraries\\Arduino_MachineControl\\utility\\MAX31865\\MAX31865.cpp.d"
     },
@@ -331,9 +331,9 @@
         "-DARDUINO_LIBRARY_DISCOVERY_PHASE=1",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\variants\\PORTENTA_H7_M7",
-        "-IC:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
+        "-Ic:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\libraries\\SPI",
-        "-IC:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src",
+        "-Ic:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\libraries\\Wire",
         "-DCM4_BINARY_START=0x08100000",
         "-DCM4_BINARY_END=0x08200000",
@@ -341,7 +341,7 @@
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino/api/deprecated-avr-comp",
         "-iprefixC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino",
         "@C:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\variants\\PORTENTA_H7_M7/../PORTENTA_H7_M7/includes.txt",
-        "C:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\utility\\MAX31865\\MAX31865.cpp",
+        "c:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\utility\\MAX31865\\MAX31865.cpp",
         "-o",
         "nul"
       ]
@@ -352,7 +352,7 @@
   },
   {
     "compile": {
-      "source_path": "C:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\utility\\QEI\\QEI.cpp",
+      "source_path": "c:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\utility\\QEI\\QEI.cpp",
       "object_path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\tmp\\verify-precatch-portenta\\libraries\\Arduino_MachineControl\\utility\\QEI\\QEI.cpp.o",
       "depfile_path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\tmp\\verify-precatch-portenta\\libraries\\Arduino_MachineControl\\utility\\QEI\\QEI.cpp.d"
     },
@@ -380,9 +380,9 @@
         "-DARDUINO_LIBRARY_DISCOVERY_PHASE=1",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\variants\\PORTENTA_H7_M7",
-        "-IC:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
+        "-Ic:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\libraries\\SPI",
-        "-IC:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src",
+        "-Ic:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\libraries\\Wire",
         "-DCM4_BINARY_START=0x08100000",
         "-DCM4_BINARY_END=0x08200000",
@@ -390,7 +390,7 @@
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino/api/deprecated-avr-comp",
         "-iprefixC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino",
         "@C:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\variants\\PORTENTA_H7_M7/../PORTENTA_H7_M7/includes.txt",
-        "C:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\utility\\QEI\\QEI.cpp",
+        "c:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\utility\\QEI\\QEI.cpp",
         "-o",
         "nul"
       ]
@@ -401,7 +401,7 @@
   },
   {
     "compile": {
-      "source_path": "C:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\utility\\RTC\\PCF8563T.cpp",
+      "source_path": "c:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\utility\\RTC\\PCF8563T.cpp",
       "object_path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\tmp\\verify-precatch-portenta\\libraries\\Arduino_MachineControl\\utility\\RTC\\PCF8563T.cpp.o",
       "depfile_path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\tmp\\verify-precatch-portenta\\libraries\\Arduino_MachineControl\\utility\\RTC\\PCF8563T.cpp.d"
     },
@@ -429,9 +429,9 @@
         "-DARDUINO_LIBRARY_DISCOVERY_PHASE=1",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\variants\\PORTENTA_H7_M7",
-        "-IC:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
+        "-Ic:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\libraries\\SPI",
-        "-IC:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src",
+        "-Ic:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\libraries\\Wire",
         "-DCM4_BINARY_START=0x08100000",
         "-DCM4_BINARY_END=0x08200000",
@@ -439,7 +439,7 @@
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino/api/deprecated-avr-comp",
         "-iprefixC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino",
         "@C:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\variants\\PORTENTA_H7_M7/../PORTENTA_H7_M7/includes.txt",
-        "C:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\utility\\RTC\\PCF8563T.cpp",
+        "c:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\utility\\RTC\\PCF8563T.cpp",
         "-o",
         "nul"
       ]
@@ -450,7 +450,7 @@
   },
   {
     "compile": {
-      "source_path": "C:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\utility\\THERMOCOUPLE\\MAX31855.cpp",
+      "source_path": "c:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\utility\\THERMOCOUPLE\\MAX31855.cpp",
       "object_path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\tmp\\verify-precatch-portenta\\libraries\\Arduino_MachineControl\\utility\\THERMOCOUPLE\\MAX31855.cpp.o",
       "depfile_path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\tmp\\verify-precatch-portenta\\libraries\\Arduino_MachineControl\\utility\\THERMOCOUPLE\\MAX31855.cpp.d"
     },
@@ -478,9 +478,9 @@
         "-DARDUINO_LIBRARY_DISCOVERY_PHASE=1",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\variants\\PORTENTA_H7_M7",
-        "-IC:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
+        "-Ic:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\libraries\\SPI",
-        "-IC:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src",
+        "-Ic:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\libraries\\Wire",
         "-DCM4_BINARY_START=0x08100000",
         "-DCM4_BINARY_END=0x08200000",
@@ -488,7 +488,7 @@
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino/api/deprecated-avr-comp",
         "-iprefixC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino",
         "@C:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\variants\\PORTENTA_H7_M7/../PORTENTA_H7_M7/includes.txt",
-        "C:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\utility\\THERMOCOUPLE\\MAX31855.cpp",
+        "c:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\utility\\THERMOCOUPLE\\MAX31855.cpp",
         "-o",
         "nul"
       ]
@@ -499,7 +499,7 @@
   },
   {
     "compile": {
-      "source_path": "C:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\utility\\ioexpander\\ArduinoIOExpander.cpp",
+      "source_path": "c:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\utility\\ioexpander\\ArduinoIOExpander.cpp",
       "object_path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\tmp\\verify-precatch-portenta\\libraries\\Arduino_MachineControl\\utility\\ioexpander\\ArduinoIOExpander.cpp.o",
       "depfile_path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\tmp\\verify-precatch-portenta\\libraries\\Arduino_MachineControl\\utility\\ioexpander\\ArduinoIOExpander.cpp.d"
     },
@@ -527,9 +527,9 @@
         "-DARDUINO_LIBRARY_DISCOVERY_PHASE=1",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\variants\\PORTENTA_H7_M7",
-        "-IC:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
+        "-Ic:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\libraries\\SPI",
-        "-IC:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src",
+        "-Ic:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\libraries\\Wire",
         "-DCM4_BINARY_START=0x08100000",
         "-DCM4_BINARY_END=0x08200000",
@@ -537,7 +537,7 @@
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino/api/deprecated-avr-comp",
         "-iprefixC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino",
         "@C:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\variants\\PORTENTA_H7_M7/../PORTENTA_H7_M7/includes.txt",
-        "C:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\utility\\ioexpander\\ArduinoIOExpander.cpp",
+        "c:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\utility\\ioexpander\\ArduinoIOExpander.cpp",
         "-o",
         "nul"
       ]
@@ -548,7 +548,7 @@
   },
   {
     "compile": {
-      "source_path": "C:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\utility\\ioexpander\\I2Cdev.cpp",
+      "source_path": "c:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\utility\\ioexpander\\I2Cdev.cpp",
       "object_path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\tmp\\verify-precatch-portenta\\libraries\\Arduino_MachineControl\\utility\\ioexpander\\I2Cdev.cpp.o",
       "depfile_path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\tmp\\verify-precatch-portenta\\libraries\\Arduino_MachineControl\\utility\\ioexpander\\I2Cdev.cpp.d"
     },
@@ -576,9 +576,9 @@
         "-DARDUINO_LIBRARY_DISCOVERY_PHASE=1",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\variants\\PORTENTA_H7_M7",
-        "-IC:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
+        "-Ic:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\libraries\\SPI",
-        "-IC:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src",
+        "-Ic:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\libraries\\Wire",
         "-DCM4_BINARY_START=0x08100000",
         "-DCM4_BINARY_END=0x08200000",
@@ -586,7 +586,7 @@
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino/api/deprecated-avr-comp",
         "-iprefixC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino",
         "@C:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\variants\\PORTENTA_H7_M7/../PORTENTA_H7_M7/includes.txt",
-        "C:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\utility\\ioexpander\\I2Cdev.cpp",
+        "c:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\utility\\ioexpander\\I2Cdev.cpp",
         "-o",
         "nul"
       ]
@@ -597,7 +597,7 @@
   },
   {
     "compile": {
-      "source_path": "C:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\utility\\ioexpander\\TCA6424A.cpp",
+      "source_path": "c:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\utility\\ioexpander\\TCA6424A.cpp",
       "object_path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\tmp\\verify-precatch-portenta\\libraries\\Arduino_MachineControl\\utility\\ioexpander\\TCA6424A.cpp.o",
       "depfile_path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\tmp\\verify-precatch-portenta\\libraries\\Arduino_MachineControl\\utility\\ioexpander\\TCA6424A.cpp.d"
     },
@@ -625,9 +625,9 @@
         "-DARDUINO_LIBRARY_DISCOVERY_PHASE=1",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\variants\\PORTENTA_H7_M7",
-        "-IC:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
+        "-Ic:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\libraries\\SPI",
-        "-IC:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src",
+        "-Ic:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\libraries\\Wire",
         "-DCM4_BINARY_START=0x08100000",
         "-DCM4_BINARY_END=0x08200000",
@@ -635,7 +635,7 @@
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino/api/deprecated-avr-comp",
         "-iprefixC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino",
         "@C:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\variants\\PORTENTA_H7_M7/../PORTENTA_H7_M7/includes.txt",
-        "C:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\utility\\ioexpander\\TCA6424A.cpp",
+        "c:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src\\utility\\ioexpander\\TCA6424A.cpp",
         "-o",
         "nul"
       ]
@@ -674,9 +674,9 @@
         "-DARDUINO_LIBRARY_DISCOVERY_PHASE=1",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\variants\\PORTENTA_H7_M7",
-        "-IC:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
+        "-Ic:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\libraries\\SPI",
-        "-IC:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src",
+        "-Ic:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\libraries\\Wire",
         "-DCM4_BINARY_START=0x08100000",
         "-DCM4_BINARY_END=0x08200000",
@@ -695,7 +695,7 @@
   },
   {
     "compile": {
-      "source_path": "C:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src\\RS485.cpp",
+      "source_path": "c:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src\\RS485.cpp",
       "object_path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\tmp\\verify-precatch-portenta\\libraries\\ArduinoRS485\\RS485.cpp.o",
       "depfile_path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\tmp\\verify-precatch-portenta\\libraries\\ArduinoRS485\\RS485.cpp.d"
     },
@@ -723,9 +723,9 @@
         "-DARDUINO_LIBRARY_DISCOVERY_PHASE=1",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\variants\\PORTENTA_H7_M7",
-        "-IC:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
+        "-Ic:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\libraries\\SPI",
-        "-IC:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src",
+        "-Ic:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\libraries\\Wire",
         "-DCM4_BINARY_START=0x08100000",
         "-DCM4_BINARY_END=0x08200000",
@@ -733,7 +733,7 @@
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino/api/deprecated-avr-comp",
         "-iprefixC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino",
         "@C:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\variants\\PORTENTA_H7_M7/../PORTENTA_H7_M7/includes.txt",
-        "C:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src\\RS485.cpp",
+        "c:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src\\RS485.cpp",
         "-o",
         "nul"
       ]
@@ -772,9 +772,9 @@
         "-DARDUINO_LIBRARY_DISCOVERY_PHASE=1",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\cores\\arduino",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\variants\\PORTENTA_H7_M7",
-        "-IC:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
+        "-Ic:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\Arduino_MachineControl\\src",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\libraries\\SPI",
-        "-IC:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src",
+        "-Ic:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries\\ArduinoRS485\\src",
         "-IC:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_portenta\\4.6.0\\libraries\\Wire",
         "-DCM4_BINARY_START=0x08100000",
         "-DCM4_BINARY_END=0x08200000",

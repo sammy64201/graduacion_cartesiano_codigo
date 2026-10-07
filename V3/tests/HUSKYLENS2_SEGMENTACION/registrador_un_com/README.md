@@ -32,7 +32,9 @@ Por defecto se guardan en la subcarpeta `registros`, junto a la aplicacion.
 Todas las lineas de la ESP32 quedan en **un mismo CSV**:
 
 - `tipo=segmentacion`: una fila por objeto, con ID, nombre, centro/tamano en
-  pixeles, X/Y en milimetros y los indicadores de validez/ubicacion.
+  pixeles, X/Y en milimetros y los indicadores de validez/ubicacion. El sketch
+  actualizado solo emite pieza6/pieza7 y agrega clase interna, eje aproximado,
+  angulo del eje y sugerencia de servo. Los angulos ambiguos quedan vacios.
 - `tipo=frame`: una fila por consulta, incluyendo `resultados=0` cuando no hay
   detecciones. Permite distinguir ausencia de piezas de ausencia de datos.
 - `tipo=mensaje`: mensajes de arranque, calibracion y errores de la ESP32.
@@ -51,7 +53,9 @@ Columnas:
 ```text
 pc_utc,puerto_com,baud,tipo,frame,ms,algoritmo,resultados,indice,id,nombre,
 contenido,tipo_resultado_raw,level_raw,u_px,v_px,ancho_px,alto_px,x_mm,y_mm,
-coordenadas_validas,en_calibracion,en_banda,error_parseo,raw
+coordenadas_validas,en_calibracion,en_banda,permitidos,ignorados,clase_pieza,
+recogible,eje_aprox,orientacion_valida,orientacion_aprox_deg,servo_sugerido_deg,
+metodo_angulo,error_parseo,raw
 ```
 
 El archivo usa UTF-8 con BOM, coma como separador, comillas escapadas y punto

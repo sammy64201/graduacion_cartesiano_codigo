@@ -6,6 +6,7 @@
 #include <DFRobot_HuskylensV2.h>
 #include <math.h>
 #include <stdlib.h>
+#include "VisionModelo129.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -14,7 +15,7 @@ struct Point2D;
 struct CalibrationTag;
 
 // 0 = algoritmo 128; 1 = 129; 2 = 130. Cambiable tambien por terminal.
-constexpr uint8_t SEGMENTATION_MODEL_INDEX = 1;
+constexpr uint8_t SEGMENTATION_MODEL_INDEX = VisionModelo129::INDICE_MODELO;
 static_assert(SEGMENTATION_MODEL_INDEX < 3, "Indice personalizado: 0, 1 o 2");
 constexpr double BELT_WIDTH_MM = 292.0;
 constexpr double TOTAL_WIDTH_MM = 412.0;
@@ -532,16 +533,58 @@ void readCalibration() {
   openModel();
 }
 
+// Misma estimacion que la maqueta: transformar las cuatro esquinas de la
+// caja y comparar su extension X/Y en mm. Solo eje dominante, no giro real.
+uint8_t estimateBoxAxis(const Result *result) {
+  if (!homographyValid || result->width <= 0 || result->height <= 0) return 0;
+  const double left = result->xCenter - result->width * 0.5;
+  const double right = result->xCenter + result->width * 0.5;
+  const double top = result->yCenter - result->height * 0.5;
+  const double bottom = result->yCenter + result->height * 0.5;
+  Point2D corners[4];
+  if (!pixelToMillimeters(left, top, corners[0]) ||
+      !pixelToMillimeters(right, top, corners[1]) ||
+      !pixelToMillimeters(left, bottom, corners[2]) ||
+      !pixelToMillimeters(right, bottom, corners[3])) return 0;
+  double minX = corners[0].x, maxX = minX;
+  double minY = corners[0].y, maxY = minY;
+  for (uint8_t i = 1; i < 4; ++i) {
+    minX = fmin(minX, corners[i].x); maxX = fmax(maxX, corners[i].x);
+    minY = fmin(minY, corners[i].y); maxY = fmax(maxY, corners[i].y);
+  }
+  return VisionModelo129::ejePorDimensiones(maxX - minX, maxY - minY);
+}
+
 void printModelResults(int8_t count) {
   const uint32_t frame = ++frameNumber;
   const uint32_t timestamp = millis();
   const uint8_t algo = static_cast<uint8_t>(selectedModel());
-  Serial.printf("{\"tipo\":\"frame\",\"frame\":%lu,\"ms\":%lu,\"algoritmo\":%u,\"resultados\":%d}\n",
-                static_cast<unsigned long>(frame), static_cast<unsigned long>(timestamp), algo, count);
+  const Result *accepted[MAX_RESULT_NUM] = {};
+  uint8_t indices[MAX_RESULT_NUM] = {};
+  uint8_t acceptedCount = 0;
+  uint8_t ignoredCount = 0;
   uint8_t index = 0;
   while (huskylens.available(selectedModel())) {
     const Result *result = huskylens.popCachedResult(selectedModel());
     if (!result) break;
+    const uint8_t rawIndex = index++;
+    if (VisionModelo129::clasePermitida(result->name.c_str()) == 0 ||
+        result->type != COMMAND_RETURN_BLOCK ||
+        result->width <= 0 || result->height <= 0) {
+      ++ignoredCount;
+      continue;
+    }
+    if (acceptedCount < MAX_RESULT_NUM) {
+      indices[acceptedCount] = rawIndex;
+      accepted[acceptedCount++] = result;
+    }
+  }
+  Serial.printf("{\"tipo\":\"frame\",\"frame\":%lu,\"ms\":%lu,\"algoritmo\":%u,\"resultados\":%d,\"permitidos\":%u,\"ignorados\":%u}\n",
+                static_cast<unsigned long>(frame), static_cast<unsigned long>(timestamp),
+                algo, count, acceptedCount, ignoredCount);
+  for (uint8_t i = 0; i < acceptedCount; ++i) {
+    const Result *result = accepted[i];
+    const uint8_t clase = VisionModelo129::clasePermitida(result->name.c_str());
     Point2D position = {};
     const bool coordinatesValid = result->type == COMMAND_RETURN_BLOCK &&
       result->width > 0 && result->height > 0 &&
@@ -551,7 +594,7 @@ void printModelResults(int8_t count) {
       fabs(position.x) <= TAG_X_FROM_CENTER_MM && fabs(position.y) <= TAG_ROWS_DISTANCE_MM / 2.0;
     const bool belt = inside && fabs(position.x) <= BELT_WIDTH_MM / 2.0;
     Serial.printf("{\"tipo\":\"segmentacion\",\"frame\":%lu,\"ms\":%lu,\"algoritmo\":%u,\"indice\":%u,\"id\":%u,\"nombre\":",
-                  static_cast<unsigned long>(frame), static_cast<unsigned long>(timestamp), algo, index++, result->ID);
+                  static_cast<unsigned long>(frame), static_cast<unsigned long>(timestamp), algo, indices[i], result->ID);
     printJsonString(result->name);
     Serial.print(F(",\"contenido\":"));
     printJsonString(result->content);
@@ -561,8 +604,17 @@ void printModelResults(int8_t count) {
     if (coordinatesValid) Serial.print(position.x, 2); else Serial.print(F("null"));
     Serial.print(F(",\"y_mm\":"));
     if (coordinatesValid) Serial.print(position.y, 2); else Serial.print(F("null"));
-    Serial.printf(",\"coordenadas_validas\":%s,\"en_calibracion\":%s,\"en_banda\":%s}\n",
+    Serial.printf(",\"coordenadas_validas\":%s,\"en_calibracion\":%s,\"en_banda\":%s",
                   coordinatesValid ? "true" : "false", inside ? "true" : "false", belt ? "true" : "false");
+    const uint8_t axis = coordinatesValid ? estimateBoxAxis(result) : 0;
+    Serial.printf(",\"clase_pieza\":%u,\"recogible\":%s,\"eje_aprox\":\"%s\",\"orientacion_valida\":%s,\"orientacion_aprox_deg\":",
+                  clase, belt ? "true" : "false", axis == 1 ? "X" : (axis == 2 ? "Y" : "INDETERMINADO"),
+                  axis != 0 ? "true" : "false");
+    if (axis != 0) Serial.print(axis == 1 ? 0 : 90); else Serial.print(F("null"));
+    Serial.print(F(",\"servo_sugerido_deg\":"));
+    // Montaje actual de la maqueta: eje X -> servo 90, eje Y -> servo 0.
+    if (axis != 0) Serial.print(axis == 1 ? 90 : 0); else Serial.print(F("null"));
+    Serial.println(F(",\"metodo_angulo\":\"MODEL129_BOX_AXIS_MM\"}"));
   }
 }
 
@@ -625,7 +677,7 @@ void cameraTick() {
         const int8_t count = huskylens.getResult(selectedModel());
         if (count >= 0) {
           Serial.println(F("[MODELO] Respondio. Comenzando JSON por terminal cada 200 ms."));
-          Serial.println(F("[DATOS] Centro/tamano son del bloque recibido; esta biblioteca no expone la mascara."));
+          Serial.println(F("[DATOS] Solo pieza6/pieza7 por nombre; ID raw no distingue clases. Angulo aproximado X/Y, sin mascara."));
           setState(CameraState::STREAMING);
           printModelResults(count);
         } else if (millis() - stateSince >= MODEL_RESPONSE_TIMEOUT_MS) {

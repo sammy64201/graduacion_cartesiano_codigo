@@ -1,7 +1,7 @@
 C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\tmp\verify-precatch-portenta\libraries\Arduino_MachineControl\Objects.cpp.o: \
- C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\Objects.cpp \
- C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\Arduino_MachineControl.h \
- C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility/MAX31865/MAX31865.h \
+ c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\Objects.cpp \
+ c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\Arduino_MachineControl.h \
+ c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility/MAX31865/MAX31865.h \
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\cores\arduino/Arduino.h \
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\variants\PORTENTA_H7_M7/pinmode_arduino.h \
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\variants\PORTENTA_H7_M7/mbed_config.h \
@@ -384,18 +384,18 @@ C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\cores\arduino/mbed/platform/include/platform/FileLike.h \
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\libraries\SPI/SPI.h \
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\cores\arduino/api/HardwareSPI.h \
- C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility/THERMOCOUPLE/MAX31855.h \
- C:\Users\samue\OneDrive\Documents\Arduino\libraries\ArduinoRS485\src/ArduinoRS485.h \
- C:\Users\samue\OneDrive\Documents\Arduino\libraries\ArduinoRS485\src/RS485.h \
- C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility/QEI/QEI.h \
- C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility/ioexpander/ArduinoIOExpander.h \
- C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility/ioexpander/TCA6424A.h \
- C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility/ioexpander/I2Cdev.h \
+ c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility/THERMOCOUPLE/MAX31855.h \
+ c:\Users\samue\OneDrive\Documents\Arduino\libraries\ArduinoRS485\src/ArduinoRS485.h \
+ c:\Users\samue\OneDrive\Documents\Arduino\libraries\ArduinoRS485\src/RS485.h \
+ c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility/QEI/QEI.h \
+ c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility/ioexpander/ArduinoIOExpander.h \
+ c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility/ioexpander/TCA6424A.h \
+ c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility/ioexpander/I2Cdev.h \
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\libraries\Wire/Wire.h \
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\cores\arduino/api/HardwareI2C.h \
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\cores\arduino/api/deprecated/Print.h \
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\cores\arduino/mbed/rtos/include/rtos/rtos.h \
- C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility/RTC/PCF8563T.h \
+ c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility/RTC/PCF8563T.h \
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\cores\arduino/mbed/platform/include/platform/mbed_mktime.h \
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\cores\arduino/pinDefinitions.h \
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\variants\PORTENTA_H7_M7/portenta_info.h

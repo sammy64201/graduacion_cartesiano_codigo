@@ -61,7 +61,12 @@ $script:Columnas = @(
     'track_arm_y_button_mm', 'track_error_button_mm',
     'track_arm_y_bottom_mm', 'track_error_bottom_mm',
     'track_arm_y_close_mm', 'track_error_close_mm',
-    'track_before_button_ms'
+    'track_before_button_ms', 'timing_result', 'auto_reference_ms',
+    'reference_status', 'catch_start_ms', 'delta_reference_ms',
+    'trigger_error_y_mm', 'trigger_speed_mm_s', 'trigger_encoder',
+    'trigger_arm_y_mm', 'trigger_piece_y_mm',
+    'scale_ratio_camera_encoder', 'scale_camera_suggested_mm_count',
+    'tested_offset_ms', 'next_offset_ms', 'adjust_step_ms', 'adjust_trials', 'adjust_success_streak', 'adjust_confirmed', 'adjust_limit'
 )
 
 $script:MapaCampos = @{
@@ -203,6 +208,27 @@ $script:MapaCampos = @{
     'track_arm_y_close' = 'track_arm_y_close_mm'
     'track_error_close' = 'track_error_close_mm'
     'track_before_button_ms' = 'track_before_button_ms'
+    'timing_result' = 'timing_result'
+    'tested_offset_ms' = 'tested_offset_ms'
+    'next_offset_ms' = 'next_offset_ms'
+    'adjust_step_ms' = 'adjust_step_ms'
+    'adjust_trials' = 'adjust_trials'
+    'adjust_success_streak' = 'adjust_success_streak'
+    'adjust_confirmed' = 'adjust_confirmed'
+    'adjust_limit' = 'adjust_limit'
+    'auto_reference_ms' = 'auto_reference_ms'
+    'reference_status' = 'reference_status'
+    'catch_start_ms' = 'catch_start_ms'
+    'delta_reference_ms' = 'delta_reference_ms'
+    'trigger_error_y' = 'trigger_error_y_mm'
+    'trigger_speed_mm_s' = 'trigger_speed_mm_s'
+    'trigger_encoder' = 'trigger_encoder'
+    'trigger_arm_y' = 'trigger_arm_y_mm'
+    'trigger_piece_y' = 'trigger_piece_y_mm'
+    'camera_x' = 'camera_x_mm'
+    'camera_y' = 'camera_y_mm'
+    'scale_ratio_camera_encoder' = 'scale_ratio_camera_encoder'
+    'scale_camera_suggested_mm_count' = 'scale_camera_suggested_mm_count'
 }
 
 $script:Reloj = [System.Diagnostics.Stopwatch]::StartNew()
@@ -324,6 +350,12 @@ function Nombre-FaseV2([string]$Fase) {
         '9' { return 'PREPARANDO_ESPERA' }
         '10' { return 'CERRANDO_PINZA' }
         '11' { return 'BAJANDO_CATCH' }
+        '12' { return 'MOVIENDO_ENTREGA' }
+        '13' { return 'BAJANDO_ENTREGA' }
+        '14' { return 'ABRIENDO_PINZA' }
+        '15' { return 'SUBIENDO_FINAL' }
+        '16' { return 'SIGUIENDO_PIEZA_EN_Y' }
+        '17' { return 'EVALUANDO_CATCH' }
         default { return '' }
     }
 }
@@ -372,6 +404,7 @@ function Nombre-AckV2([string]$Codigo) {
         '3' { return 'CANCELADO' }
         '4' { return 'COMPLETADO' }
         '5' { return 'CERRAR_PINZA' }
+        '6' { return 'ABRIR_PINZA' }
         default { return $Codigo }
     }
 }
@@ -391,6 +424,14 @@ function Describir-Evento([object]$Analizada, [string]$Linea) {
     $vel = Obtener-Dato $Analizada 'vel'
 
     switch ($evento) {
+        'CAL_REFERENCE' { return "AJUSTE CATCH #$obj | referencia nominal de alineacion (300 ms)" }
+        'CAL_TRIGGER' { return "AJUSTE CATCH #$obj | descenso automatico | diferencia=" + (Obtener-Dato $Analizada 'delta_reference_ms') + ' ms | referencia=' + (Obtener-Dato $Analizada 'reference_status') }
+        'CAL_GRIP' { return "AJUSTE CATCH #$obj | DIN04 confirmado; orden de cierre" }
+        'CAL_GRIP_APPLIED' { return "AJUSTE CATCH #$obj | ESP aplico el pulso de cierre" }
+        'CAL_CLOSE' { return "AJUSTE CATCH #$obj | tiempo de cierre completado; agarre sin verificar" }
+        'CAL_AWAIT_FEEDBACK' { return "AJUSTE CATCH #$obj | X=LA AGARRO; cuadrado=ANTES; circulo=DESPUES" }
+        'CAL_SAMPLE' { return "AJUSTE CATCH #$obj | resultado=" + (Obtener-Dato $Analizada 'timing_result') + ' | probado=' + (Obtener-Dato $Analizada 'tested_offset_ms') + ' ms | proximo=' + (Obtener-Dato $Analizada 'next_offset_ms') + ' ms | agarres=' + (Obtener-Dato $Analizada 'adjust_success_streak') + '/3' }
+        'CAL_REJECT' { return "AJUSTE CATCH #$obj | X ignorada: todavia no esta alineado X/Y" }
         'ENCODER_TEST_START' { return 'PRUEBA DE ENCODER LISTA | X: iniciar/detener; circulo: cero; triangulo: salir | sin catch ni control de banda' }
         'ENCODER_TEST_END' { return 'PRUEBA DE ENCODER TERMINADA | CSV guardado' }
         'ENCODER_TEST_RESET' { return 'CONTADOR A CERO | X: iniciar otra medicion' }
@@ -440,8 +481,8 @@ function Describir-Evento([object]$Analizada, [string]$Linea) {
                 ' mm/s | encoder=' + (Obtener-Dato $Analizada 'encoder_window_mm_s') +
                 ' mm/s | valida=' + (Obtener-Dato $Analizada 'camera_speed_valid')
         }
-        'ML_ANGLE_SUGGESTION' {
-            return "ML PIEZA #$obj | angulo sugerido=" +
+        { $_ -in @('ML_ANGLE_SUGGESTION', 'AUTO_ANGLE_SUGGESTION') } {
+            return "PIEZA #$obj | angulo sugerido=" +
                 (Obtener-Dato $Analizada 'suggested_rot') +
                 ' grados | servo=' + (Obtener-Dato $Analizada 'servo_rot_deg') +
                 ' grados'
@@ -531,8 +572,13 @@ function Describir-Evento([object]$Analizada, [string]$Linea) {
             return "$fase | brazo=($ax,$ay,Z:$z) objetivo=($tx,$ty) error=($ex,$ey) velocidad=$vel mm/s encoder=$enc"
         }
         'PHASE' { return "FASE -> $fase | objetivo #$obj" }
-        'TRIGGER' { return "PREBAJADA DE Z | objetivo #$obj | preposicion terminada, Z baja para esperar la pieza" }
-        'BUTTON_X' { return "X RECIBIDA E IGNORADA | Automatico V2 no requiere confirmacion | objetivo #$obj fase=$fase" }
+        'TRIGGER' { return "DESCENSO DE Z | objetivo #${obj}: $mensaje" }
+        'AUTO_TRACK' { return "SEGUIMIENTO AUTOMATICO #$obj | brazo Y=" + (Obtener-Dato $Analizada 'arm_y') + ' mm | error=' + (Obtener-Dato $Analizada 'error_y') + ' mm' }
+        'RELEASE' { return "ENTREGA DERECHA #$obj | apertura de pinza; falta retirada final de Z" }
+        'BUTTON_X' {
+            if ((Obtener-Dato $Analizada 'mode') -eq 'CATCH_CAL') { return "X RECIBIDA | ajuste de catch #$obj fase=$fase" }
+            return "X RECIBIDA E IGNORADA | Automatico V2 no requiere confirmacion | objetivo #$obj fase=$fase"
+        }
         'ACCEPT' { return "OBJETIVO #$obj ACEPTADO | encoder=$enc velocidad=$vel mm/s" }
         'REJECT' { return "OBJETIVO #$obj RECHAZADO: $mensaje" }
         'ACK' {
@@ -541,7 +587,7 @@ function Describir-Evento([object]$Analizada, [string]$Linea) {
         }
         'READY_CATCH' {
             $piezaY = Obtener-Dato $Analizada 'target_y'
-            return "Z ABAJO EN DIN04 | objetivo #$obj | pieza estimada Y=$piezaY mm | esperando cruce automatico Y=0 | encoder=$enc"
+            return "Z EN PRECAPTURA | objetivo #$obj | pieza estimada Y=$piezaY mm | catch automatico | encoder=$enc"
         }
         'GRIP_COMMAND' {
             $piezaY = Obtener-Dato $Analizada 'target_y'
@@ -550,7 +596,7 @@ function Describir-Evento([object]$Analizada, [string]$Linea) {
         'CAPTURE' {
             if ($mensaje -eq 'PINZA CERRADA POR PREDICCION DE ENCODER') {
                 $piezaY = Obtener-Dato $Analizada 'target_y'
-                return "CATCH FISICO COMPLETADO | objetivo #$obj pieza estimada Y=$piezaY mm encoder=$enc velocidad=$vel mm/s"
+                return "CIERRE ORDENADO COMPLETADO | objetivo #$obj pieza estimada Y=$piezaY mm encoder=$enc velocidad=$vel mm/s | agarre fisico no verificado"
             }
             return "CAPTURA | objetivo #$obj fase=$fase encoder=$enc velocidad=$vel mm/s"
         }
@@ -845,7 +891,8 @@ try {
                 'RESULT', 'CANCEL', 'ERROR', 'READY_ANGLE', 'ANGLE_SAMPLE',
                 'ML_ACCEPT', 'ML_CATCH_TRIGGER', 'ML_CLOSE', 'ML_SAMPLE',
                 'ML_BUTTON_CATCH', 'ML_AWAIT_FEEDBACK', 'ML_RESULT',
-                'ML_TRACK', 'ML_TRACK_REJECT'
+                'ML_TRACK', 'ML_TRACK_REJECT', 'CAL_REFERENCE', 'CAL_TRIGGER',
+                'CAL_GRIP', 'CAL_CLOSE', 'CAL_AWAIT_FEEDBACK', 'CAL_SAMPLE'
             )
             $eventoConfirmaV2 = $eventosQueConfirmanV2 -contains $evento
             $estadoGeneralLegado = $null
@@ -898,16 +945,17 @@ try {
                     elseif ((Obtener-Dato $analizada 'mode') -eq 'ML_V2') { 'ml_v2' }
                     elseif ((Obtener-Dato $analizada 'mode') -eq 'ML_TRACK') { 'ml_track' }
                     elseif ((Obtener-Dato $analizada 'mode') -eq 'ML') { 'ml' }
+                    elseif ((Obtener-Dato $analizada 'mode') -eq 'CATCH_CAL') { 'catch_cal' }
                     else { 'v2' }
                 Iniciar-Sesion
                 foreach ($anterior in $prebuffer.ToArray()) {
                     Escribir-Fila $anterior (Analizar-Linea $anterior.Line $anterior.Source)
                 }
                 if ($analizada.Structured -and $evento -eq 'CANCEL' -and
-                     $script:TipoSesion -notin @('angulo', 'ml', 'ml_v2', 'ml_track')) {
+                     $script:TipoSesion -notin @('angulo', 'ml', 'ml_v2', 'ml_track', 'catch_cal')) {
                     $script:BloqueadoHastaSalirV2 = $true
                     Cerrar-Sesion 'CANCEL'
-                } elseif ($esCancelacionLegada -and $script:TipoSesion -notin @('angulo', 'ml', 'ml_v2', 'ml_track')) {
+                } elseif ($esCancelacionLegada -and $script:TipoSesion -notin @('angulo', 'ml', 'ml_v2', 'ml_track', 'catch_cal')) {
                     $script:BloqueadoHastaSalirV2 = $true
                     Cerrar-Sesion 'CANCEL legado'
                 }
@@ -918,13 +966,13 @@ try {
                 Escribir-Fila $envoltura $analizada
                 if ($analizada.Structured -and $analizada.Source -eq 'P' -and
                     ($evento -eq 'SESSION_END' -or
-                       ($evento -eq 'CANCEL' -and $script:TipoSesion -notin @('angulo', 'ml', 'ml_v2', 'ml_track')) -or
+                       ($evento -eq 'CANCEL' -and $script:TipoSesion -notin @('angulo', 'ml', 'ml_v2', 'ml_track', 'catch_cal')) -or
                      $evento -eq 'ENCODER_TEST_END')) {
                     if ($evento -eq 'CANCEL') {
                         $script:BloqueadoHastaSalirV2 = $true
                     }
                     Cerrar-Sesion $evento
-                } elseif ($esCancelacionLegada -and $script:TipoSesion -notin @('angulo', 'ml', 'ml_v2', 'ml_track')) {
+                } elseif ($esCancelacionLegada -and $script:TipoSesion -notin @('angulo', 'ml', 'ml_v2', 'ml_track', 'catch_cal')) {
                     $script:BloqueadoHastaSalirV2 = $true
                     Cerrar-Sesion 'CANCEL legado'
                 } elseif ($esSalidaEstadoLegado) {

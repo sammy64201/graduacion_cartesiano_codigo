@@ -4,7 +4,9 @@ $script:Columnas = @(
     'pc_utc', 'puerto_com', 'baud', 'tipo', 'frame', 'ms', 'algoritmo',
     'resultados', 'indice', 'id', 'nombre', 'contenido', 'tipo_resultado_raw',
     'level_raw', 'u_px', 'v_px', 'ancho_px', 'alto_px', 'x_mm', 'y_mm',
-    'coordenadas_validas', 'en_calibracion', 'en_banda', 'error_parseo', 'raw'
+    'coordenadas_validas', 'en_calibracion', 'en_banda', 'permitidos', 'ignorados',
+    'clase_pieza', 'recogible', 'eje_aprox', 'orientacion_valida',
+    'orientacion_aprox_deg', 'servo_sugerido_deg', 'metodo_angulo', 'error_parseo', 'raw'
 )
 
 function Get-ColumnasRegistro {

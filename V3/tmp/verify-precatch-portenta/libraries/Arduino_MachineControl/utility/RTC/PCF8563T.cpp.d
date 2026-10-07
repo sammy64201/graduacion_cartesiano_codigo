@@ -1,6 +1,6 @@
 C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\tmp\verify-precatch-portenta\libraries\Arduino_MachineControl\utility\RTC\PCF8563T.cpp.o: \
- C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\RTC\PCF8563T.cpp \
- C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\RTC\PCF8563T.h \
+ c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\RTC\PCF8563T.cpp \
+ c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\RTC\PCF8563T.h \
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\cores\arduino/Arduino.h \
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\variants\PORTENTA_H7_M7/pinmode_arduino.h \
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\variants\PORTENTA_H7_M7/mbed_config.h \

@@ -1,0 +1,192 @@
+{
+  "whole_portenta": {
+    "board": "P",
+    "first_line": 3,
+    "last_line": 103,
+    "start": "2026-10-06T23:16:42.374000+00:00",
+    "end": "2026-10-06T23:17:11.472000+00:00",
+    "duration_s": 29.098,
+    "delta": {
+      "rxOK": 1927,
+      "rxError": 231,
+      "len": 68,
+      "crc": 163,
+      "sem": 0,
+      "txOK": 1054,
+      "txError": 196,
+      "reinicios": 1,
+      "pausaLoopMax": 2
+    },
+    "read_error_percent": 10.704355885078776,
+    "write_error_percent": 15.68
+  },
+  "whole_esp": {
+    "board": "E",
+    "first_line": 4,
+    "last_line": 104,
+    "start": "2026-10-06T23:16:42.517000+00:00",
+    "end": "2026-10-06T23:17:11.502000+00:00",
+    "duration_s": 28.985,
+    "delta": {
+      "rx": 1165,
+      "ok": 991,
+      "errLen": 167,
+      "errCRC": 7,
+      "requests": 2084,
+      "reinicios": 0
+    },
+    "rejected_receive_percent": 14.935622317596566
+  },
+  "before_arm_portenta": {
+    "board": "P",
+    "first_line": 3,
+    "last_line": 15,
+    "start": "2026-10-06T23:16:42.374000+00:00",
+    "end": "2026-10-06T23:16:46.371000+00:00",
+    "duration_s": 3.997,
+    "delta": {
+      "rxOK": 300,
+      "rxError": 20,
+      "len": 6,
+      "crc": 14,
+      "sem": 0,
+      "txOK": 156,
+      "txError": 21,
+      "reinicios": 0,
+      "pausaLoopMax": 0
+    },
+    "read_error_percent": 6.25,
+    "write_error_percent": 11.864406779661017
+  },
+  "before_arm_esp": {
+    "board": "E",
+    "first_line": 4,
+    "last_line": 16,
+    "start": "2026-10-06T23:16:42.517000+00:00",
+    "end": "2026-10-06T23:16:46.503000+00:00",
+    "duration_s": 3.986,
+    "delta": {
+      "rx": 165,
+      "ok": 146,
+      "errLen": 18,
+      "errCRC": 1,
+      "requests": 310,
+      "reinicios": 0
+    },
+    "rejected_receive_percent": 11.515151515151516
+  },
+  "moving_y_portenta": {
+    "board": "P",
+    "first_line": 75,
+    "last_line": 87,
+    "start": "2026-10-06T23:17:04.452000+00:00",
+    "end": "2026-10-06T23:17:07.472000+00:00",
+    "duration_s": 3.02,
+    "delta": {
+      "rxOK": 140,
+      "rxError": 40,
+      "len": 12,
+      "crc": 28,
+      "sem": 0,
+      "txOK": 87,
+      "txError": 37,
+      "reinicios": 0,
+      "pausaLoopMax": 0
+    },
+    "read_error_percent": 22.22222222222222,
+    "write_error_percent": 29.838709677419356
+  },
+  "moving_y_esp": {
+    "board": "E",
+    "first_line": 76,
+    "last_line": 88,
+    "start": "2026-10-06T23:17:04.502000+00:00",
+    "end": "2026-10-06T23:17:07.502000+00:00",
+    "duration_s": 3.0,
+    "delta": {
+      "rx": 111,
+      "ok": 78,
+      "errLen": 33,
+      "errCRC": 0,
+      "requests": 167,
+      "reinicios": 0
+    },
+    "rejected_receive_percent": 29.72972972972973
+  },
+  "after_recovery_portenta": {
+    "board": "P",
+    "first_line": 96,
+    "last_line": 103,
+    "start": "2026-10-06T23:17:08.465000+00:00",
+    "end": "2026-10-06T23:17:11.472000+00:00",
+    "duration_s": 3.007,
+    "delta": {
+      "rxOK": 204,
+      "rxError": 25,
+      "len": 5,
+      "crc": 20,
+      "sem": 0,
+      "txOK": 109,
+      "txError": 22,
+      "reinicios": 0,
+      "pausaLoopMax": 0
+    },
+    "read_error_percent": 10.91703056768559,
+    "write_error_percent": 16.793893129770993
+  },
+  "after_recovery_esp": {
+    "board": "E",
+    "first_line": 97,
+    "last_line": 104,
+    "start": "2026-10-06T23:17:08.517000+00:00",
+    "end": "2026-10-06T23:17:11.502000+00:00",
+    "duration_s": 2.985,
+    "delta": {
+      "rx": 121,
+      "ok": 101,
+      "errLen": 19,
+      "errCRC": 1,
+      "requests": 223,
+      "reinicios": 0
+    },
+    "rejected_receive_percent": 16.52892561983471
+  },
+  "events": [
+    {
+      "line": 17,
+      "local_time": "2026-10-06T17:16:46.722000-06:00",
+      "board": "P",
+      "raw": "[CAL] Inicio autonomo de calibracion X/Y/Z"
+    },
+    {
+      "line": 83,
+      "local_time": "2026-10-06T17:17:06.362000-06:00",
+      "board": "P",
+      "raw": "[CAL] BUSCANDO Y+"
+    },
+    {
+      "line": 90,
+      "local_time": "2026-10-06T17:17:07.717000-06:00",
+      "board": "P",
+      "raw": "[I2C] Enlace perdido; reintentando sin reinicio fisico"
+    },
+    {
+      "line": 91,
+      "local_time": "2026-10-06T17:17:07.717000-06:00",
+      "board": "P",
+      "raw": "[I2C] Movimiento interrumpido; recalibrar brazo antes de mover"
+    },
+    {
+      "line": 92,
+      "local_time": "2026-10-06T17:17:07.738000-06:00",
+      "board": "P",
+      "raw": "[I2C][RECUPERACION] Maestro reiniciado, intento=6"
+    },
+    {
+      "line": 94,
+      "local_time": "2026-10-06T17:17:07.748000-06:00",
+      "board": "P",
+      "raw": "[I2C] Primer paquete completo y valido"
+    }
+  ]
+}

@@ -23,10 +23,12 @@ try {
         nombre=('pieza, "' + [char]0x00F1 + '"'); contenido="linea uno`nlinea dos"
         tipo_resultado_raw=28; level_raw=-1; u_px=350; v_px=220; ancho_px=60; alto_px=35
         x_mm=20.5; y_mm=-15.2; coordenadas_validas=$true; en_calibracion=$true; en_banda=$false
+        clase_pieza=6; recogible=$false; eje_aprox='X'; orientacion_valida=$true
+        orientacion_aprox_deg=0; servo_sugerido_deg=90; metodo_angulo='MODEL129_BOX_AXIS_MM'
     } | ConvertTo-Json -Compress
-    $frame = '{"tipo":"frame","frame":12,"ms":25000,"algoritmo":129,"resultados":1}'
+    $frame = '{"tipo":"frame","frame":12,"ms":25000,"algoritmo":129,"resultados":4,"permitidos":1,"ignorados":3}'
     $sinObjetos = '{"tipo":"frame","frame":13,"ms":25200,"algoritmo":129,"resultados":0}'
-    $nulos = '{"tipo":"segmentacion","id":1,"x_mm":null,"y_mm":null,"en_banda":false}'
+    $nulos = '{"tipo":"segmentacion","id":0,"x_mm":null,"y_mm":null,"en_banda":false,"orientacion_valida":false,"orientacion_aprox_deg":null,"servo_sugerido_deg":null}'
     $jsonMalo = '{"tipo":roto}'
     $texto = "[CAL] Muestras 25/25`r`n$frame`n$segmentacion`r`n$sinObjetos`n$nulos`n$jsonMalo`nultima linea incompleta"
     $pendiente = ''
@@ -59,6 +61,13 @@ try {
     if ($filas[3].resultados -ne '0' -or $filas[4].x_mm -ne '' -or $filas[4].y_mm -ne '' -or
         $filas[5].raw -ne $jsonMalo -or [string]::IsNullOrWhiteSpace($filas[5].error_parseo) -or
         $filas[6].raw -ne $pendiente) { throw 'Se perdieron ceros, nulos, errores o el fragmento final.' }
+    if ($filas[1].permitidos -ne '1' -or $filas[1].ignorados -ne '3' -or
+        $filas[2].clase_pieza -ne '6' -or $filas[2].recogible -ne 'false' -or
+        $filas[2].eje_aprox -ne 'X' -or $filas[2].orientacion_valida -ne 'true' -or
+        $filas[2].orientacion_aprox_deg -ne '0' -or $filas[2].servo_sugerido_deg -ne '90' -or
+        $filas[2].metodo_angulo -ne 'MODEL129_BOX_AXIS_MM' -or
+        $filas[4].orientacion_valida -ne 'false' -or $filas[4].orientacion_aprox_deg -ne '' -or
+        $filas[4].servo_sugerido_deg -ne '') { throw 'Se alteraron los campos de filtro/orientacion.' }
     foreach ($fila in $filas) {
         if ($fila.puerto_com -ne 'COM5' -or $fila.baud -ne '115200' -or !$fila.pc_utc) {
             throw 'Faltan datos de origen/tiempo.'

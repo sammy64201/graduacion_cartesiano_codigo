@@ -1,5 +1,11 @@
 # Automático V2: puesta en marcha
 
+> Documento historico de la primera version (encoder PCNT en ESP y cierre
+> virtual). El modo integrador vigente usa los sketches de
+> `pruebas de automatico v2/`, encoder en Portenta, catch fisico y entrega.
+> Consultar `pruebas de automatico v2/INTEGRACION_AUTOMATICO_V2.md` y
+> `pruebas de automatico v2/README_PRUEBAS.md` para cableado y pruebas actuales.
+
 Automático V2 es la quinta opción del menú. Los modos manual, automático
 original y las dos calibraciones conservan sus códigos y comportamiento. V2
 permanece bloqueado hasta que el encoder tenga escala válida y haya producido

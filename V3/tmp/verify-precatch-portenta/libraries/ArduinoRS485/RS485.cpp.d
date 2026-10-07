@@ -1,6 +1,6 @@
 C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\tmp\verify-precatch-portenta\libraries\ArduinoRS485\RS485.cpp.o: \
- C:\Users\samue\OneDrive\Documents\Arduino\libraries\ArduinoRS485\src\RS485.cpp \
- C:\Users\samue\OneDrive\Documents\Arduino\libraries\ArduinoRS485\src\RS485.h \
+ c:\Users\samue\OneDrive\Documents\Arduino\libraries\ArduinoRS485\src\RS485.cpp \
+ c:\Users\samue\OneDrive\Documents\Arduino\libraries\ArduinoRS485\src\RS485.h \
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\cores\arduino/Arduino.h \
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\variants\PORTENTA_H7_M7/pinmode_arduino.h \
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\variants\PORTENTA_H7_M7/mbed_config.h \

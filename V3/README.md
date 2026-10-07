@@ -12,6 +12,48 @@ El objetivo final es que el sistema pueda arrancar, comprobar sus componentes, c
 
 Este proyecto forma parte de un trabajo de graduación de Ingeniería Mecatrónica.
 
+### Automatico V2 como modo integrador (2026-10-06)
+
+El modo completo para integrar y probar las mejoras del proyecto es Automatico
+V2 de `pruebas de automatico v2/`. Toda actualizacion aplicable de otros modos
+debe incorporarse alli en la misma tarea, conforme a `AGENTS.md`.
+La revision actual integra calibracion de giro ML V2, seguimiento Y durante el
+catch y entrega derecha completa. Ver
+`pruebas de automatico v2/INTEGRACION_AUTOMATICO_V2.md` y su `README_PRUEBAS.md`.
+Los sketches de prueba usan protocolo 16 y deben cargarse juntos. El nuevo
+modo `AJUSTE CATCH V2` ejecuta el catch, espera tu evaluacion y ajusta el tiempo
+del siguiente ensayo. `CAMBIOS CATCH` muestra el valor probado y el parametro
+que implementar en Automatico V2. Conserva el seguimiento y registra tambien
+la comparacion camara-encoder.
+Ver `pruebas de automatico v2/AJUSTE_CATCH_V2.md`. Los sketches
+`ESP/` y `PORTENTA/` de la raiz corresponden a otra version del firmware.
+
+### Actualizacion de camara/modelo 129 (2026-10-05)
+
+Los sketches integrados `ESP/ESP.ino` y `pruebas de automatico v2/ESP/ESP.ino`
+seleccionan ahora el indice 1, algoritmo 129. La captura de la camara nueva
+trae ID raw=0 para todas las piezas: se aceptan exclusivamente los nombres
+exactos `pieza6` y `pieza7`, publicados como clases internas 6 y 7. Los demas
+resultados se descartan antes de filtrar o seleccionar objetivos.
+
+En el firmware principal se imprime la estimacion de eje X/Y y la sugerencia
+de servo al confirmar un objetivo. La maqueta aplica esa estimacion en sus
+modos automaticos y la propone en Registrar Angulo/Ensenanza ML. La homografia,
+UART y protocolo I2C existentes se conservan. La estimacion usa las extensiones
+en mm de la caja; estos datos no permiten obtener el giro continuo de la pieza.
+
+Para comenzar observando sin movimiento, usar el sketch independiente
+`tests/HUSKYLENS2_SEGMENTACION/HUSKYLENS2_SEGMENTACION.ino`, calibrar los tags
+y registrar JSON/CSV a 115200 baudios. Su README explica los campos del angulo.
+Las menciones al modelo 128 en la descripcion historica siguiente corresponden
+a la integracion original.
+
+Verificacion de esta actualizacion: los tres sketches compilan con
+`esp32-bluepad32:esp32:esp32` (core 4.1.0). El principal usa 781693 bytes de
+programa y 90932 de RAM; la maqueta V2, 805465 y 104124; la prueba aislada,
+735609 y 89524. Pasaron el replay del filtro con la captura real, las pruebas
+de geometria y el registro CSV. No se cargaron placas ni se valido el agarre.
+
 ---
 
 ## 2. Archivos principales
