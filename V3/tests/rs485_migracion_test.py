@@ -15,8 +15,10 @@ OLD = ROOT / 'pruebas de automatico v2'
 BUILD = ROOT / 'tmp/rs485-migracion/tests'
 
 def definition(source, marker):
-    start = source.index(marker)
-    opening = source.index('{', start)
+    found = re.search(re.escape(marker) + ('' if marker.endswith('{') else r'[^;{]*\{'), source)
+    if not found:
+        raise ValueError('Definicion ausente: ' + marker)
+    start, opening = found.start(), found.end() - 1
     depth, end = 1, opening + 1
     while depth:
         depth += (source[end] == '{') - (source[end] == '}')
@@ -61,19 +63,15 @@ def main():
         assert declaration in esp, declaration
     assert 'TwoWire I2C_Pantalla(1)' in esp
     assert 'constexpr bool RS485_DIRECCION_MANUAL = true;' in esp
-    # Las funciones reales de OLED y los parametros mecanicos son los del V2.
-    oldesp = (OLD / 'ESP/ESP.ino').read_text(encoding='utf-8-sig')
-    for marker in ['void procesarPantalla()', 'void escribirPinzaCalibrada(',
-                   'bool estimarEjeCajaV2(', 'void procesarHandshakeObjetivo(']:
-        if marker not in oldesp: continue
-        original = definition(oldesp, marker).replace('I2C', 'RS485').replace('i2c', 'rs485')
-        assert original == definition(esp, marker), marker
+    # Desde 2026-10-09 RS485 es el firmware vigente. La copia I2C conservada
+    # no debe obligar a duplicar nuevas mejoras del transporte o del ciclo.
     assert (OLD / 'ESP/ProtocoloI2C.h').read_bytes() == (OLD / 'PORTENTA/ProtocoloI2C.h').read_bytes()
 
     # Ejecutar setup() real con la dependencia que quedo fuera de la primera
     # migracion. El expansor interno no puede usarse antes de Wire.begin().
     arranque = '#include <cassert>\n#include <cstdio>\n#include <stdint.h>\n#define F(x) x\n'
     arranque += '#include "' + (NEW / 'PORTENTA/EnlaceRS485.h').as_posix() + '"\n'
+    arranque += '#include "' + (NEW / 'PORTENTA/CapturaFijaV2.h').as_posix() + '"\n'
     arranque += '''
 struct Terminal {
   bool iniciado=false;
@@ -99,6 +97,8 @@ constexpr int pP_X=4, pP_Y=2, pP_Z=0, pD_X=5, pD_Y=3, pD_Z=1;
 constexpr float velocidadMotores=0.0001f;
 constexpr float CAMARA_A_HOME_Y_MM=845, V2_AJUSTE_DISTANCIA_CATCH_MM=335;
 float escalaEncoderMmPorCuenta=0.075f;
+int8_t signoEncoderAvance=1;
+CapturaFijaV2::Estimador estimadorCapturaFijaV2;
 uint32_t tiempoEncendidoSistema=0, inicioEstadoGeneral=0, tAnteriorRS485=0, tAnteriorEstadoESP=0;
 bool comunicacionRS485Habilitada=true;
 uint8_t comandoCamaraActual=99, secuenciaComandoCamara=99;
@@ -305,7 +305,7 @@ int main() {
 
     # Reusar los escenarios existentes sobre los fuentes NUEVOS sin copiar ni
     # modificar el firmware anterior. Las capturas historicas siguen en OLD.
-    for name in ['auto_v2_integracion_test.py', 'auto_v2_giro_test.py',
+    for name in ['rs485_captura_fija_integracion_test.py', 'auto_v2_giro_test.py',
                  'mlv2_catch_test.py', 'mlv2_rectas_test.py', 'vision_modelo129_test.py']:
         original = ROOT / 'tests' / name
         code = original.read_text(encoding='utf-8-sig')
@@ -316,7 +316,7 @@ int main() {
         code = code.replace("log = (folder / 'registros_v2/", "log = ((ROOT / 'pruebas de automatico v2') / 'registros_v2/")
         code = code.replace("(folder / 'registros_v2/", "((ROOT / 'pruebas de automatico v2') / 'registros_v2/")
         code = code.replace('I2C', 'RS485')
-        code = code.replace('CRC version 16', 'CRC version 17')
+        code = code.replace('CRC version 18', 'CRC version 19')
         code = code.replace("protocol = protocol.replace('../ESP/ProtocoloRS485.h',", "protocol = protocol.replace('I2C', 'RS485')\n    protocol = protocol.replace('../ESP/ProtocoloRS485.h',")
         script = BUILD / name
         script.write_text(code, encoding='utf-8')

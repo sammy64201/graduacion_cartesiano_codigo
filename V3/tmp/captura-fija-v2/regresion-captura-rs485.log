@@ -1,0 +1,3 @@
+PASS: RS485: RX real, umbral >1000 ms, secuencia/invalidos sin recuperacion temprana, referencias y cancelacion persistentes
+PASS: seguimiento real, ciclo automatico hasta entrega, ruta fija, DIN04, timeout, encoder, control, limites y resultado reservado hasta Z seguro
+PASS: ajuste autonomo, aprendizaje acotado y etiquetas; handshake/pinza, reserva, idempotencia, CRC y rechazo de version previa

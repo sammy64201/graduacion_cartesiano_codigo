@@ -66,7 +66,22 @@ $script:Columnas = @(
     'trigger_error_y_mm', 'trigger_speed_mm_s', 'trigger_encoder',
     'trigger_arm_y_mm', 'trigger_piece_y_mm',
     'scale_ratio_camera_encoder', 'scale_camera_suggested_mm_count',
-    'tested_offset_ms', 'next_offset_ms', 'adjust_step_ms', 'adjust_trials', 'adjust_success_streak', 'adjust_confirmed', 'adjust_limit'
+    'tested_offset_ms', 'next_offset_ms', 'adjust_step_ms', 'adjust_trials', 'adjust_success_streak', 'adjust_confirmed', 'adjust_limit',
+    'rejected_cropped', 'objective_flags', 'reference_query_age_ms',
+    'reference_source', 'capture_timestamp', 'image_age_known',
+    'camera_delay_cal_ms', 'camera_jitter_cal_ms', 'image_reference_uncertainty_mm',
+    'camera_delay_compensated', 'closure_axis_minor', 'rotation_command_applied',
+    'rotation_physically_verified',
+    'physical_validated', 'timing_preliminary', 'capture_window_mm',
+    'geometry_error_mm', 'z_margin_s', 'contact_min_s',
+    'contact_max_s', 'transport_max_ms', 'stage',
+    'remaining_mm', 'velocity_mm_s', 'acceleration_mm_s2',
+    'velocity_error_mm_s', 'acceleration_error_mm_s2', 'horizon_min_s',
+    'horizon_max_s', 'pred_y_min_mm', 'pred_y_max_mm',
+    'window_decision',
+    'scale_error_relative', 'reference_error_ms', 'model_acceleration_error_mm_s2',
+    'velocity_min_mm_s', 'velocity_max_mm_s', 'lift_clearance_steps',
+    'lift_clearance_max_s', 'drag_max_mm', 'position_error_mm'
 )
 
 $script:MapaCampos = @{
@@ -229,6 +244,48 @@ $script:MapaCampos = @{
     'camera_y' = 'camera_y_mm'
     'scale_ratio_camera_encoder' = 'scale_ratio_camera_encoder'
     'scale_camera_suggested_mm_count' = 'scale_camera_suggested_mm_count'
+    'rej_crop' = 'rejected_cropped'
+    'reference_encoder' = 'objective_encoder_count'
+    'objective_flags' = 'objective_flags'
+    'reference_query_age_ms' = 'reference_query_age_ms'
+    'reference_source' = 'reference_source'
+    'capture_timestamp' = 'capture_timestamp'
+    'image_age_known' = 'image_age_known'
+    'camera_delay_cal_ms' = 'camera_delay_cal_ms'
+    'camera_jitter_cal_ms' = 'camera_jitter_cal_ms'
+    'image_reference_uncertainty_mm' = 'image_reference_uncertainty_mm'
+    'camera_delay_compensated' = 'camera_delay_compensated'
+    'closure_axis_minor' = 'closure_axis_minor'
+    'rotation_command_applied' = 'rotation_command_applied'
+    'rotation_physically_verified' = 'rotation_physically_verified'
+    'physical_validated' = 'physical_validated'
+    'timing_preliminary' = 'timing_preliminary'
+    'capture_window_mm' = 'capture_window_mm'
+    'geometry_error_mm' = 'geometry_error_mm'
+    'z_margin_s' = 'z_margin_s'
+    'contact_min_s' = 'contact_min_s'
+    'contact_max_s' = 'contact_max_s'
+    'transport_max_ms' = 'transport_max_ms'
+    'stage' = 'stage'
+    'remaining_mm' = 'remaining_mm'
+    'velocity_mm_s' = 'velocity_mm_s'
+    'acceleration_mm_s2' = 'acceleration_mm_s2'
+    'velocity_error_mm_s' = 'velocity_error_mm_s'
+    'acceleration_error_mm_s2' = 'acceleration_error_mm_s2'
+    'horizon_min_s' = 'horizon_min_s'
+    'horizon_max_s' = 'horizon_max_s'
+    'pred_y_min_mm' = 'pred_y_min_mm'
+    'pred_y_max_mm' = 'pred_y_max_mm'
+    'window_decision' = 'window_decision'
+    'scale_error_relative' = 'scale_error_relative'
+    'reference_error_ms' = 'reference_error_ms'
+    'model_acceleration_error_mm_s2' = 'model_acceleration_error_mm_s2'
+    'velocity_min_mm_s' = 'velocity_min_mm_s'
+    'velocity_max_mm_s' = 'velocity_max_mm_s'
+    'lift_clearance_steps' = 'lift_clearance_steps'
+    'lift_clearance_max_s' = 'lift_clearance_max_s'
+    'drag_max_mm' = 'drag_max_mm'
+    'position_error_mm' = 'position_error_mm'
 }
 
 $script:Reloj = [System.Diagnostics.Stopwatch]::StartNew()
@@ -424,6 +481,9 @@ function Describir-Evento([object]$Analizada, [string]$Linea) {
     $vel = Obtener-Dato $Analizada 'vel'
 
     switch ($evento) {
+        'CALIBRATION_REQUIRED' { return 'CAPTURA FIJA INHIBIDA | falta medir y validar el perfil fisico' }
+        'FIXED_PROFILE' { return 'PERFIL CAPTURA FIJA | validado=' + (Obtener-Dato $Analizada 'physical_validated') + ' | ventana=' + (Obtener-Dato $Analizada 'capture_window_mm') + ' mm' }
+        'FIXED_PREDICTION' { return 'PREDICCION CAPTURA FIJA | etapa=' + (Obtener-Dato $Analizada 'stage') + ' | contacto Y=' + (Obtener-Dato $Analizada 'pred_y_min_mm') + '..' + (Obtener-Dato $Analizada 'pred_y_max_mm') + ' mm | agarre fisico no verificado' }
         'CAL_REFERENCE' { return "AJUSTE CATCH #$obj | referencia nominal de alineacion (300 ms)" }
         'CAL_TRIGGER' { return "AJUSTE CATCH #$obj | descenso automatico | diferencia=" + (Obtener-Dato $Analizada 'delta_reference_ms') + ' ms | referencia=' + (Obtener-Dato $Analizada 'reference_status') }
         'CAL_GRIP' { return "AJUSTE CATCH #$obj | DIN04 confirmado; orden de cierre" }

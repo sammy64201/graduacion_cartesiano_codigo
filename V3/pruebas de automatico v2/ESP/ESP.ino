@@ -125,6 +125,14 @@ constexpr double TOLERANCIA_REARME_MM = 8.0;
 constexpr uint32_t TIEMPO_DESAPARICION_MS = 1000;
 constexpr uint32_t TIEMPO_REARME_V2_MS = 500;
 constexpr uint32_t TIMEOUT_MUESTRA_ENCODER_MS = 50;
+// Coordenadas de Result de HUSKYLENS 2: la homografia usa el plano 640x480.
+constexpr int16_t CAMERA_ANCHO_IMAGEN_PX = 640;
+constexpr int16_t CAMERA_ALTO_IMAGEN_PX = 480;
+constexpr int16_t CAMERA_MARGEN_CAJA_PX = 1;
+// -1 = sin medicion fisica. Son metadatos: no corrigen cuentas ni inventan
+// timestamps de exposicion. Una correccion requiere un historial sincronizado.
+constexpr int32_t CAMERA_RETARDO_CAPTURA_CALIBRADO_MS = -1;
+constexpr int32_t CAMERA_JITTER_CAPTURA_CALIBRADO_MS = -1;
 constexpr uint32_t BAUD_LOG_ESP = 460800;
 constexpr uint16_t CAPACIDAD_COLA_LOG_V2 = 128;
 
@@ -260,6 +268,7 @@ struct EstadoCamaraPublicado {
   bool objetivoV2;
   int32_t conteoReferenciaObjetivo;
   int16_t sugerenciaAngulo;
+  uint8_t flagsObjetivoV2;
 };
 
 portMUX_TYPE estadoCamaraMux = portMUX_INITIALIZER_UNLOCKED;
@@ -307,7 +316,11 @@ enum CausaDiagnosticoV2 : uint8_t {
   V2_DIAG_DETECCIONES,
   V2_DIAG_DESPLAZAMIENTO,
   V2_DIAG_OBJETIVO_LISTO,
-  V2_DIAG_PUBLICADO
+  V2_DIAG_PUBLICADO,
+  V2_DIAG_CAJA_RECORTADA,
+  V2_DIAG_MULTIPLES_PIEZAS,
+  V2_DIAG_ORIENTACION_AMBIGUA,
+  V2_DIAG_REFERENCIA_CAMARA_INCIERTA
 };
 
 struct DiagnosticoDeteccionV2 {
@@ -339,6 +352,12 @@ struct DiagnosticoDeteccionV2 {
   int32_t conteoAsociadoCamara;
   double recorridoDuranteConsultaMm;
   int8_t relacionYEncoder;
+  uint8_t rechazadosCajaRecortada;
+  uint8_t votosEjeX;
+  uint8_t votosEjeY;
+  uint8_t flagsObjetivoV2;
+  uint32_t edadConsultaReferenciaObjetivoMs;
+  bool referenciaEntreMuestras;
 };
 
 void publicarCausaDiagnosticoV2(
@@ -426,6 +445,10 @@ const char *nombreCausaDiagnosticoV2(uint8_t causa) {
     case V2_DIAG_DESPLAZAMIENTO: return "DESPLAZAMIENTO";
     case V2_DIAG_OBJETIVO_LISTO: return "OBJETIVO_LISTO";
     case V2_DIAG_PUBLICADO: return "PUBLICADO";
+    case V2_DIAG_CAJA_RECORTADA: return "CAJA_RECORTADA";
+    case V2_DIAG_MULTIPLES_PIEZAS: return "MULTIPLES_PIEZAS";
+    case V2_DIAG_ORIENTACION_AMBIGUA: return "ORIENTACION_AMBIGUA";
+    case V2_DIAG_REFERENCIA_CAMARA_INCIERTA: return "REFERENCIA_CAMARA_INCIERTA";
     default: return "DESCONOCIDO";
   }
 }
@@ -455,6 +478,10 @@ const char *nombreCortoDiagnosticoV2(uint8_t causa) {
     case V2_DIAG_DESPLAZAMIENTO: return "DESPLAZAM.";
     case V2_DIAG_OBJETIVO_LISTO: return "OBJ LISTO";
     case V2_DIAG_PUBLICADO: return "PUBLICADO";
+    case V2_DIAG_CAJA_RECORTADA: return "CAJA RECORT.";
+    case V2_DIAG_MULTIPLES_PIEZAS: return "PIEZAS AMBIG.";
+    case V2_DIAG_ORIENTACION_AMBIGUA: return "GIRO AMBIGUO";
+    case V2_DIAG_REFERENCIA_CAMARA_INCIERTA: return "REF CAM INCIERTA";
     default: return "---";
   }
 }
@@ -1010,6 +1037,10 @@ void invalidarControlCamaraPorTimeout() {
 }
 
 bool paquetePortentaSemanticamenteValido(const PaquetePortentaAESP &p) {
+  if (p.errorSistema > SISTEMA_ERROR_CALIBRACION_CAPTURA_FIJA) return false;
+  if (p.errorSistema == SISTEMA_ERROR_CALIBRACION_CAPTURA_FIJA &&
+      (p.estadoSistema != SISTEMA_MODO_AUTOMATICO_V2 ||
+       p.opcionMenu != MENU_MODO_AUTOMATICO_V2)) return false;
   if (p.estadoSistema == SISTEMA_CAMBIOS_CATCH) {
     // El resumen usa campos del encoder con unidades/flags propios.
     return p.opcionMenu == MENU_CAMBIOS_CATCH && p.faseCalibracionBrazo <= 1 &&
@@ -1109,7 +1140,7 @@ void prepararSnapshotI2C() {
   paquete.errorCamara = camara.error;
   paquete.ackSecuenciaComandoCamara = camara.ackComando;
   empacarMuestrasTags(camara.muestras, paquete.muestrasTagEmpacadas);
-  paquete.reservadoV2 = 0;
+  paquete.reservadoV2 = camara.objetivoValido ? camara.flagsObjetivoV2 : 0;
   paquete.claseObjetivo = camara.claseObjetivo;
   paquete.objetivoX10 = camara.objetivoX10;
   paquete.objetivoY10 = camara.objetivoY10;
@@ -1207,6 +1238,12 @@ struct RegistroLogV2 {
   float recorridoDuranteConsultaMm;
   int32_t conteoAntesConsulta;
   int32_t conteoDespuesConsulta;
+  uint8_t rechazadosCajaRecortada;
+  uint8_t votosEjeX;
+  uint8_t votosEjeY;
+  uint8_t flagsObjetivoV2;
+  uint32_t edadConsultaReferenciaObjetivoMs;
+  bool referenciaEntreMuestras;
 };
 
 portMUX_TYPE colaLogV2Mux = portMUX_INITIALIZER_UNLOCKED;
@@ -1304,6 +1341,12 @@ void registrarConsultaLogV2(
     static_cast<float>(diag.recorridoDuranteConsultaMm);
   registro.conteoAntesConsulta = diag.conteoAntesConsulta;
   registro.conteoDespuesConsulta = diag.conteoDespuesConsulta;
+  registro.rechazadosCajaRecortada = diag.rechazadosCajaRecortada;
+  registro.votosEjeX = diag.votosEjeX;
+  registro.votosEjeY = diag.votosEjeY;
+  registro.flagsObjetivoV2 = diag.flagsObjetivoV2;
+  registro.edadConsultaReferenciaObjetivoMs = diag.edadConsultaReferenciaObjetivoMs;
+  registro.referenciaEntreMuestras = diag.referenciaEntreMuestras;
   encolarRegistroLogV2(registro);
 }
 
@@ -1385,6 +1428,23 @@ void imprimirRegistroLogV2(const RegistroLogV2 &r) {
     Serial.print(r.recorridoDuranteConsultaMm, 3);
     Serial.print(F("|enc_before=")); Serial.print(r.conteoAntesConsulta);
     Serial.print(F("|enc_after=")); Serial.print(r.conteoDespuesConsulta);
+    Serial.print(F("|rej_crop=")); Serial.print(r.rechazadosCajaRecortada);
+    Serial.print(F("|votes_x=")); Serial.print(r.votosEjeX);
+    Serial.print(F("|votes_y=")); Serial.print(r.votosEjeY);
+    Serial.print(F("|objective_flags=")); Serial.print(r.flagsObjetivoV2);
+    Serial.print(F("|reference_query_age_ms="));
+    if (r.edadConsultaReferenciaObjetivoMs == UINT32_MAX) Serial.print(F("NA"));
+    else Serial.print(r.edadConsultaReferenciaObjetivoMs);
+    Serial.print(F("|reference_source="));
+    Serial.print(r.referenciaEntreMuestras ? F("QUERY_MIDPOINT_APPROX") : F("ENCODER_AFTER_QUERY_APPROX"));
+    Serial.print(F("|capture_timestamp=NA|image_age_known=0"));
+    Serial.print(F("|camera_delay_cal_ms="));
+    if (CAMERA_RETARDO_CAPTURA_CALIBRADO_MS < 0) Serial.print(F("NA"));
+    else Serial.print(CAMERA_RETARDO_CAPTURA_CALIBRADO_MS);
+    Serial.print(F("|camera_jitter_cal_ms="));
+    if (CAMERA_JITTER_CAPTURA_CALIBRADO_MS < 0) Serial.print(F("NA"));
+    else Serial.print(CAMERA_JITTER_CAPTURA_CALIBRADO_MS);
+    Serial.print(F("|image_reference_uncertainty_mm=NA|camera_delay_compensated=0"));
   }
   Serial.println();
 }
@@ -1691,6 +1751,33 @@ bool isOverWhiteBelt(const Point2D &position) {
     isInsideCalibrationArea(position);
 }
 
+bool cajaIntegraAutonomaV2(const CandidatoPiezaV2 &candidato) {
+  if (candidato.anchoPx <= 0 || candidato.altoPx <= 0) return false;
+  const double izquierda = candidato.centroXpx - candidato.anchoPx * 0.5;
+  const double derecha = candidato.centroXpx + candidato.anchoPx * 0.5;
+  const double arriba = candidato.centroYpx - candidato.altoPx * 0.5;
+  const double abajo = candidato.centroYpx + candidato.altoPx * 0.5;
+  if (izquierda <= CAMERA_MARGEN_CAJA_PX || arriba <= CAMERA_MARGEN_CAJA_PX ||
+      derecha >= CAMERA_ANCHO_IMAGEN_PX - CAMERA_MARGEN_CAJA_PX ||
+      abajo >= CAMERA_ALTO_IMAGEN_PX - CAMERA_MARGEN_CAJA_PX) return false;
+  // No estimar eje/centro con una caja que requiere extrapolar la homografia.
+  const double u[4] = {izquierda, derecha, izquierda, derecha};
+  const double v[4] = {arriba, arriba, abajo, abajo};
+  for (uint8_t i = 0; i < 4; ++i) {
+    Point2D esquina;
+    if (!pixelToMillimeters(u[i], v[i], true, esquina) ||
+        !isInsideCalibrationArea(esquina)) return false;
+  }
+  return true;
+}
+
+bool capturaAutonomaV2(const ControlCamaraCompartido &control) {
+  // Las correcciones humanas y ensayos mantienen su politica previa.
+  return control.automaticoV2Activo && control.orientarGarraV2 &&
+         !control.ajusteCatchV2 && !control.entrenamientoML &&
+         !control.pruebaEncoderActiva;
+}
+
 void printHomography() {
   Serial.println(F("[CAL] Matriz de homografia:"));
   for (uint8_t row = 0; row < 3; ++row) {
@@ -1793,6 +1880,8 @@ struct ContextoCamara {
   int32_t conteoReferenciaObjetivo;
   int16_t sugerenciaAngulo;
   bool pruebaEncoderAnterior;
+  uint8_t flagsObjetivoV2;
+  uint32_t consultaReferenciaObjetivoMs;
 };
 
 ContextoCamara camaraCtx = {};
@@ -1828,6 +1917,7 @@ void publicarEstadoCamara(const ContextoCamara &ctx) {
   publicado.objetivoV2 = ctx.objetivoV2;
   publicado.sugerenciaAngulo = ctx.sugerenciaAngulo;
   publicado.conteoReferenciaObjetivo = ctx.conteoReferenciaObjetivo;
+  publicado.flagsObjetivoV2 = ctx.flagsObjetivoV2;
 
   portENTER_CRITICAL(&estadoCamaraMux);
   estadoCamaraPublicado = publicado;
@@ -1931,6 +2021,8 @@ void limpiarObjetivo(ContextoCamara &ctx, bool exigirDesaparicion) {
   ctx.objetivoV2 = false;
   ctx.conteoReferenciaObjetivo = 0;
   ctx.sugerenciaAngulo = -1;
+  ctx.flagsObjetivoV2 = 0;
+  ctx.consultaReferenciaObjetivoMs = 0;
   reiniciarFiltro(ctx);
   reiniciarFiltroV2(ctx);
   if (exigirDesaparicion && habiaObjetivo) {
@@ -2476,10 +2568,14 @@ bool publicarObjetivoV2(
   bool entrenamientoML,
   bool entrenamientoMLV2,
   bool pruebaSeguimiento,
-  bool ajusteCatch
+  bool ajusteCatch,
+  bool capturaAutonoma = false
 ) {
   FiltroDeteccionV2 &filtro = ctx.filtroV2;
   if (filtro.consecutivas < DETECCIONES_ESTABLES_V2) return false;
+  if (capturaAutonoma && (!orientarGarra || !AUTO_V2_APLICAR_GIRO_POR_CAJA ||
+      CalibracionAnguloMLV2::sugerir(filtro.clase, filtro.votosEjeX,
+                                  filtro.votosEjeY) < 0)) return false;
   const double desplazamiento = fabs(
     static_cast<double>(diferenciaConteosConWrap(
       conteoActual,
@@ -2511,8 +2607,12 @@ bool publicarObjetivoV2(
   ctx.objetivoX10 = static_cast<int16_t>(x10);
   ctx.objetivoY10 = static_cast<int16_t>(y10);
   ctx.conteoReferenciaObjetivo = conteoActual;
+  ctx.flagsObjetivoV2 = capturaAutonoma
+    ? OBJ_V2_REFERENCIA_APROXIMADA | OBJ_V2_ORIENTACION_AXIAL | OBJ_V2_GIRO_APLICADO
+    : 0;
+  ctx.consultaReferenciaObjetivoMs = filtro.ultimoMs;
   ctx.rearmada = false;
-  if (entrenamientoMLV2 || ajusteCatch) {
+  if (entrenamientoMLV2 || ajusteCatch || capturaAutonoma) {
     const uint32_t intervaloMs = filtro.ultimoMs - filtro.primerMs;
     const double deltaCamaraY = filtro.ultimoYRaw - filtro.primerYRaw;
     const double recorridoCamaraMm = fabs(deltaCamaraY);
@@ -2525,11 +2625,13 @@ bool publicarObjetivoV2(
       ? 1000.0 * recorridoCamaraMm / intervaloMs : NAN;
     const double velocidadEncoderVentanaMmS = intervaloMs > 0
       ? 1000.0 * recorridoEncoderMm / intervaloMs : NAN;
-    Serial.print(ajusteCatch
+    Serial.print(capturaAutonoma
+      ? F("V2LOG|E|mode=V2|event=CAMERA_SPEED|session=")
+      : (ajusteCatch
       ? F("V2LOG|E|mode=CATCH_CAL|event=CAMERA_SPEED|session=")
       : (pruebaSeguimiento
       ? F("V2LOG|E|mode=ML_TRACK|event=CAMERA_SPEED|session=")
-      : F("V2LOG|E|mode=ML_V2|event=CAMERA_SPEED|session=")));
+      : F("V2LOG|E|mode=ML_V2|event=CAMERA_SPEED|session="))));
     Serial.print(sesionArranque);
     Serial.print(F("|ms=")); Serial.print(filtro.ultimoMs);
     Serial.print(F("|obj=")); Serial.print(ctx.secuenciaObjetivo);
@@ -2610,6 +2712,23 @@ bool publicarObjetivoV2(
     orientarGarraAutomatica(filtro.votosEjeX, filtro.votosEjeY, true,
                             filtro.clase, ctx.secuenciaObjetivo);
   }
+  if (capturaAutonoma) {
+    // El eje que devuelve la caja es el lado largo. Los valores aprendidos
+    // corresponden al cierre por el lado menor; no sumar 90 grados al servo.
+    Serial.print(F("V2LOG|E|event=OBJECTIVE_REFERENCE|mode=V2|session="));
+    Serial.print(sesionArranque);
+    Serial.print(F("|ms=")); Serial.print(millis());
+    Serial.print(F("|obj=")); Serial.print(ctx.secuenciaObjetivo);
+    Serial.print(F("|objective_flags=")); Serial.print(ctx.flagsObjetivoV2);
+    Serial.print(F("|reference_encoder=")); Serial.print(ctx.conteoReferenciaObjetivo);
+    Serial.print(F("|reference_source=QUERY_MIDPOINT_APPROX|capture_timestamp=NA|image_age_known=0"));
+    Serial.print(F("|reference_query_age_ms=")); Serial.print(millis() - filtro.ultimoMs);
+    Serial.print(F("|closure_axis_minor="));
+    Serial.print(filtro.votosEjeX >= 2 && filtro.votosEjeY == 0 ? F("Y") : F("X"));
+    Serial.print(F("|suggestion_source=MLV2_EJES_20261005|servo_rot_deg="));
+    Serial.print(anguloServoRotacion);
+    Serial.println(F("|rotation_command_applied=1|rotation_physically_verified=0"));
+  }
   reiniciarFiltroV2(ctx);
 
   Serial.print(F("[AUTO V2] Objetivo bloqueado seq="));
@@ -2631,6 +2750,7 @@ bool leerPiezasV2UnaVez(
   uint32_t ahora
 ) {
   uint32_t consulta = ++consultasLogV2;
+  const bool capturaAutonoma = capturaAutonomaV2(control);
   if (consulta == 0) consulta = ++consultasLogV2;
   const EstadoEncoderCompartido encoderAntes = copiarEstadoEncoder();
   const uint32_t inicioConsulta = millis();
@@ -2650,6 +2770,11 @@ bool leerPiezasV2UnaVez(
     );
   }
   const bool encoderValido = encoderRemotoVigente(encoder);
+  const uint8_t flagsReferencia = ENC_FLAG_HW_LISTO | ENC_FLAG_ESCALA_VALIDA |
+    ENC_FLAG_PULSOS_VISTOS;
+  const bool referenciaAutonomaValida = muestrasCompatibles &&
+    (encoderAntes.flags & flagsReferencia) == flagsReferencia &&
+    (encoderAntes.flags & ENC_FLAG_SATURADO) == 0 && encoderValido;
   DiagnosticoDeteccionV2 diag = crearDiagnosticoBaseV2(
     encoder, resultCount
   );
@@ -2657,6 +2782,10 @@ bool leerPiezasV2UnaVez(
   diag.conteoAntesConsulta = encoderAntes.conteo;
   diag.conteoDespuesConsulta = encoderDespues.conteo;
   diag.conteoAsociadoCamara = encoder.conteo;
+  diag.referenciaEntreMuestras = muestrasCompatibles;
+  diag.flagsObjetivoV2 = ctx.flagsObjetivoV2;
+  diag.edadConsultaReferenciaObjetivoMs = ctx.objetivoValido
+    ? finConsulta - ctx.consultaReferenciaObjetivoMs : UINT32_MAX;
   if (muestrasCompatibles) {
     diag.recorridoDuranteConsultaMm = fabs(
       desplazamientoEncoderMm(
@@ -2710,6 +2839,12 @@ bool leerPiezasV2UnaVez(
       continue;
     }
     if (diag.candidatosValidos < UINT8_MAX) ++diag.candidatosValidos;
+    if (capturaAutonoma && !cajaIntegraAutonomaV2(candidato)) {
+      if (diag.rechazadosCajaRecortada < UINT8_MAX) ++diag.rechazadosCajaRecortada;
+      registrarCandidatoLogV2(consulta, encoder, candidato, indiceActual,
+                             V2_DIAG_CAJA_RECORTADA);
+      continue;
+    }
     if (cantidadCandidatos >= MAX_CANDIDATOS_V2) {
       registrarCandidatoLogV2(
         consulta, encoder, candidato, indiceActual, V2_DIAG_SIN_BLOQUEO
@@ -2836,6 +2971,12 @@ bool leerPiezasV2UnaVez(
     bloqueoPrevio = V2_DIAG_NO_REARMADO;
   } else if (!encoderValido) {
     bloqueoPrevio = diagnosticarEncoderV2(encoder);
+  } else if (capturaAutonoma && !referenciaAutonomaValida) {
+    bloqueoPrevio = V2_DIAG_REFERENCIA_CAMARA_INCIERTA;
+  } else if (capturaAutonoma && diag.rechazadosCajaRecortada != 0) {
+    bloqueoPrevio = V2_DIAG_CAJA_RECORTADA;
+  } else if (capturaAutonoma && cantidadUnicos > 1) {
+    bloqueoPrevio = V2_DIAG_MULTIPLES_PIEZAS;
   }
 
   if (bloqueoPrevio != V2_DIAG_SIN_BLOQUEO) {
@@ -2981,6 +3122,8 @@ bool leerPiezasV2UnaVez(
   diag.xMm = candidatoElegido.posicion.x;
   diag.yMm = candidatoElegido.posicion.y;
   diag.relacionYEncoder = ctx.filtroV2.relacionYEncoder;
+  diag.votosEjeX = ctx.filtroV2.votosEjeX;
+  diag.votosEjeY = ctx.filtroV2.votosEjeY;
   diag.yCompensadaMm = compensarYConEncoder(
     candidatoElegido.posicion.y,
     encoder.conteo,
@@ -3004,11 +3147,22 @@ bool leerPiezasV2UnaVez(
   }
 
   publicarCausaDiagnosticoV2(diag, V2_DIAG_OBJETIVO_LISTO);
+  if (capturaAutonoma && (!AUTO_V2_APLICAR_GIRO_POR_CAJA ||
+      CalibracionAnguloMLV2::sugerir(ctx.filtroV2.clase,
+        ctx.filtroV2.votosEjeX, ctx.filtroV2.votosEjeY) < 0)) {
+    // Conservar el giro previo y reunir una nueva ventana; la caja no mide diagonales.
+    publicarYRegistrarDiagnosticoV2(diag, V2_DIAG_ORIENTACION_AMBIGUA,
+                                  encoder, consulta, indiceElegido);
+    reiniciarFiltroV2(ctx);
+    return true;
+  }
   if (publicarObjetivoV2(
         ctx, encoder.conteo, encoder, control.orientarGarraV2,
         control.entrenamientoML, control.entrenamientoMLV2,
-        control.pruebaSeguimiento, control.ajusteCatchV2)) {
+        control.pruebaSeguimiento, control.ajusteCatchV2, capturaAutonoma)) {
     diag.secuenciaPublicada = ctx.secuenciaObjetivo;
+    diag.flagsObjetivoV2 = ctx.flagsObjetivoV2;
+    diag.edadConsultaReferenciaObjetivoMs = finConsulta - ctx.consultaReferenciaObjetivoMs;
     publicarYRegistrarDiagnosticoV2(
       diag, V2_DIAG_PUBLICADO, encoder, consulta, indiceElegido
     );
@@ -3701,6 +3855,7 @@ const char *textoErrorSistema(uint8_t error) {
     case SISTEMA_ERROR_TIMEOUT_MOVIMIENTO: return "TIMEOUT MOV.";
     case SISTEMA_ERROR_FINALES_INCOHERENTES: return "FINALES INCOH.";
     case SISTEMA_ERROR_CANCELADO: return "CANCELADO";
+    case SISTEMA_ERROR_CALIBRACION_CAPTURA_FIJA: return "CALIBRAR CAPTURA";
     default: return "ERROR DESCONOCIDO";
   }
 }
@@ -3973,7 +4128,14 @@ void mostrarModoAutomaticoV2(const PaquetePortentaAESP &p) {
   const DiagnosticoDeteccionV2 diag = copiarDiagnosticoV2();
   const bool ajusteCatch = p.opcionMenu == MENU_AJUSTE_CATCH_V2;
   dibujarTitulo(p.opcionMenu == MENU_REGISTRO_ANGULO
-    ? F("REGISTRO ANGULO") : (ajusteCatch ? F("AJUSTE CATCH V2") : F("AUTOMATICO V2")));
+    ? F("REGISTRO ANGULO") : (ajusteCatch ? F("AJUSTE CATCH V2") : F("AUTO V2 Y FIJO")));
+  if (!ajusteCatch && p.opcionMenu == MENU_MODO_AUTOMATICO_V2 &&
+      p.errorSistema == SISTEMA_ERROR_CALIBRACION_CAPTURA_FIJA) {
+    pantalla.setCursor(0, 17); pantalla.print(F("CALIBRAR CAPTURA"));
+    pantalla.setCursor(0, 32); pantalla.print(F("PERFIL FISICO"));
+    pantalla.setCursor(0, 57); pantalla.print(F("TRI:SALIR"));
+    return;
+  }
   if (ajusteCatch && p.faseCalibracionBrazo == 17) {
     pantalla.setCursor(0, 13); pantalla.print(F("RESULTADO CATCH?"));
     pantalla.setCursor(0, 25); pantalla.print(F("X: LA AGARRO"));
@@ -4064,7 +4226,7 @@ void mostrarModoAutomaticoV2(const PaquetePortentaAESP &p) {
   } else if (p.faseCalibracionBrazo == 15) {
     pantalla.print(F("Z REGRESANDO"));
   } else if (p.faseCalibracionBrazo == 16) {
-    pantalla.print(ajusteCatch ? F("Y SIGUE CATCH AUTO") : F("Y SIGUE PIEZA"));
+    pantalla.print(ajusteCatch ? F("Y SIGUE CATCH AUTO") : F("ESPERA Y FIJO"));
   } else {
     pantalla.print(F("TRI:CANCELAR"));
   }

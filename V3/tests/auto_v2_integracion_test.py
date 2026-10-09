@@ -12,8 +12,10 @@ from recuperacion_enlace_test import run_recovery
 
 
 def definition(source, marker):
-    start = source.index(marker)
-    opening = source.index('{', start)
+    found = re.search(re.escape(marker) + ('' if marker.endswith('{') else r'[^;{]*\{'), source)
+    if not found:
+        raise ValueError('Definicion ausente: ' + marker)
+    start, opening = found.start(), found.end() - 1
     depth, end = 1, opening + 1
     while depth:
         depth += (source[end] == '{') - (source[end] == '}')
@@ -30,6 +32,7 @@ def main():
     assert (folder / 'ESP/ProtocoloI2C.h').read_bytes() == (folder / 'PORTENTA/ProtocoloI2C.h').read_bytes()
     cpp = '#include <assert.h>\n#include <math.h>\n#include <stdint.h>\n#include <stdlib.h>\n#include <string.h>\n#include <stdio.h>\n#define F(x) x\n'
     cpp += '#include "' + (folder / 'PORTENTA/ProtocoloI2C.h').as_posix() + '"\nusing namespace ProtocoloI2C;\n'
+    cpp += '#include "' + (folder / 'PORTENTA/CapturaFijaV2.h').as_posix() + '"\n'
     cpp += definition(source, 'enum FaseAutomaticoV2 :') + ';\n'
     cpp += definition(source, 'struct ContextoAutomaticoV2 {') + ';\n'
     for name in ['RANGO_FISICO_Y_MM', 'MARGEN_SEGURIDAD_MM', 'PASOS_SEPARACION',
@@ -41,10 +44,31 @@ def main():
                  'V2_DIV_BUSQUEDA_FINAL_Z', 'ML_TIEMPO_SERVO_MS',
                  'ML_MARGEN_FINAL_DERECHO_MM', 'ML_SEGUIMIENTO_MARGEN_Y_MM',
                  'ML_SEGUIMIENTO_RESERVA_S', 'ML_SEGUIMIENTO_LOG_MS',
-                 'V2_SEGUIMIENTO_ESTABLE_MS', 'V2_AJUSTE_DISPARO_CATCH_MS']:
+                 'V2_SEGUIMIENTO_ESTABLE_MS', 'V2_AJUSTE_DISPARO_CATCH_MS',
+                 'V2_PERIODO_LOG_TELEMETRIA_MS']:
         cpp += re.search(r'(?:const|constexpr) [^;\n]+\b' + name + r'\s*=\s*[^;]+;', source).group() + '\n'
     cpp += '#include \"' + (folder / 'PORTENTA/AjusteCatchV2.h').as_posix() + '\"\n'
+    # Solo el simulador puede activar un perfil medido sintetico. El firmware
+    # permanece inhibido con V2_CAPTURA_FIJA_VALIDADA=false hasta medicion fisica.
+    for name in ['V2_CAPTURA_FIJA_VALIDADA', 'V2_VENTANA_CAPTURA_Y_MM',
+                 'V2_ERROR_GEOMETRIA_CAPTURA_MM', 'V2_MARGEN_TIEMPO_Z_S',
+                 'V2_TIEMPO_CONTACTO_MIN_S', 'V2_TIEMPO_CONTACTO_MAX_S',
+                 'V2_LIMITE_ACELERACION_MM_S2', 'V2_ERROR_MODELO_ACELERACION_MM_S2',
+                 'V2_VELOCIDAD_MIN_CAPTURA_MM_S', 'V2_VELOCIDAD_MAX_CAPTURA_MM_S',
+                 'V2_ERROR_RELATIVO_ESCALA', 'V2_ERROR_REFERENCIA_CAMARA_MS',
+                 'V2_ALTURA_LIBRE_BANDA_PASOS', 'V2_TIEMPO_RETIRADA_BANDA_MAX_S',
+                 'V2_DESPLAZAMIENTO_SOSTENIDO_MAX_MM',
+                 'V2_VENTANA_VELOCIDAD_MS', 'V2_EDAD_MAXIMA_VELOCIDAD_MS',
+                 'V2_ASENTAMIENTO_X_MS', 'V2_ASENTAMIENTO_GIRO_MS',
+                 'V2_ESPERA_MAXIMA_ABAJO_MS']:
+        declaration = re.search(r'constexpr [^;\n]+\b' + name + r'\s*=\s*[^;]+;', source)
+        if declaration:
+            cpp += declaration.group().replace('constexpr ', '') + '\n'
     cpp += '''
+CapturaFijaV2::Estimador estimadorCapturaFijaV2;
+float velocidadMotores=0.0001f;
+float escalaEncoderMmPorCuenta=0.001f;
+int8_t signoEncoderAvance=1;
 AjusteCatchV2::Sesion ajusteCatchV2;
 uint8_t paginaCambiosCatch=0;
 void imprimirCambiosCatchV2() {}
@@ -56,12 +80,13 @@ ContextoAutomaticoV2 automaticoV2;
 struct Terminal { template<class T> void print(const T&, int=0) {};
 template<class T> void println(const T&, int=0) {}; } Serial;
 unsigned long now=1000, tAnteriorEstadoESP;
+unsigned long ultimoPaqueteValidoMs=1000;
 unsigned long millis() { return now; }
 bool btConectado, eventoBotonTriangulo, eventoBotonX, eventoBotonCuadrado, eventoBotonCirculo;
 bool limiteZarriba, limiteZabajo, limiteXmas, limiteXmenos, limiteYmas, limiteYmenos;
 bool encoderOK, bandaOK, camaraOK, predictionOK, xyOK, comunicacionI2CHabilitada;
 bool movimientoPosicionadoActivo, objetivoYActivo, xActive, zActive;
-int movX, movY, movZ, divisorY=DIV_POSICION, posServoRot=59;
+int movX, movY, movZ, divisorY=DIV_POSICION, posServoRot=59, posServoPin=0;
 long objetivoY, ySteps, zSteps, zTarget;
 float pasosPorMmY=100, armX, pieceY, velocidadBandaMmS;
 int32_t conteoEncoderBanda;
@@ -143,13 +168,32 @@ void reset(FaseAutomaticoV2 phase=V2_SIGUIENDO_PIEZA) {
   errores=cancelaciones=cierres=resultados=aceptados=busquedas=yStarts=tx=0;
   intentosV2=exitosV2=0; codigoAckObjetivo=ACK_OBJ_ACEPTADO;
   secuenciaObjetivoRecibida=ackSecuenciaObjetivo=42;
+  ultimoPaqueteValidoMs=now;
+  posServoRot=59; posServoPin=0;
+  automaticoV2.flagsReferencia=MASCARA_FLAGS_OBJETIVO_V2;
+  automaticoV2.anguloPreparado=59;
+  automaticoV2.aceptadoMs=now-V2_ASENTAMIENTO_GIRO_MS;
+  automaticoV2.inicioXEstable=now-V2_ASENTAMIENTO_X_MS;
 }
 void finishXYZ() { detenerTodos(); movimientoPosicionadoActivo=false; zSteps=zTarget; }
 '''
-    for marker in ['bool seguirPiezaY(float', 'bool seguirPiezaYAutomaticoV2()',
+    for marker in ['bool seguimientoYAutomaticoV2()', 'bool perfilCapturaFijaV2Valido()',
+                   'CapturaFijaV2::Movimiento movimientoCapturaFijaV2()',
+                   'float errorPosicionCapturaFijaV2(', 'bool retencionBandaAdmisibleV2(',
+                   'float horizonteContactoMinV2()', 'float horizonteContactoMaxV2()',
+                   'CapturaFijaV2::Intervalo predecirContactoFijoV2(',
+                   'void registrarPerfilCapturaFijaV2()', 'bool xYGiroListosCapturaFijaV2()',
+                   'void registrarPrediccionCapturaFijaV2(', 'bool procesarCapturaFijaV2()',
+                   'bool seguirPiezaY(float', 'bool seguirPiezaYAutomaticoV2()',
                    'bool iniciarTrasladoEntrega()', 'void llenarResumenCatchV2(', 'void procesarModoAutomaticoV2()']:
         cpp += definition(source, marker) + '\n'
-    cpp += '''int main() {
+    cpp += '''void medirMovimientoSimulado() {
+  estimadorCapturaFijaV2.reiniciar(0,now-400,escalaEncoderMmPorCuenta,1);
+  for(int n=1;n<=4;++n)
+    estimadorCapturaFijaV2.actualizar(n*1000,now-400+n*100,escalaEncoderMmPorCuenta,1);
+  conteoEncoderBanda=4000;
+}
+int main() {
 static_assert(sizeof(PaquetePortentaAESP)==32 && sizeof(PaqueteESPAPortenta)==32,"Paquetes");
 // Seguimiento real: actualiza objetivo sin reiniciar pulsos y limita el recorrido.
 reset(); pieceY=10; assert(seguirPiezaY(pieceY)); assert(yStarts==1);
@@ -266,11 +310,52 @@ ajusteCatchV2=AjusteCatchV2::Sesion(1000);
 reset(); assert(ajusteCatchV2.offsetMs==1000);
 calMode=false; reset(); procesarModoAutomaticoV2(); now+=300;
 procesarModoAutomaticoV2(); assert(zActive);
-// Ruta fija sigue disponible; X no dispara ni habilita excepciones de ML V2.
+// La ruta fija exige perfil fisico, giro y ventana; X nunca dispara.
 AUTO_V2_SEGUIMIENTO_Y=false; reset(V2_ESPERANDO_CATCH_AUTOMATICO);
-pieceY=-100; eventoBotonX=true; procesarModoAutomaticoV2(); assert(!zActive && !eventoBotonX);
-pieceY=-55; procesarModoAutomaticoV2(); assert(zActive);
-pieceY=6; procesarModoAutomaticoV2(); assert(cancelaciones==1 && !cierres);
+pieceY=-100; eventoBotonX=true; procesarModoAutomaticoV2();
+assert(cancelaciones==1 && !zActive && !cierres && !eventoBotonX);
+V2_CAPTURA_FIJA_VALIDADA=true; V2_MARGEN_TIEMPO_Z_S=.001f;
+V2_TIEMPO_CONTACTO_MIN_S=V2_TIEMPO_CONTACTO_MAX_S=.2f;
+V2_ERROR_GEOMETRIA_CAPTURA_MM=.5f;
+V2_ERROR_MODELO_ACELERACION_MM_S2=.1f;
+V2_VELOCIDAD_MIN_CAPTURA_MM_S=.1f; V2_VELOCIDAD_MAX_CAPTURA_MM_S=200;
+V2_ERROR_RELATIVO_ESCALA=0; V2_ERROR_REFERENCIA_CAMARA_MS=0;
+V2_DESPLAZAMIENTO_SOSTENIDO_MAX_MM=100;
+reset(V2_ESPERANDO_CATCH_AUTOMATICO); medirMovimientoSimulado();
+pieceY=-100; eventoBotonX=true; procesarModoAutomaticoV2();
+assert(!zActive && !eventoBotonX && !cancelaciones && !yStarts);
+pieceY=-8.25f; procesarModoAutomaticoV2(); assert(zActive && !movY && !yStarts);
+assert(automaticoV2.fase==V2_BAJANDO_CATCH && intentosV2==1);
+// DIN04 solo no fuerza cierre: actualiza la prediccion tras la bajada.
+pieceY=-2.25f; limiteZabajo=true; procesarModoAutomaticoV2();
+assert(cierres==1 && automaticoV2.fase==V2_CERRANDO_PINZA && !movY);
+procesarModoAutomaticoV2(); assert(cierres==1);
+now+=V2_TIEMPO_CIERRE_PINZA_MS+V2_LATENCIA_ORDEN_PINZA_MS;
+posServoPin=130; ultimoPaqueteValidoMs=now;
+medirMovimientoSimulado(); procesarModoAutomaticoV2();
+assert(automaticoV2.fase==V2_SUBIENDO_Z && zTarget==0 && !movY);
+// Cumplir un temporizador sin feedback de la orden aplicada no habilita retirada/entrega.
+reset(V2_CERRANDO_PINZA); medirMovimientoSimulado(); limiteZabajo=true;
+automaticoV2.ordenCierreMs=now; automaticoV2.conteoInicioCierre=conteoEncoderBanda;
+now+=V2_TIEMPO_CIERRE_PINZA_MS+V2_LATENCIA_ORDEN_PINZA_MS;
+medirMovimientoSimulado(); procesarModoAutomaticoV2();
+assert(cancelaciones==1 && automaticoV2.fase==V2_CANCELANDO);
+// Cambiar la velocidad/posicion fuera de ventana cancela sin cerrar.
+reset(V2_BAJANDO_CATCH); medirMovimientoSimulado(); pieceY=6;
+procesarModoAutomaticoV2(); assert(cancelaciones==1 && !cierres);
+reset(V2_BAJANDO_CATCH); medirMovimientoSimulado(); pieceY=-2.25f;
+detenerZ(); procesarModoAutomaticoV2(); assert(cancelaciones==1 && !cierres && !busquedas);
+// La garra no permanece indefinidamente abajo esperando una llegada tardia.
+reset(V2_BAJANDO_CATCH); medirMovimientoSimulado(); pieceY=-100; limiteZabajo=true;
+procesarModoAutomaticoV2(); assert(!cierres && !cancelaciones);
+now+=V2_ESPERA_MAXIMA_ABAJO_MS+1; medirMovimientoSimulado();
+procesarModoAutomaticoV2(); assert(cancelaciones==1 && !cierres);
+reset(V2_ESPERANDO_CATCH_AUTOMATICO); medirMovimientoSimulado();
+pieceY=-8.25f; posServoRot=155; procesarModoAutomaticoV2();
+assert(cancelaciones==1 && !cierres && !zActive);
+reset(V2_ESPERANDO_CATCH_AUTOMATICO); medirMovimientoSimulado();
+pieceY=-8.25f; now+=V2_EDAD_MAXIMA_VELOCIDAD_MS+1;
+procesarModoAutomaticoV2(); assert(cancelaciones==1 && !cierres);
 puts("PASS: seguimiento real, ciclo automatico hasta entrega, ruta fija, DIN04, timeout, encoder, control, limites y resultado reservado hasta Z seguro");
 }
 '''
@@ -353,7 +438,7 @@ assert(paquetePortentaSemanticamenteValido(resumen)); actualizarEncoderDesdePort
 assert(estadoEncoder.conteo==123 && estadoEncoder.velocidadMmS==50);
 PaquetePortentaAESP wire={}; wire.codigoAckObjetivo=ACK_OBJ_ABRIR_PINZA;
 prepararPaquete(wire); assert(validarPaquete(wire));
-wire.version=15;
+wire.version=VERSION_PROTOCOLO-1;
 wire.checksum=calcularCRC8ATM(reinterpret_cast<const uint8_t*>(&wire),31);
 assert(!validarPaquete(wire)); // Rechazar version vieja aun con CRC correcto.
 }'''
@@ -378,7 +463,7 @@ assert(!validarPaquete(wire)); // Rechazar version vieja aun con CRC correcto.
         subprocess.run([args.compiler, '-std=c++11', '-Wall', '-Wextra', '-static',
                         str(path), '-o', str(exe)], check=True)
         subprocess.run([str(exe)], check=True)
-    print('PASS: ajuste autonomo, aprendizaje acotado y etiquetas; handshake/pinza, reserva, idempotencia, CRC version 16')
+    print('PASS: ajuste autonomo, aprendizaje acotado y etiquetas; handshake/pinza, reserva, idempotencia, CRC y rechazo de version previa')
 
 
 if __name__ == '__main__':

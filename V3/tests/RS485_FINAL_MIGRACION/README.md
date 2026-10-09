@@ -8,7 +8,7 @@ CRC8. La prueba anterior a 9600 se conserva como antecedente. Este banco usa
 **el transporte del firmware completo**, sin motores, servos, camara, OLED,
 control Bluepad32, encoder ni calibraciones de arranque.
 
-- Aplicacion: `ProtocoloRS485.h`, **version 17**, paquetes de **32 bytes**.
+- Aplicacion: `ProtocoloRS485.h`, **version 19**, paquetes de **32 bytes**.
 - Transporte: `EnlaceRS485.h`, COBS + sesion + solicitud + CRC16,
   **44 bytes en cable**, **115200 baudios, 8N1, half duplex**.
 - Portenta coordina y mantiene una solicitud pendiente; ESP responde.
@@ -23,7 +23,9 @@ Las cabeceras de protocolo/transporte son copias identicas de
 `../../automatico v2 rs485/`. `ConfiguracionRS485.h` tambien se comparte con
 su ESP; la regresion verifica las copias. `FinalRS485.h` es exclusivo del banco:
 sus fallos artificiales por numero de solicitud nunca se incorporan al ciclo
-autonomo. No hay una nueva orden de aplicacion ni cambio de version.
+autonomo. Desde 2026-10-09 las cabeceras se sincronizan con la version 19
+de captura fija; el byte antes reservado describe calidad del objetivo en
+produccion. El banco conserva cargas sinteticas y no aplica actuadores.
 
 ## Cableado de la prueba del usuario
 
@@ -59,7 +61,7 @@ byte recibido, Portenta aplaza otra solicitud hasta cumplir 3 ms de silencio.
 Esto permite que ESP libere DE despues de sus 200 us de post-TX. La condicion
 vive en `Cliente::registrarRecepcion()`, `puedeIniciar()` e `iniciar()` del
 transporte compartido y no bloquea el loop. Se mantienen 15 ms antes de
-responder, timeout de 100 ms y formato v17/32 bytes/COBS 44 bytes.
+responder, timeout de 100 ms y formato v19/32 bytes/COBS 44 bytes.
 El test ASCII confirmado separaba solicitudes con 100 ms y no comprobaba
 este retorno inmediato bajo carga. Ver la evidencia y sus limites en
 `../../automatico v2 rs485/DIAGNOSTICO_RS485_2026-10-08.md`.

@@ -10,8 +10,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def definition(source, marker):
-    start = source.index(marker)
-    opening = source.index('{', start)
+    found = re.search(re.escape(marker) + ('' if marker.endswith('{') else r'[^;{]*\{'), source)
+    if not found:
+        raise ValueError('Definicion ausente: ' + marker)
+    start, opening = found.start(), found.end() - 1
     depth, end = 1, opening + 1
     while depth:
         depth += (source[end] == '{') - (source[end] == '}')
@@ -77,7 +79,7 @@ struct { int fase=ML_ESPERANDO_CONFIRMACION; } entrenamientoML;
 bool ajusteCatchV2Seleccionado() { return false; }
 bool entrenamientoConResultadoSeleccionado() { return false; }
 void registrarEventoPortentaV2(const char *, const char *) {}
-uint8_t estadoCamara=0, errorCamara=0, flagsCamara=0, muestrasTag[4]={}, claseObjetivo=0;
+uint8_t estadoCamara=0, errorCamara=0, flagsCamara=0, flagsObjetivoV2=0, muestrasTag[4]={}, claseObjetivo=0;
 int16_t objetivoCamaraX10=0, objetivoCamaraY10=0;
 uint16_t secuenciaObjetivoRecibida=0;
 int32_t conteoReferenciaObjetivoRecibido=0;
@@ -193,10 +195,15 @@ int main() {
   now+=1000; vigilarSeguridadComunicacion(); comprobarActivo();
   ++now; vigilarSeguridadComunicacion(); comprobarParo();
   // CRC de aplicacion, semantica y longitud/ruido no renuevan ultimo valido.
-  for(unsigned fallo : {0U,1U,5U}) {
+  for(unsigned fallo : {0U,1U,5U,7U,8U}) {
     preparar(); now+=999; auto p=respuesta();
     if(fallo==0) p.checksum^=1;
     if(fallo==1) { p.joystickX=2; prepararPaquete(p); }
+    if(fallo==7) { p.reservadoV2=0x80; prepararPaquete(p); }
+    if(fallo==8) {
+      p.version=VERSION_PROTOCOLO-1;
+      p.checksum=calcularCRC8ATM(reinterpret_cast<const uint8_t*>(&p),sizeof(p)-1);
+    }
     transmitir(p,fallo); assert(!leerPaqueteESP32()); assert(ultimoPaqueteValidoMs==1000);
     vigilarSeguridadComunicacion(); comprobarActivo();
     now=2001; vigilarSeguridadComunicacion(); comprobarParo();

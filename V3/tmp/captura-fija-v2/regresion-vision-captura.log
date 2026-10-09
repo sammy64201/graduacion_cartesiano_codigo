@@ -1,0 +1,28 @@
+C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\tmp\auto-v2-vision-capture-y3v7_cax\i2c.cpp: In function 'void reiniciarFiltroV2(ContextoCamara&)':
+C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\tmp\auto-v2-vision-capture-y3v7_cax\i2c.cpp:502:3: warning: missing initializer for member 'FiltroDeteccionV2::primerMs' [-Wmissing-field-initializers]
+  502 |   };
+      |   ^
+C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\tmp\auto-v2-vision-capture-y3v7_cax\i2c.cpp:502:3: warning: missing initializer for member 'FiltroDeteccionV2::ultimoMs' [-Wmissing-field-initializers]
+C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\tmp\auto-v2-vision-capture-y3v7_cax\i2c.cpp:502:3: warning: missing initializer for member 'FiltroDeteccionV2::primerYRaw' [-Wmissing-field-initializers]
+C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\tmp\auto-v2-vision-capture-y3v7_cax\i2c.cpp:502:3: warning: missing initializer for member 'FiltroDeteccionV2::muestrasYDistintas' [-Wmissing-field-initializers]
+C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\tmp\auto-v2-vision-capture-y3v7_cax\i2c.cpp: In function 'bool leerPiezasV2UnaVez(ContextoCamara&, const ControlCamaraCompartido&, uint32_t)':
+C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\tmp\auto-v2-vision-capture-y3v7_cax\i2c.cpp:1080:22: warning: enumerated and non-enumerated type in conditional expression [-Wextra]
+ 1080 |       !encoderValido ? diagnosticarEncoderV2(encoder) :
+      |       ~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ 1081 |         (cantidadUnicos == 0 ? V2_DIAG_SIN_PIEZA : V2_DIAG_SIN_BLOQUEO),
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+PASS: ESP vision captura fija; region, cuentas, ejes, reserva, cajas, ambiguedad y compatibilidad de ensayos.
+C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\tmp\auto-v2-vision-capture-y3v7_cax\rs485.cpp: In function 'void reiniciarFiltroV2(ContextoCamara&)':
+C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\tmp\auto-v2-vision-capture-y3v7_cax\rs485.cpp:502:3: warning: missing initializer for member 'FiltroDeteccionV2::primerMs' [-Wmissing-field-initializers]
+  502 |   };
+      |   ^
+C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\tmp\auto-v2-vision-capture-y3v7_cax\rs485.cpp:502:3: warning: missing initializer for member 'FiltroDeteccionV2::ultimoMs' [-Wmissing-field-initializers]
+C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\tmp\auto-v2-vision-capture-y3v7_cax\rs485.cpp:502:3: warning: missing initializer for member 'FiltroDeteccionV2::primerYRaw' [-Wmissing-field-initializers]
+C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\tmp\auto-v2-vision-capture-y3v7_cax\rs485.cpp:502:3: warning: missing initializer for member 'FiltroDeteccionV2::muestrasYDistintas' [-Wmissing-field-initializers]
+C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\tmp\auto-v2-vision-capture-y3v7_cax\rs485.cpp: In function 'bool leerPiezasV2UnaVez(ContextoCamara&, const ControlCamaraCompartido&, uint32_t)':
+C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\tmp\auto-v2-vision-capture-y3v7_cax\rs485.cpp:1080:22: warning: enumerated and non-enumerated type in conditional expression [-Wextra]
+ 1080 |       !encoderValido ? diagnosticarEncoderV2(encoder) :
+      |       ~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ 1081 |         (cantidadUnicos == 0 ? V2_DIAG_SIN_PIEZA : V2_DIAG_SIN_BLOQUEO),
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+PASS: ESP vision captura fija; region, cuentas, ejes, reserva, cajas, ambiguedad y compatibilidad de ensayos.

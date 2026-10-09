@@ -5,22 +5,146 @@ Version completa creada el **2026-10-07** a partir de los sketches vigentes de
 de control entre ESP32 y Portenta Machine Control a **RS485, 115200 baudios,
 8N1, half duplex**. La pantalla SH1106 sigue usando I2C.
 
+## Captura fija vigente (2026-10-09)
+
+Para ajustar el catch durante los ensayos, usar la terminal USB de Portenta
+a **115200**: `CATCH +100` adelanta 100 ms, `CATCH -100` retrasa y `CATCH`
+consulta. Rango +/-500 ms, aplicado a la siguiente pieza; v/a y cuentas
+adaptan el disparo a la velocidad actual. `CATCH 0` quita el ajuste.
+El valor se pierde al reiniciar; `V2_DESFASE_CATCH_MS` fija el predeterminado
+en el codigo (entregado en cero). El perfil estricto no aplica este ajuste.
+Consultar los detalles en [CAPTURA_FIJA_V2.md](CAPTURA_FIJA_V2.md).
+
+La revision tambien completa el ultimo STEP de X/Y/Z hasta el siguiente
+tick de 100 us y confirma DIN04 con Z quieto hasta 40 ms tras el endpoint.
+No permite cerrar sin DIN04 ni agrega busqueda por debajo del limite.
+La prediccion nominal descarta aceleracion indistinguible de cuantizacion;
+conserva muestras originales y las cancelaciones por cambios reales.
+Se agregan registros del desfase reservado y de la causa final de cancelacion.
+Verificado offline: nueve ciclos a 20/40/128 mm/s con desfases -100/0/+100 ms,
+parser y comandos reales sin modificar la reserva activa, confirmacion DIN04
+tardia/ausente, cancelacion ante aceleracion real y 60 casos de ISR/paradas
+para pulsos X/Y/Z. Pasaron la suite de migracion RS485 y el CSV. Ambos
+sketches compilaron (Bluepad32 4.1.0 / mbed_portenta 4.6.0); logs con sufijo
+`desfase` en `../tmp/captura-fija-v2/`. No se cargaron placas ni se acciono
+hardware; la correccion del software no acredita la respuesta fisica DIN04.
+
+Automatico V2 autonomo prepara **X de la pieza, Y=0, giro y Z en
+precaptura**. La posicion de pieza avanza por delta real de cuentas; la
+velocidad y aceleracion predicen solo el corto horizonte de descenso y
+contacto. El cierre exige DIN04 y una prediccion viable, con limite
+de permanencia abajo. DIN04 confirma altura, no presencia ni agarre.
+La orientacion horizontal/vertical busca cerrar sobre el ancho menor;
+sin consenso axial del modelo 129 se conserva el ajuste previo y se
+rechaza el objetivo autonomo. Multiples piezas unicas y cajas recortadas
+tambien se rechazan con un motivo explicito.
+
+La configuracion entregada habilita el ensayo solicitado:
+`V2_HABILITAR_PRUEBAS_CATCH=true`, con `V2_CAPTURA_FIJA_VALIDADA=false`.
+Entrar en **AUTOMATICO V2** permite preparar X/giro, esperar por encoder,
+bajar con Y=0, cerrar con DIN04 y completar la entrega; no requiere X
+manual. La OLED muestra **AUTOMATICO V2**, la fase y **VALORES NOMINALES**.
+El aviso de perfil pendiente ya no oculta el ciclo. El ensayo decide con
+posicion/velocidad/aceleracion nominales y tiempos actuales, sin exigir
+las cotas provisionales de incertidumbre y arrastre como si estuvieran
+medidas. Mantiene finales, cancelacion, encoder fresco, rango nominal
+1..150 mm/s, asentamiento y confirmacion ESP posterior al cierre.
+Los registros separan `test_mode=1`, `physical_validated=0`, prediccion
+nominal y envolvente del perfil. Medir/configurar escala, geometria,
+incertidumbre de imagen, descenso, contacto, ventana y arrastre antes de
+activar el perfil validado. Un ciclo ejecutado no demuestra la meta 95/100.
+Consultar [CAPTURA_FIJA_V2.md](CAPTURA_FIJA_V2.md).
+
+Verificacion del ensayo habilitado: compilaron ambos sketches RS485
+(ESP Bluepad32 4.1.0 y Portenta mbed_portenta 4.6.0). Pasaron la suite
+`rs485_migracion_test.py`, vision/OLED y CSV. La regresion de captura usa
+los parametros nominales entregados y la escala real, verifica el ciclo
+hasta entrega y cancelacion ante ausencia DIN04, falta de confirmacion,
+encoder antiguo, paro y aceleracion posterior al disparo. Tambien prueba
+el disparo centrado con encoder cuantizado a 20 mm/s, conservando su
+historial durante descenso hasta DIN04/orden de cierre. Las cuatro copias
+del protocolo 19 siguen identicas, con paquetes de 32 bytes. Los logs
+de esta comprobacion tienen sufijo `ensayo` en `../tmp/captura-fija-v2/`.
+No se cargaron placas ni se acciono hardware.
+
+## Correccion de banda, nombre y rango del ensayo (2026-10-09)
+
+Los registros de la maqueta mostraron 51 candidatos etiquetados
+`FUERA_BANDA` con X dentro de los +/-146 mm de banda: lo que excedian era
+el tramo calibrado Y +/-191 mm. Se separan **FUERA BANDA** (ancho lateral)
+y **FUERA CALIB.** (centro o caja que sale del area entre tags). Las cajas
+recortadas por el borde de imagen conservan su causa propia. Se mantienen
+los limites fisicos y las guardas contra extrapolar la homografia.
+`rej_cal` cuenta los rechazos por calibracion, separado de `rej_b`.
+
+El nombre del modo en OLED es **AUTOMATICO V2**, con el aviso
+**VALORES NOMINALES** cuando el perfil sigue pendiente. El modelo real
+continua siendo el personalizado **129**, confirmado en los registros;
+el titulo anterior no representaba otro modelo ni otro modo de control.
+
+Los registros tambien mostraron velocidad de banda 125..132 mm/s, superior
+al limite preliminar 100. `V2_VELOCIDAD_MAX_PRUEBA_MM_S=150` es exclusivo
+del ensayo: el perfil validado conserva `V2_VELOCIDAD_MAX_CAPTURA_MM_S=100`.
+`FIXED_NOT_READY` publica velocidad, limite aplicado y edad de muestra;
+los rechazos de referencia/giro, apertura y velocidad ya son distintos.
+El limite de ensayo no acredita un rango fisico seguro ni 95/100 agarres.
+Esta correccion se aplica solo a RS485 y conserva protocolo 19/32 bytes.
+
+Verificacion de la correccion: compilaron ESP (808233 bytes de programa,
+105892 globales, Bluepad32 4.1.0) y Portenta (mbed_portenta 4.6.0),
+ambos con salida 0. Pasaron transporte/modos RS485, vision/OLED con replay
+de la homografia recibida, admision nominal a 128 mm/s/rechazo a 151,
+perfil estricto con maximo 100, y CSV con causas y limites diferenciados.
+Logs de compilacion/regresion en `../tmp/captura-fija-v2/` con sufijo `banda`.
+La verificacion offline conserva las guardas y no acredita agarre fisico.
+
+Por instruccion expresa del usuario, desde esta revision el desarrollo
+vigente es exclusivamente el enlace ESP-Portenta RS485. I2C se conserva
+para la OLED. La copia previa I2C queda como antecedente sin nuevas mejoras.
+
+AJUSTE CATCH y los modos de ensenanza conservan seguimiento y controles
+propios; no habilitan ese perfil ni transfieren sus etiquetas al ciclo
+autonomo. La captura fija previa se integro en la base Automatico V2 I2C;
+el desbloqueo de ensayo de esta revision se aplica exclusivamente a RS485.
+Los sketches de la raiz mantienen su version propia.
+
+Protocolo de aplicacion vigente **19 RS485 / 18 I2C**, **32 bytes**.
+`reservadoV2` publica flags de referencia aproximada de imagen,
+orientacion axial y giro aplicado; no confirma contacto ni agarre.
+Los cuatro `ProtocoloRS485.h` del firmware y banco final migran juntos a
+19. El banco no actua motores y mantiene esos flags en cero. Transporte
+COBS de 44 bytes, CRC/correlacion, pines, baudios y recuperacion a mas de
+1000 ms se conservan. Los numeros 17/16 y resultados indicados en los
+antecedentes siguientes corresponden a sus revisiones, no al firmware
+actual. No se cargaron placas ni se acciono hardware.
+
+Verificacion local de la implementacion previa: pasaron las regresiones RS485
+(8 grupos y 5 suites heredadas), I2C de integracion, posicion/velocidad
+real Portenta en ambas variantes, vision/reserva real ESP y OLED,
+modelo portable y ambos registradores. El banco de protocolo 19 paso
+11000 intercambios y 20 casos. ESP RS485 compilo con Bluepad32 4.1.0
+(807805 bytes de programa, 105892 globales) y Portenta RS485 con
+mbed_portenta 4.6.0, salida 0. Los logs finales de regresion y compilacion
+estan en `../tmp/captura-fija-v2/`; ver el registro detallado en
+[INTEGRACION_AUTOMATICO_V2.md](../pruebas%20de%20automatico%20v2/INTEGRACION_AUTOMATICO_V2.md).
+Estas comprobaciones no validan el perfil fisico ni la meta de 95/100.
+
 ## Archivos que se cargan
 
 - **ESP32:** `ESP/ESP.ino`, placa `esp32-bluepad32:esp32:esp32`, core 4.1.0.
 - **Portenta H7 M7:** `PORTENTA/PORTENTA.ino`, placa
   `arduino:mbed_portenta:envie_m7`, core 4.6.0.
 - Abrir cada `.ino` desde su carpeta completa: las cabeceras forman parte del
-  sketch. Cargar **los dos sketches juntos**, protocolo de aplicacion **17**.
+  sketch. Cargar **los dos sketches juntos**, protocolo de aplicacion **19**.
 - Monitor serial de ESP: **460800**. Monitor serial de Portenta: **115200**.
   El bus RS485 permanece en **115200** aunque el monitor ESP use 460800.
 
 Esta es la version completa del brazo, con sus modos y calibraciones de
 arranque; la prueba anterior en `../tests/RS485_COMUNICACION/` solo verifica
-el enlace. No mezclar firmware I2C/version 16 ni prueba RS485/version 2 con
+el enlace. No mezclar firmware I2C/version 18 ni firmware RS485 de versiones previas con
 estos sketches. La version anterior se conserva en su carpeta original.
 
-## Recuperacion vigente: mas de un segundo sin respuesta (2026-10-08)
+## Recuperacion conservada: mas de un segundo sin respuesta (2026-10-08)
 
 Por la nueva instruccion del usuario, Portenta conserva vigente el enlace
 hasta **1000 ms inclusive desde la ultima respuesta valida**. Solo declara
@@ -255,15 +379,17 @@ Automatico V2 usan este mismo transporte.
 
 Se conservan Automatico V2, Automatico, Manual, calibraciones, pruebas de
 encoder/seguimiento, registro de angulo, ensenanza ML/ML V2, ajuste catch y
-cambios catch. Se conservan velocidades, geometria, escalas, homografia,
-calibracion de giro, pulsos de pinza, entrega y guardas DIN04/finales/control.
+cambios catch. La revision de captura fija conserva calibraciones, pulsos
+de pinza, entrega y guardas DIN04/finales/control; agrega el perfil fisico
+pendiente, ventana de contacto y orientacion al ancho menor descritos arriba.
 Las etiquetas humanas y catch por X siguen exclusivos de sus modos de
 ensenanza; no pasan a ser requisitos ni excepciones del ciclo autonomo.
 
 ## Transporte y seguridad
 
 - `ProtocoloRS485.h` conserva exactamente **32 bytes por paquete**, mismas
-  posiciones de campos y CRC-8/ATM de la aplicacion. Version nueva: **17**.
+  posiciones de campos y CRC-8/ATM de la aplicacion. Version vigente: **19**;
+  `reservadoV2` lleva los flags de captura fija descritos arriba.
   Los nombres de algunos enums conservan el sufijo historico `Wire`; sus
   numeros se mantienen para preservar los estados de la maqueta.
 - `EnlaceRS485.h` encapsula cada paquete con sesion aleatoria de Portenta,

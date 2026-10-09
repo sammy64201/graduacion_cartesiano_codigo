@@ -1,15 +1,18 @@
 # Modo integrador del proyecto
 
 Por instruccion del usuario, **Automatico V2** es el modo completo para probar
-la integracion del proyecto. Su firmware vigente esta en
-`pruebas de automatico v2/ESP/ESP.ino` y
-`pruebas de automatico v2/PORTENTA/PORTENTA.ino`.
+la integracion del proyecto. Por instruccion expresa del 2026-10-09, su
+firmware vigente esta en `automatico v2 rs485/ESP/ESP.ino` y
+`automatico v2 rs485/PORTENTA/PORTENTA.ino`. El enlace ESP-Portenta usa
+exclusivamente RS485. I2C se conserva para la OLED (y el expansor interno
+de Machine Control); no desarrollar nuevamente el enlace I2C ESP-Portenta.
+La carpeta `pruebas de automatico v2/` queda como antecedente conservado.
 
 Al modificar cualquier otro modo, revisar e incorporar en Automatico V2 las
 mejoras aplicables en la misma tarea: deteccion, calibraciones, orientacion,
 encoder, coordenadas, motores, catch, entrega, seguridad, OLED y registros.
 Preferir funciones y parametros compartidos para impedir que diverjan.
-Actualizar `pruebas de automatico v2/INTEGRACION_AUTOMATICO_V2.md` indicando
+Actualizar la documentacion vigente en `automatico v2 rs485/` indicando
 que se integro, que es exclusivo del modo de origen y como se verifico.
 
 Los gestos de ensenanza (correccion por joystick, catch manual con X y etiqueta

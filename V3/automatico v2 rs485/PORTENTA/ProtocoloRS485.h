@@ -16,10 +16,18 @@
 
 namespace ProtocoloRS485 {
 
-constexpr uint8_t VERSION_PROTOCOLO = 17;
+constexpr uint8_t VERSION_PROTOCOLO = 19;
 constexpr uint8_t MAGIC_ESP_A_PORTENTA = 0xE3;
 constexpr uint8_t MAGIC_PORTENTA_A_ESP = 0xA7;
 constexpr size_t MAX_BYTES_WIRE = 32;
+// reservadoV2 transporta calidad del objetivo, sin aumentar los 32 bytes.
+// GIRO_APLICADO confirma una orden de servo, no asentamiento ni agarre fisico.
+enum FlagsObjetivoV2 : uint8_t {
+    OBJ_V2_REFERENCIA_APROXIMADA = 1U << 0,
+    OBJ_V2_ORIENTACION_AXIAL = 1U << 1,
+    OBJ_V2_GIRO_APLICADO = 1U << 2
+};
+constexpr uint8_t MASCARA_FLAGS_OBJETIVO_V2 = 0x07;
 // Separacion de Z sobre DIN04 mientras la pieza se aproxima al catch.
 constexpr long Z_MARGEN_PRECAPTURA_PASOS = 3000L;
 // El paquete conserva su formato de 32 bytes: los 18 bits bajos conservan la
@@ -131,7 +139,8 @@ enum ErrorSistemaWire : uint8_t {
     SISTEMA_ERROR_OBJETIVO_FUERA_RANGO = 5,
     SISTEMA_ERROR_TIMEOUT_MOVIMIENTO = 6,
     SISTEMA_ERROR_FINALES_INCOHERENTES = 7,
-    SISTEMA_ERROR_CANCELADO = 8
+    SISTEMA_ERROR_CANCELADO = 8,
+    SISTEMA_ERROR_CALIBRACION_CAPTURA_FIJA = 9
 };
 
 enum FaseCalibracionBrazoWire : uint8_t {

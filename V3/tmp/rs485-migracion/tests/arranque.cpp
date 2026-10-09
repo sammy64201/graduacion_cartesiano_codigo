@@ -3,6 +3,7 @@
 #include <stdint.h>
 #define F(x) x
 #include "C:/Users/samue/OneDrive/Documents/Universidad/Tesis/Github/graduacion_cartesiano_codigo/V3/automatico v2 rs485/PORTENTA/EnlaceRS485.h"
+#include "C:/Users/samue/OneDrive/Documents/Universidad/Tesis/Github/graduacion_cartesiano_codigo/V3/automatico v2 rs485/PORTENTA/CapturaFijaV2.h"
 
 struct Terminal {
   bool iniciado=false;
@@ -28,6 +29,8 @@ constexpr int pP_X=4, pP_Y=2, pP_Z=0, pD_X=5, pD_Y=3, pD_Z=1;
 constexpr float velocidadMotores=0.0001f;
 constexpr float CAMARA_A_HOME_Y_MM=845, V2_AJUSTE_DISTANCIA_CATCH_MM=335;
 float escalaEncoderMmPorCuenta=0.075f;
+int8_t signoEncoderAvance=1;
+CapturaFijaV2::Estimador estimadorCapturaFijaV2;
 uint32_t tiempoEncendidoSistema=0, inicioEstadoGeneral=0, tAnteriorRS485=0, tAnteriorEstadoESP=0;
 bool comunicacionRS485Habilitada=true;
 uint8_t comandoCamaraActual=99, secuenciaComandoCamara=99;
@@ -49,6 +52,7 @@ void setup() {
 
     digital_inputs.init();
     encoders[0].reset();
+    estimadorCapturaFijaV2.reiniciar(0, millis(), escalaEncoderMmPorCuenta, signoEncoderAvance);
     digital_outputs.set(pP_X, LOW);
     digital_outputs.set(pP_Y, LOW);
     digital_outputs.set(pP_Z, LOW);

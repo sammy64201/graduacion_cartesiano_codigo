@@ -18,7 +18,7 @@ static bool recibir(Receptor &r, const uint8_t *p, size_t n, Mensaje &m, uint32_
 int main() {
     static_assert(sizeof(ProtocoloRS485::PaqueteESPAPortenta) == 32, "ESP 32 bytes");
     static_assert(sizeof(ProtocoloRS485::PaquetePortentaAESP) == 32, "P 32 bytes");
-    static_assert(ProtocoloRS485::VERSION_PROTOCOLO == 17, "Version incompatible nueva");
+    static_assert(ProtocoloRS485::VERSION_PROTOCOLO == 19, "Calidad del objetivo en captura fija");
     // Perfil comprobado por el usuario: el monitor USB no demuestra la
     // velocidad del bus ni los tiempos del controlador RS485 de Portenta.
     static_assert(BAUD == 115200, "Bus comprobado a 115200");
@@ -137,7 +137,8 @@ int main() {
     ProtocoloRS485::PaquetePortentaAESP p={};
     ProtocoloRS485::prepararPaquete(p);
     assert(ProtocoloRS485::validarPaquete(p));
-    p.version=16; p.checksum=ProtocoloRS485::calcularChecksumPaquete(p);
+    p.version=ProtocoloRS485::VERSION_PROTOCOLO-1;
+    p.checksum=ProtocoloRS485::calcularChecksumPaquete(p);
     assert(!ProtocoloRS485::validarPaquete(p));
-    std::puts("PASS: 1000 roundtrips, 3440 errores de bit, truncado, ruido, fragmentos, correlacion, plazo, giro tras RX/ruido/wrap, duplicados y rechazo v16");
+    std::puts("PASS: 1000 roundtrips, 3440 errores de bit, truncado, ruido, fragmentos, correlacion, plazo, giro tras RX/ruido/wrap, duplicados y rechazo de version previa");
 }

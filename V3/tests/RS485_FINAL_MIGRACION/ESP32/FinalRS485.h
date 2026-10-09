@@ -4,7 +4,7 @@
 #include "ConfiguracionRS485.h"
 
 // Fixtures exclusivos del banco: nunca cargar una sola placa con firmware real.
-// Se usan los paquetes v17 sin agregar ordenes ni cambiar su semantica.
+// Se usan los paquetes v19 de produccion, sin agregar ordenes del banco.
 namespace FinalRS485 {
 using namespace ProtocoloRS485;
 constexpr int RX = ConfiguracionRS485::RX, TX = ConfiguracionRS485::TX, DE = ConfiguracionRS485::DE;
