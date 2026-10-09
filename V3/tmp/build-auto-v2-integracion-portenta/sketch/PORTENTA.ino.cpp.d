@@ -399,4 +399,6 @@ C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\cores\arduino/mbed/platform/include/platform/mbed_mktime.h \
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\cores\arduino/pinDefinitions.h \
  C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\variants\PORTENTA_H7_M7/portenta_info.h \
- C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\tmp\build-auto-v2-integracion-portenta\sketch\ProtocoloI2C.h
+ C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\tmp\build-auto-v2-integracion-portenta\sketch\ProtocoloI2C.h \
+ C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\tmp\build-auto-v2-integracion-portenta\sketch\AjusteCatchV2.h \
+ C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\tmp\build-auto-v2-integracion-portenta\sketch\RecuperacionEnlace.h

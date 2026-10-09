@@ -1,0 +1,9 @@
+{
+  "additionalFiles": "..\\..",
+  "compiler.optimization_flags": "",
+  "customBuildProperties": "",
+  "fqbn": "arduino:avr:nano:cpu=atmega328",
+  "hardwareFolders": "C:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\avr\\1.8.8,C:\\Users\\samue\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\avr\\1.8.8",
+  "otherLibrariesFolders": "C:\\Users\\samue\\OneDrive\\Documents\\Arduino\\libraries",
+  "sketchLocation": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\tests\\MAX485_UN_MODULO_NANO_UNO\\NANO"
+}

@@ -1,0 +1,2 @@
+PASS: ambos sketches reales a 115200, 11000 intercambios, 20 casos, duplicado sin reaplicar, recuperacion y DE 200/200 us
+PASS: bus desconectado nunca obtiene aprobacion

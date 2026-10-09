@@ -1,0 +1,50 @@
+[
+  {
+    "Path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\CalibracionAnguloMLV2.h",
+    "Hash": "618FC857E2D7B0627EA4369AAF3B61A40DD1676ABFBBFC65A7886FFE11F096EE"
+  },
+  {
+    "Path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino",
+    "Hash": "31BD08E3951C53E2A015DC30029AB76EE0CD8DFAE86B8A2470AEE2619CC4A099"
+  },
+  {
+    "Path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ProtocoloI2C.h",
+    "Hash": "06FAEC37C6ABD3B0B1267A47CDDBAB282C758F2CB1801307221EF5D1C2800508"
+  },
+  {
+    "Path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\VisionModelo129.h",
+    "Hash": "A62515E89445DBAA0E1436443488FCD0A03B8AD7E4C5300984DCF234DCED43AA"
+  },
+  {
+    "Path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\PORTENTA\\AjusteCatchV2.h",
+    "Hash": "269C699D819A391EC8CF5002BAD621BE25A0671BE4F4D0352013182B4B346C52"
+  },
+  {
+    "Path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\PORTENTA\\PORTENTA.ino",
+    "Hash": "91060F39E1B684C143EBEE539C85C6C0998B04CF004290768457FE3E05D6EED3"
+  },
+  {
+    "Path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\PORTENTA\\ProtocoloI2C.h",
+    "Hash": "06FAEC37C6ABD3B0B1267A47CDDBAB282C758F2CB1801307221EF5D1C2800508"
+  },
+  {
+    "Path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\ESP\\ESP.ino",
+    "Hash": "312C99C39308FB078EE2724134169B9424959A91FCE5613C60588B03EEDB2513"
+  },
+  {
+    "Path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\ESP\\ProtocoloI2C.h",
+    "Hash": "A654113DE8992E9371197BE95A5508CC2716858B59F869546799FB49569CA3BB"
+  },
+  {
+    "Path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\ESP\\VisionModelo129.h",
+    "Hash": "A62515E89445DBAA0E1436443488FCD0A03B8AD7E4C5300984DCF234DCED43AA"
+  },
+  {
+    "Path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\PORTENTA\\PORTENTA.ino",
+    "Hash": "3C10B5FD09589F462250FF971D75D06BC630295792F80C19329B88BD1E55EE81"
+  },
+  {
+    "Path": "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\PORTENTA\\ProtocoloI2C.h",
+    "Hash": "A654113DE8992E9371197BE95A5508CC2716858B59F869546799FB49569CA3BB"
+  }
+]

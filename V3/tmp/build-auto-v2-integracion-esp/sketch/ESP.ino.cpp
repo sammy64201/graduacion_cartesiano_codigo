@@ -232,6 +232,7 @@ struct ControlCamaraCompartido {
   bool entrenamientoML;
   bool entrenamientoMLV2;
   bool pruebaSeguimiento;
+  bool ajusteCatchV2;
   bool pruebaEncoderActiva;
   bool brazoOcupado;
   uint8_t comando;
@@ -358,223 +359,225 @@ DiagnosticoDeteccionV2 diagnosticoV2 = {
 // Utilidades generales.
 // =============================================================================
 
-#line 360 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 361 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 bool plazoCumplido(uint32_t ahora, uint32_t plazo);
-#line 364 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 365 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 EstadoCamaraPublicado copiarEstadoCamara();
-#line 372 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 373 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 ControlCamaraCompartido copiarControlCamara();
-#line 380 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 381 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 EstadoEncoderCompartido copiarEstadoEncoder();
-#line 388 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 389 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 DiagnosticoDeteccionV2 copiarDiagnosticoV2();
-#line 396 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 397 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void publicarDiagnosticoV2(const DiagnosticoDeteccionV2 &nuevo);
-#line 402 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 403 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 const char * nombreCausaDiagnosticoV2(uint8_t causa);
-#line 432 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 433 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 const char * nombreCortoDiagnosticoV2(uint8_t causa);
-#line 461 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 462 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 uint8_t diagnosticarEncoderV2(const EstadoEncoderCompartido &encoder);
-#line 477 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 478 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 float escalaEncoderMm(const EstadoEncoderCompartido &encoder);
-#line 481 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 482 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 bool encoderRemotoVigente(const EstadoEncoderCompartido &encoder);
-#line 493 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 494 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void actualizarEncoderDesdePortenta(const PaquetePortentaAESP &paquete);
-#line 507 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 514 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void vigilarEncoderRemoto();
-#line 517 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 524 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void ponerControlEnNeutro();
-#line 530 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 537 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void requestEvent();
-#line 540 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 547 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void receiveEvent(int cantidadBytes);
-#line 572 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 579 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 bool iniciarI2CEsclavo(bool reinicio);
-#line 598 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 605 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void mantenerI2CEsclavoRecuperable();
-#line 622 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 629 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void onConnectedController(ControllerPtr ctl);
-#line 634 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 641 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void onDisconnectedController(ControllerPtr ctl);
-#line 647 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 654 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void processControllers();
-#line 768 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 775 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void escribirPinzaCalibrada(bool cerrar);
-#line 779 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 786 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void procesarPinzaAutomaticaV2();
-#line 874 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 890 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void intentarInicializarOLEDNoBloqueante();
-#line 936 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 952 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void publicarControlCamaraDesdePortenta(const PaquetePortentaAESP &paquete);
-#line 977 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 997 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void invalidarControlCamaraPorTimeout();
-#line 992 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1012 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 bool paquetePortentaSemanticamenteValido(const PaquetePortentaAESP &p);
-#line 1010 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1039 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void procesarRecepcionI2C();
-#line 1051 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1080 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void prepararSnapshotI2C();
-#line 1190 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1219 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void encolarRegistroLogV2(const RegistroLogV2 &registro);
-#line 1204 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1233 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void registrarCandidatoLogV2( uint32_t consulta, const EstadoEncoderCompartido &encoder, const CandidatoPiezaV2 &candidato, uint8_t indice, uint8_t causa );
-#line 1238 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1267 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void registrarConsultaLogV2( const DiagnosticoDeteccionV2 &diag, const EstadoEncoderCompartido &encoder, uint32_t consulta, uint8_t grupoSeleccionado );
-#line 1292 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1321 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 bool extraerRegistroLogV2(RegistroLogV2 &registro);
-#line 1306 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1335 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void imprimirRegistroLogV2(const RegistroLogV2 &r);
-#line 1363 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1392 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void vaciarColaLogV2();
-#line 1404 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1433 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 Point2D getPhysicalTagPosition(uint8_t index);
-#line 1415 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1444 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 bool parseLastInteger(const String &text, int &value);
-#line 1439 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1468 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 bool extractTagCode(const Result *result, int &tagCode);
-#line 1450 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1479 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 int findTagIndex(int tagCode);
-#line 1459 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1488 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void resetCalibrationData();
-#line 1471 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1500 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 bool allTagsReady();
-#line 1480 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1509 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 bool solveLinearSystem8( double matrix[8][8], double vector[8], double solution[8] );
-#line 1544 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1573 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 bool calculateHomography();
-#line 1601 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1630 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 bool pixelToMillimeters( double u, double v, bool homographyValid, Point2D &physicalPoint );
-#line 1625 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1654 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 uint8_t estimarEjeCajaV2(const CandidatoPiezaV2 &candidato);
-#line 1650 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1679 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 bool isInsideCalibrationArea(const Point2D &position);
-#line 1659 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1688 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 bool isOverWhiteBelt(const Point2D &position);
-#line 1665 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1694 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void printHomography();
-#line 1771 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1800 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 bool estadoCamaraOcupado(uint8_t estado);
-#line 1780 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1809 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void publicarEstadoCamara(const ContextoCamara &ctx);
-#line 1808 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1837 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void cambiarEstadoCamara(ContextoCamara &ctx, uint8_t nuevoEstado);
-#line 1816 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1845 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void reiniciarFiltro(ContextoCamara &ctx);
-#line 1867 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1896 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void reiniciarFiltroV2(ContextoCamara &ctx);
-#line 1878 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1907 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void iniciarEsperaDesaparicion( ContextoCamara &ctx, uint8_t clase, int16_t x10, int16_t y10 );
-#line 1893 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1922 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void limpiarObjetivo(ContextoCamara &ctx, bool exigirDesaparicion);
-#line 1919 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1948 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void registrarErrorCamara( ContextoCamara &ctx, uint8_t error, bool desconectar, bool recuperarAutomaticamente );
-#line 1939 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1968 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void imprimirProgresoCalibracion();
-#line 1952 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 1981 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 bool leerTagsUnaVez();
-#line 1985 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 2014 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void actualizarEsperaDesaparicion( ContextoCamara &ctx, bool piezaProcesadaPresente, uint32_t ahora, bool brazoOcupado, uint32_t tiempoRearmeMs, bool automaticoV2 );
-#line 2032 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 2061 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 bool mismaDeteccionEstable( const FiltroDeteccion &filtro, uint8_t clase, const Point2D &posicion );
-#line 2049 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 2078 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void incorporarDeteccion( ContextoCamara &ctx, uint8_t clase, const Point2D &posicion, uint8_t ejeCaja, const CandidatoPiezaV2 &caja );
-#line 2095 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 2124 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 int16_t sugerirAnguloPorVotos(uint8_t votosX, uint8_t votosY);
-#line 2101 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 2130 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 int16_t sugerirAnguloRegistro(const FiltroDeteccion &filtro);
-#line 2105 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 2134 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void publicarObjetivoEstable(ContextoCamara &ctx, bool registrarAngulo);
-#line 2190 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 2219 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 double desplazamientoEncoderMm( int32_t conteo, int32_t referencia, const EstadoEncoderCompartido &encoder );
-#line 2200 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 2229 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 double compensarYConEncoder( double y, int32_t conteo, int32_t referencia, const EstadoEncoderCompartido &encoder, int8_t relacionYEncoder );
-#line 2214 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 2243 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 int32_t conteoMedioConWrap(int32_t antes, int32_t despues);
-#line 2221 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 2250 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 double areaCajaV2(const CandidatoPiezaV2 &candidato);
-#line 2226 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 2255 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 bool cajasDuplicadasV2( const CandidatoPiezaV2 &a, const CandidatoPiezaV2 &b );
-#line 2266 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 2295 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 bool candidatoV2MejorQue( const CandidatoPiezaV2 &nuevo, const CandidatoPiezaV2 &actual );
-#line 2276 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 2305 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 DiagnosticoDeteccionV2 crearDiagnosticoBaseV2( const EstadoEncoderCompartido &encoder, int8_t resultadosHusky );
-#line 2293 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 2322 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void completarMetricasFiltroV2( DiagnosticoDeteccionV2 &diag, const FiltroDeteccionV2 &filtro, int32_t conteoActual, const EstadoEncoderCompartido &encoder );
-#line 2321 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 2350 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 int8_t elegirRelacionYEncoderV2( const FiltroDeteccionV2 &filtro, const Point2D &posicion, int32_t conteo, const EstadoEncoderCompartido &encoder );
-#line 2340 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 2369 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 bool tamanoCompatibleV2( const FiltroDeteccionV2 &filtro, const CandidatoPiezaV2 &candidato );
-#line 2355 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 2384 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 bool mismaTrayectoriaV2( const FiltroDeteccionV2 &filtro, const CandidatoPiezaV2 &candidato, int32_t conteo, const EstadoEncoderCompartido &encoder );
-#line 2381 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 2410 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void incorporarDeteccionV2( ContextoCamara &ctx, const CandidatoPiezaV2 &candidato, int32_t conteo, const EstadoEncoderCompartido &encoder, uint32_t instanteMs );
-#line 2442 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
-bool publicarObjetivoV2( ContextoCamara &ctx, int32_t conteoActual, const EstadoEncoderCompartido &encoder, bool orientarGarra, bool entrenamientoML, bool entrenamientoMLV2, bool pruebaSeguimiento );
-#line 2587 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 2471 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+bool publicarObjetivoV2( ContextoCamara &ctx, int32_t conteoActual, const EstadoEncoderCompartido &encoder, bool orientarGarra, bool entrenamientoML, bool entrenamientoMLV2, bool pruebaSeguimiento, bool ajusteCatch );
+#line 2628 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 bool leerPiezasV2UnaVez( ContextoCamara &ctx, const ControlCamaraCompartido &control, uint32_t ahora );
-#line 2980 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 3021 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 bool leerPiezasUnaVez( ContextoCamara &ctx, const ControlCamaraCompartido &control, uint32_t ahora );
-#line 3117 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 3158 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void prepararNuevaCalibracion(ContextoCamara &ctx);
-#line 3138 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 3179 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void solicitarAperturaModelo(ContextoCamara &ctx);
-#line 3161 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 3202 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void procesarComandoCamara( ContextoCamara &ctx, const ControlCamaraCompartido &control );
-#line 3225 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 3266 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void procesarHandshakeObjetivo( ContextoCamara &ctx, const ControlCamaraCompartido &control );
-#line 3289 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 3330 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void vaciarUARTCamara();
-#line 3295 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 3336 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void procesarEstadoCamara( ContextoCamara &ctx, const ControlCamaraCompartido &control );
-#line 3572 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 3613 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void tareaCamara(void *parametro);
-#line 3603 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 3644 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 const char * nombreEstadoCamara(uint8_t estado);
-#line 3618 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 3659 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 const char * nombreFaseBrazo(uint8_t fase);
-#line 3652 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 3693 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 const char * textoErrorSistema(uint8_t error);
-#line 3667 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 3708 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void dibujarTitulo(const __FlashStringHelper *titulo);
-#line 3673 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 3714 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void dibujarChecklistConexiones( bool portentaOk, bool estabilizando, uint32_t restanteMs );
-#line 3706 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 3747 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void mostrarSinPortenta();
-#line 3712 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 3753 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void mostrarCalibracionCamara();
-#line 3735 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 3776 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void mostrarMenuPrincipal(const PaquetePortentaAESP &p);
-#line 3763 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 3805 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void mostrarMenuCalibraciones(const PaquetePortentaAESP &p);
-#line 3786 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 3828 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void mostrarPruebaServos();
-#line 3801 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 3843 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void mostrarDiagnostico(const PaquetePortentaAESP &p);
-#line 3841 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 3883 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void mostrarModoManual(const PaquetePortentaAESP &p);
-#line 3874 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 3916 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void mostrarModoAutomatico(const PaquetePortentaAESP &p);
-#line 3930 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 3972 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void mostrarModoAutomaticoV2(const PaquetePortentaAESP &p);
-#line 4022 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 4073 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+void mostrarCambiosCatch(const PaquetePortentaAESP &p);
+#line 4094 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void mostrarEntrenamientoML(const PaquetePortentaAESP &p);
-#line 4086 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 4158 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void procesarReporteDiagnosticoV2();
-#line 4169 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 4241 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void mostrarCalibracionEncoder(const PaquetePortentaAESP &p);
-#line 4216 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 4288 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void actualizarPantallaESP32(const PaquetePortentaAESP &p);
-#line 4345 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 4421 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void procesarPantalla();
-#line 4367 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 4443 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void inicializarSnapshotSeguro();
-#line 4382 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 4458 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void setup();
-#line 4462 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 4538 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 void loop();
-#line 360 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
+#line 361 "C:\\Users\\samue\\OneDrive\\Documents\\Universidad\\Tesis\\Github\\graduacion_cartesiano_codigo\\V3\\pruebas de automatico v2\\ESP\\ESP.ino"
 bool plazoCumplido(uint32_t ahora, uint32_t plazo) {
   return static_cast<int32_t>(ahora - plazo) >= 0;
 }
@@ -710,6 +713,12 @@ bool encoderRemotoVigente(const EstadoEncoderCompartido &encoder) {
 
 void actualizarEncoderDesdePortenta(const PaquetePortentaAESP &paquete) {
   EstadoEncoderCompartido nuevo = {};
+  if (paquete.estadoSistema == SISTEMA_CAMBIOS_CATCH) {
+    // Datos de resumen: invalidar encoder remoto, sin publicar offsets como velocidad.
+    nuevo.recibidoMs = millis();
+    portENTER_CRITICAL(&encoderMux); estadoEncoder = nuevo; portEXIT_CRITICAL(&encoderMux);
+    return;
+  }
   nuevo.conteo = paquete.conteoEncoder;
   nuevo.velocidadMmS = static_cast<float>(paquete.velocidadEncoderUmS) / 1000000.0f;
   nuevo.nmPorCuenta = extraerEscalaEncoderNm(paquete.nmPorCuentaEncoder);
@@ -999,7 +1008,8 @@ void procesarPinzaAutomaticaV2() {
     millis() - ultimoEstadoPortenta <= TIMEOUT_PORTENTA_MS;
   const bool automaticoV2Activo = enlaceVigente && (
     (estadoPortenta.estadoSistema == SISTEMA_MODO_AUTOMATICO_V2 &&
-     estadoPortenta.opcionMenu == MENU_MODO_AUTOMATICO_V2) ||
+     (estadoPortenta.opcionMenu == MENU_MODO_AUTOMATICO_V2 ||
+      estadoPortenta.opcionMenu == MENU_AJUSTE_CATCH_V2)) ||
     (estadoPortenta.estadoSistema == SISTEMA_MODO_AUTOMATICO &&
      estadoPortenta.opcionMenu == MENU_REGISTRO_ANGULO) ||
     (estadoPortenta.estadoSistema == SISTEMA_ENTRENAMIENTO_ML &&
@@ -1032,6 +1042,14 @@ void procesarPinzaAutomaticaV2() {
   ultimoCodigoPinzaV2 = estadoPortenta.codigoAckObjetivo;
   if (ultimoCodigoPinzaV2 == ACK_OBJ_CERRAR_PINZA) {
     escribirPinzaCalibrada(true);
+    if (estadoPortenta.opcionMenu == MENU_AJUSTE_CATCH_V2) {
+      Serial.print(F("V2LOG|E|mode=CATCH_CAL|event=CAL_GRIP_APPLIED|session="));
+      Serial.print(sesionArranque);
+      Serial.print(F("|ms=")); Serial.print(millis());
+      Serial.print(F("|obj=")); Serial.print(ultimaSecuenciaPinzaV2);
+      Serial.print(F("|servo_rot_deg=")); Serial.print(anguloServoRotacion);
+      Serial.print(F("|pulse_us=")); Serial.println(PULSO_PINZA_CERRADA_US);
+    }
     if (estadoPortenta.estadoSistema == SISTEMA_ENTRENAMIENTO_ML) {
       Serial.print(estadoPortenta.opcionMenu == MENU_PRUEBA_SEGUIMIENTO
         ? F("V2LOG|E|mode=ML_TRACK|event=ML_GRIP_APPLIED|session=")
@@ -1162,6 +1180,7 @@ void publicarControlCamaraDesdePortenta(const PaquetePortentaAESP &paquete) {
   // encoder tomada en el mismo momento que las coordenadas de camara.
   nuevo.automaticoV2Activo = (nuevo.automaticoActivo &&
     (paquete.opcionMenu == MENU_MODO_AUTOMATICO_V2 ||
+     paquete.opcionMenu == MENU_AJUSTE_CATCH_V2 ||
      paquete.opcionMenu == MENU_ENTRENAMIENTO_ML ||
       paquete.opcionMenu == MENU_ENTRENAMIENTO_ML_V2 ||
       paquete.opcionMenu == MENU_PRUEBA_SEGUIMIENTO));
@@ -1170,7 +1189,8 @@ void publicarControlCamaraDesdePortenta(const PaquetePortentaAESP &paquete) {
     paquete.opcionMenu == MENU_REGISTRO_ANGULO;
   nuevo.orientarGarraV2 = nuevo.automaticoV2Activo &&
     paquete.estadoSistema == SISTEMA_MODO_AUTOMATICO_V2 &&
-    paquete.opcionMenu == MENU_MODO_AUTOMATICO_V2;
+    (paquete.opcionMenu == MENU_MODO_AUTOMATICO_V2 ||
+     paquete.opcionMenu == MENU_AJUSTE_CATCH_V2);
   nuevo.entrenamientoML = nuevo.automaticoV2Activo &&
     paquete.estadoSistema == SISTEMA_ENTRENAMIENTO_ML &&
     (paquete.opcionMenu == MENU_ENTRENAMIENTO_ML ||
@@ -1181,6 +1201,8 @@ void publicarControlCamaraDesdePortenta(const PaquetePortentaAESP &paquete) {
      paquete.opcionMenu == MENU_PRUEBA_SEGUIMIENTO);
   nuevo.pruebaSeguimiento = nuevo.entrenamientoML &&
     paquete.opcionMenu == MENU_PRUEBA_SEGUIMIENTO;
+  nuevo.ajusteCatchV2 = nuevo.automaticoV2Activo &&
+    paquete.opcionMenu == MENU_AJUSTE_CATCH_V2;
   nuevo.brazoOcupado = (paquete.flagsSistema & SIS_FLAG_BRAZO_OCUPADO) != 0;
   nuevo.comando = paquete.comandoCamara;
   nuevo.secuenciaComando = paquete.secuenciaComandoCamara;
@@ -1208,6 +1230,15 @@ void invalidarControlCamaraPorTimeout() {
 }
 
 bool paquetePortentaSemanticamenteValido(const PaquetePortentaAESP &p) {
+  if (p.estadoSistema == SISTEMA_CAMBIOS_CATCH) {
+    // El resumen usa campos del encoder con unidades/flags propios.
+    return p.opcionMenu == MENU_CAMBIOS_CATCH && p.faseCalibracionBrazo <= 1 &&
+      (p.estadoEncoder & 0xF0U) == 0 &&
+      ((p.estadoEncoder & 1U) != 0) == ((p.estadoEncoder >> 2) == 3) &&
+      p.nmPorCuentaEncoder >= 10 && p.nmPorCuentaEncoder <= 50 &&
+      p.codigoAckObjetivo <= ACK_OBJ_ABRIR_PINZA &&
+      (p.signoEncoder == 1 || p.signoEncoder == -1);
+  }
   const uint8_t mascaraEncoder = ENC_FLAG_HW_LISTO |
                                  ENC_FLAG_ESCALA_VALIDA |
                                  ENC_FLAG_PULSOS_VISTOS |
@@ -2664,7 +2695,8 @@ bool publicarObjetivoV2(
   bool orientarGarra,
   bool entrenamientoML,
   bool entrenamientoMLV2,
-  bool pruebaSeguimiento
+  bool pruebaSeguimiento,
+  bool ajusteCatch
 ) {
   FiltroDeteccionV2 &filtro = ctx.filtroV2;
   if (filtro.consecutivas < DETECCIONES_ESTABLES_V2) return false;
@@ -2700,7 +2732,7 @@ bool publicarObjetivoV2(
   ctx.objetivoY10 = static_cast<int16_t>(y10);
   ctx.conteoReferenciaObjetivo = conteoActual;
   ctx.rearmada = false;
-  if (entrenamientoMLV2) {
+  if (entrenamientoMLV2 || ajusteCatch) {
     const uint32_t intervaloMs = filtro.ultimoMs - filtro.primerMs;
     const double deltaCamaraY = filtro.ultimoYRaw - filtro.primerYRaw;
     const double recorridoCamaraMm = fabs(deltaCamaraY);
@@ -2713,9 +2745,11 @@ bool publicarObjetivoV2(
       ? 1000.0 * recorridoCamaraMm / intervaloMs : NAN;
     const double velocidadEncoderVentanaMmS = intervaloMs > 0
       ? 1000.0 * recorridoEncoderMm / intervaloMs : NAN;
-    Serial.print(pruebaSeguimiento
+    Serial.print(ajusteCatch
+      ? F("V2LOG|E|mode=CATCH_CAL|event=CAMERA_SPEED|session=")
+      : (pruebaSeguimiento
       ? F("V2LOG|E|mode=ML_TRACK|event=CAMERA_SPEED|session=")
-      : F("V2LOG|E|mode=ML_V2|event=CAMERA_SPEED|session="));
+      : F("V2LOG|E|mode=ML_V2|event=CAMERA_SPEED|session=")));
     Serial.print(sesionArranque);
     Serial.print(F("|ms=")); Serial.print(filtro.ultimoMs);
     Serial.print(F("|obj=")); Serial.print(ctx.secuenciaObjetivo);
@@ -2744,7 +2778,16 @@ bool publicarObjetivoV2(
     Serial.print(F("|camera_y_first_mm="));
     Serial.print(filtro.primerYRaw, 3);
     Serial.print(F("|camera_y_last_mm="));
-    Serial.println(filtro.ultimoYRaw, 3);
+    Serial.print(filtro.ultimoYRaw, 3);
+    if (ajusteCatch) {
+      const double relacionEscala = velocidadCamaraValida
+        ? recorridoCamaraMm / recorridoEncoderMm : NAN;
+      Serial.print(F("|scale_ratio_camera_encoder=")); Serial.print(relacionEscala, 6);
+      Serial.print(F("|scale_camera_suggested_mm_count="));
+      Serial.print(velocidadCamaraValida
+        ? escalaEncoderMm(encoder) * relacionEscala : NAN, 7);
+    }
+    Serial.println();
   }
   const bool usarCalibracionEjes = entrenamientoML &&
     (entrenamientoMLV2 || pruebaSeguimiento);
@@ -3184,7 +3227,7 @@ bool leerPiezasV2UnaVez(
   if (publicarObjetivoV2(
         ctx, encoder.conteo, encoder, control.orientarGarraV2,
         control.entrenamientoML, control.entrenamientoMLV2,
-        control.pruebaSeguimiento)) {
+        control.pruebaSeguimiento, control.ajusteCatchV2)) {
     diag.secuenciaPublicada = ctx.secuenciaObjetivo;
     publicarYRegistrarDiagnosticoV2(
       diag, V2_DIAG_PUBLICADO, encoder, consulta, indiceElegido
@@ -3952,21 +3995,22 @@ void mostrarCalibracionCamara() {
 
 void mostrarMenuPrincipal(const PaquetePortentaAESP &p) {
   dibujarTitulo(F("MENU PRINCIPAL"));
-  const char *opciones[11] = {
-    "MANUAL", "AUTOMATICO", "AUTOMATICO V2",
+  const char *opciones[13] = {
+    "MANUAL", "AUTOMATICO", "AUTOMATICO V2", "AJUSTE CATCH V2", "CAMBIOS CATCH",
     "REGISTRAR ANGULO", "CALIBRACIONES", "PRUEBA SERVOS",
     "ENSENANZA ML", "ENSENANZA ML V2", "SEGUIMIENTO Y",
     "PRUEBA DE ENCODER", "CHECKLIST"
   };
-  const uint8_t valores[11] = {
+  const uint8_t valores[13] = {
     MENU_MODO_MANUAL, MENU_MODO_AUTOMATICO, MENU_MODO_AUTOMATICO_V2,
+    MENU_AJUSTE_CATCH_V2, MENU_CAMBIOS_CATCH,
     MENU_REGISTRO_ANGULO, MENU_CALIBRACIONES, MENU_PRUEBA_SERVOS,
     MENU_ENTRENAMIENTO_ML, MENU_ENTRENAMIENTO_ML_V2,
     MENU_PRUEBA_SEGUIMIENTO,
     MENU_PRUEBA_ENCODER, MENU_DIAGNOSTICO
   };
   uint8_t seleccion = 0;
-  for (uint8_t i = 0; i < 11; ++i) {
+  for (uint8_t i = 0; i < 13; ++i) {
     if (p.opcionMenu == valores[i]) seleccion = i;
   }
   const uint8_t inicio = seleccion >= 5 ? seleccion - 4 : 0;
@@ -4147,12 +4191,21 @@ void mostrarModoAutomatico(const PaquetePortentaAESP &p) {
 
 void mostrarModoAutomaticoV2(const PaquetePortentaAESP &p) {
   const DiagnosticoDeteccionV2 diag = copiarDiagnosticoV2();
+  const bool ajusteCatch = p.opcionMenu == MENU_AJUSTE_CATCH_V2;
   dibujarTitulo(p.opcionMenu == MENU_REGISTRO_ANGULO
-    ? F("REGISTRO ANGULO") : F("AUTOMATICO V2"));
+    ? F("REGISTRO ANGULO") : (ajusteCatch ? F("AJUSTE CATCH V2") : F("AUTOMATICO V2")));
+  if (ajusteCatch && p.faseCalibracionBrazo == 17) {
+    pantalla.setCursor(0, 13); pantalla.print(F("RESULTADO CATCH?"));
+    pantalla.setCursor(0, 25); pantalla.print(F("X: LA AGARRO"));
+    pantalla.setCursor(0, 37); pantalla.print(F("CUAD: ANTES"));
+    pantalla.setCursor(0, 49); pantalla.print(F("CIRC: DESPUES"));
+    pantalla.setCursor(0, 57); pantalla.print(F("TRI: DESCARTAR/SALIR"));
+    return;
+  }
   pantalla.setCursor(0, 12);
   pantalla.print(F("FASE: "));
   pantalla.print(p.faseCalibracionBrazo);
-  if (p.opcionMenu == MENU_MODO_AUTOMATICO_V2) {
+  if (p.opcionMenu == MENU_MODO_AUTOMATICO_V2 || ajusteCatch) {
     pantalla.print(AUTO_V2_APLICAR_GIRO_POR_CAJA ? F(" ROT:") : F(" FIJA:"));
     pantalla.print(anguloServoRotacion);
   }
@@ -4231,10 +4284,31 @@ void mostrarModoAutomaticoV2(const PaquetePortentaAESP &p) {
   } else if (p.faseCalibracionBrazo == 15) {
     pantalla.print(F("Z REGRESANDO"));
   } else if (p.faseCalibracionBrazo == 16) {
-    pantalla.print(F("Y SIGUE PIEZA"));
+    pantalla.print(ajusteCatch ? F("Y SIGUE CATCH AUTO") : F("Y SIGUE PIEZA"));
   } else {
     pantalla.print(F("TRI:CANCELAR"));
   }
+}
+
+void mostrarCambiosCatch(const PaquetePortentaAESP &p) {
+  dibujarTitulo(F("CAMBIOS CATCH"));
+  if (p.secuenciaEncoder == 0) {
+    pantalla.setCursor(0, 20); pantalla.print(F("SIN ENSAYOS"));
+    pantalla.setCursor(0, 35); pantalla.print(F("USAR AJUSTE CATCH V2"));
+  } else if (p.faseCalibracionBrazo == 0) {
+    pantalla.setCursor(0, 13); pantalla.print(F("PROBADO:")); pantalla.print(p.velocidadEncoderUmS); pantalla.print(F(" ms"));
+    pantalla.setCursor(0, 23); pantalla.print(F("PROXIMO:")); pantalla.print(p.conteoEncoder); pantalla.print(F(" ms"));
+    pantalla.setCursor(0, 33); pantalla.print(F("AGARRES:")); pantalla.print(p.estadoEncoder >> 2);
+    pantalla.print(F("/3 N:")); pantalla.print(p.secuenciaEncoder);
+    pantalla.setCursor(0, 43); pantalla.print((p.estadoEncoder & 2) ? F("LIMITE:REVISAR MEDIDAS") :
+      ((p.estadoEncoder & 1) ? F("REPETIDO 3/3") : F("EN PRUEBA")));
+  } else {
+    pantalla.setCursor(0, 13); pantalla.print(F("PORTENTA.ino"));
+    pantalla.setCursor(0, 23); pantalla.print(F("V2_AJUSTE_DISPARO_"));
+    pantalla.setCursor(0, 33); pantalla.print(F("CATCH_MS = ")); pantalla.print(p.velocidadEncoderUmS); pantalla.print(F(";"));
+    pantalla.setCursor(0, 43); pantalla.print(F("DETALLE EN TERMINAL"));
+  }
+  pantalla.setCursor(0, 57); pantalla.print(F("X:PAGINA TRI:SALIR"));
 }
 
 void mostrarEntrenamientoML(const PaquetePortentaAESP &p) {
@@ -4497,6 +4571,10 @@ void actualizarPantallaESP32(const PaquetePortentaAESP &p) {
 
     case SISTEMA_PRUEBA_SERVOS:
       mostrarPruebaServos();
+      break;
+
+    case SISTEMA_CAMBIOS_CATCH:
+      mostrarCambiosCatch(p);
       break;
 
     case SISTEMA_DIAGNOSTICO:

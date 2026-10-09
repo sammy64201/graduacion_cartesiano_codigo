@@ -1,0 +1,12 @@
+PASS: setup real: USB serial y Wire interno antes de DIN/finales, arranque seguro RS485
+PASS: 1000 roundtrips, 3440 errores de bit, truncado, ruido, fragmentos, correlacion, plazo, duplicados, wrap y rechazo v16
+PASS: perfil real 115200, inicio/recuperacion, Portenta 0/2000 us, ESP DE 200/flush/200 us y respuesta 15 ms
+PASS: guardas reales: perdida, secuencia congelada, reinicio ESP, invalidos y cancelacion con recalibracion
+PASS: envio real, direccion half duplex, cierre/apertura prioritarios, estado actual y TX corto recuperable
+PASS: seguimiento real, ciclo automatico hasta entrega, ruta fija, DIN04, timeout, encoder, control, limites y resultado reservado hasta Z seguro
+PASS: ajuste autonomo, aprendizaje acotado y etiquetas; handshake/pinza, reserva, idempotencia, CRC version 17
+PASS: V2 usa la calibracion ML V2; 181 ajustes, 9 clases, 8 combinaciones; ambiguedad conserva manual; Automatico original conserva su comportamiento.
+PASS: estado real de descenso + guardas; catch X ML V2 continua tras rebase, una sola orden con DIN04, aviso unico; sin DIN04/control/encoder o con timeout cancela. Registro: objetivos 6/7 sin cierre, 5 con pulso aplicado.
+PASS: 16 intentos cruzados CSV/log; calibracion Y 155/166, X 59/59; replay C++ conserva NA en horizontal ambigua y votos contradictorios; sin consenso u otras clases no sugiere.
+PASS: geometria de los tres sketches, nombres exactos, headers identicos; replay 84 detecciones: pieza6=17, pieza7=16, ignoradas=51.
+PASS: migracion RS485, OLED I2C, pines y cinco suites de regresion sobre los nuevos sketches

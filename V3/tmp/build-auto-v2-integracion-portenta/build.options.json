@@ -1,5 +1,5 @@
 {
-  "additionalFiles": "..\\..",
+  "additionalFiles": "..\\..,..\\..,..\\..",
   "builtInLibrariesFolders": "C:\\Users\\samue\\AppData\\Local\\Arduino15\\libraries",
   "compiler.optimization_flags": "",
   "customBuildProperties": "",

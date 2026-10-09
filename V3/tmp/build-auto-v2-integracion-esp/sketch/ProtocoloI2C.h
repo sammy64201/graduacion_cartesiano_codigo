@@ -17,7 +17,7 @@
 namespace ProtocoloI2C {
 
 constexpr uint8_t DIRECCION_ESP32 = 0x40;
-constexpr uint8_t VERSION_PROTOCOLO = 14;
+constexpr uint8_t VERSION_PROTOCOLO = 16;
 constexpr uint8_t MAGIC_ESP_A_PORTENTA = 0xE3;
 constexpr uint8_t MAGIC_PORTENTA_A_ESP = 0xA7;
 constexpr size_t MAX_BYTES_WIRE = 32;
@@ -61,7 +61,8 @@ enum EstadoSistemaWire : uint8_t {
     SISTEMA_PRUEBA_SERVOS = 14,
     SISTEMA_DIAGNOSTICO = 15,
     SISTEMA_ENTRENAMIENTO_ML = 16,
-    SISTEMA_PRUEBA_ENCODER = 17
+    SISTEMA_PRUEBA_ENCODER = 17,
+    SISTEMA_CAMBIOS_CATCH = 18
 };
 
 enum OpcionMenuWire : uint8_t {
@@ -77,7 +78,9 @@ enum OpcionMenuWire : uint8_t {
     MENU_PRUEBA_ENCODER = 9,
     MENU_REGISTRO_ANGULO = 10,
     MENU_ENTRENAMIENTO_ML_V2 = 11,
-    MENU_PRUEBA_SEGUIMIENTO = 12
+    MENU_PRUEBA_SEGUIMIENTO = 12,
+    MENU_AJUSTE_CATCH_V2 = 13,
+    MENU_CAMBIOS_CATCH = 14
 };
 
 enum FlagsEncoder : uint8_t {
@@ -269,6 +272,9 @@ struct __attribute__((packed)) PaquetePortentaAESP {
     uint8_t secuenciaComandoCamara;
     uint16_t ackSecuenciaObjetivo;
     uint8_t codigoAckObjetivo;
+    // SISTEMA_CAMBIOS_CATCH: conteo=proximo offset ms, velocidad=ultimo probado ms,
+    // nmPorCuenta=paso ms, secuencia=ensayos, estado=confirmado bit0/limite bit1/
+    // agarres bits2..3, fase=pagina. No publicar estos campos como encoder real.
     int32_t conteoEncoder;
     int32_t velocidadEncoderUmS;
     uint32_t nmPorCuentaEncoder; // escala 18 bits + Z desde DIN04 14 bits

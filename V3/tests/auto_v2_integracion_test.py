@@ -3,9 +3,12 @@ import argparse
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'tests'))
+from recuperacion_enlace_test import run_recovery
 
 
 def definition(source, marker):
@@ -160,7 +163,10 @@ now+=1; procesarModoAutomaticoV2(); assert(zActive && automaticoV2.fase==V2_BAJA
 pieceY=3; ySteps=300; procesarModoAutomaticoV2(); assert(movZ<0 && !cierres);
 limiteZabajo=true; procesarModoAutomaticoV2(); procesarModoAutomaticoV2();
 assert(cierres==1 && automaticoV2.fase==V2_CERRANDO_PINZA && !resultados);
-now+=500; procesarModoAutomaticoV2();
+now+=V2_TIEMPO_CIERRE_PINZA_MS+V2_LATENCIA_ORDEN_PINZA_MS-1;
+procesarModoAutomaticoV2();
+assert(automaticoV2.fase==V2_CERRANDO_PINZA && !resultados);
+now+=1; procesarModoAutomaticoV2();
 assert(automaticoV2.fase==V2_MOVIENDO_ENTREGA && codigoAckObjetivo==ACK_OBJ_CERRAR_PINZA);
 assert(armX==213 && objetivoY==0 && zTarget==0);
 // La banda puede detenerse durante entrega sin cancelar la pieza ya capturada.
@@ -169,10 +175,12 @@ procesarModoAutomaticoV2(); assert(automaticoV2.fase==V2_BAJANDO_ENTREGA && zAct
 procesarModoAutomaticoV2(); assert(codigoAckObjetivo==ACK_OBJ_CERRAR_PINZA);
 limiteZabajo=true; procesarModoAutomaticoV2();
 assert(automaticoV2.fase==V2_ABRIENDO_PINZA && codigoAckObjetivo==ACK_OBJ_ABRIR_PINZA && !resultados);
-now+=500; procesarModoAutomaticoV2(); assert(automaticoV2.fase==V2_SUBIENDO_FINAL);
+now+=ML_TIEMPO_SERVO_MS+V2_LATENCIA_ORDEN_PINZA_MS-1;
+procesarModoAutomaticoV2(); assert(automaticoV2.fase==V2_ABRIENDO_PINZA && !resultados);
+now+=1; procesarModoAutomaticoV2(); assert(automaticoV2.fase==V2_SUBIENDO_FINAL);
 limiteZabajo=false; finishXYZ(); procesarModoAutomaticoV2();
 assert(resultados==1 && exitosV2==1 && !errores && !cancelaciones);
-now+=500; procesarModoAutomaticoV2(); assert(automaticoV2.fase==V2_ESPERANDO_PIEZA);
+now+=V2_TIEMPO_COMPLETADO_MS; procesarModoAutomaticoV2(); assert(automaticoV2.fase==V2_ESPERANDO_PIEZA);
 // Fallos impiden el cierre y la entrega no confirma exito anticipadamente.
 reset(); pieceY=160; procesarModoAutomaticoV2(); assert(cancelaciones==1 && !cierres);
 reset(); ySteps=1000; now+=301; procesarModoAutomaticoV2(); assert(!zActive);
@@ -191,7 +199,8 @@ reset(V2_MOVIENDO_ENTREGA); zSteps=-100;
 procesarModoAutomaticoV2(); assert(cancelaciones==1 && !resultados);
 reset(V2_BAJANDO_ENTREGA); procesarModoAutomaticoV2(); assert(busquedas==1);
 detenerZ(); procesarModoAutomaticoV2(); assert(cancelaciones==1 && !resultados);
-reset(V2_CERRANDO_PINZA); limiteZabajo=true; now+=500; xyOK=false;
+reset(V2_CERRANDO_PINZA); limiteZabajo=true;
+now+=V2_TIEMPO_CIERRE_PINZA_MS+V2_LATENCIA_ORDEN_PINZA_MS; xyOK=false;
 procesarModoAutomaticoV2(); assert(cancelaciones==1 && !resultados);
 // Modo independiente: disparo autonomo y adelanto/retardo acotado.
 calMode=true; reset(); procesarModoAutomaticoV2(); now+=299;
@@ -361,6 +370,7 @@ assert(!validarPaquete(wire)); // Rechazar version vieja aun con CRC correcto.
     protocol = protocol.replace('valorPantalla1', 'conteoEncoder').replace(
         'valorPantalla2', 'velocidadEncoderUmS')
     build = Path(tempfile.mkdtemp(prefix='auto-v2-integracion-', dir=ROOT / 'tmp'))
+    run_recovery(args.compiler, folder, 'I2C', build)
     for name, code in [('ciclo', cpp), ('handshake', handshake), ('protocolo', protocol)]:
         path = build / (name + '.cpp')
         path.write_text(code, encoding='utf-8')

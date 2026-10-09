@@ -1,0 +1,6 @@
+c:\Users\samue\OneDrive\Documents\Arduino\libraries\DFRobot_HuskylensV2\DFRobot_HuskylensV2.cpp: In member function 'Result* HuskylensV2::getCurrentBranch(eAlgorithm_t)':
+c:\Users\samue\OneDrive\Documents\Arduino\libraries\DFRobot_HuskylensV2\DFRobot_HuskylensV2.cpp:258:1: warning: control reaches end of non-void function [-Wreturn-type]
+ }
+ ^
+Sketch uses 805617 bytes (61%) of program storage space. Maximum is 1310720 bytes.
+Global variables use 104356 bytes (31%) of dynamic memory, leaving 223324 bytes for local variables. Maximum is 327680 bytes.

@@ -1,0 +1,47 @@
+C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\automatico v2 rs485\PORTENTA\PORTENTA.ino: In function 'void setup()':
+C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\automatico v2 rs485\PORTENTA\PORTENTA.ino:5754:60: warning: 'void mbed::TickerBase::attach(F&&, float) [with F = void (*)()]' is deprecated: Pass a chrono duration, not a float second count. For example use `10ms` rather than `0.01f`. [since mbed-os-6.0.0] [-Wdeprecated-declarations]
+     motorTicker.attach(&generarPulsoMotor, velocidadMotores);
+                                                            ^
+In file included from C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\cores\arduino/mbed/mbed.h:84:0,
+                 from C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\cores\arduino/mbed.h:8,
+                 from c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src/utility/MAX31865/MAX31865.h:24,
+                 from c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src/Arduino_MachineControl.h:4,
+                 from C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\automatico v2 rs485\PORTENTA\PORTENTA.ino:5:
+C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\cores\arduino/mbed/drivers/include/drivers/Ticker.h:92:10: note: declared here
+     void attach(F &&func, float t)
+          ^~~~~~
+In file included from C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\automatico v2 rs485\PORTENTA\PORTENTA.ino:5:0:
+c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src/Arduino_MachineControl.h: In member function 'QEI& machinecontrol::EncoderClass::operator[](int)':
+c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src/Arduino_MachineControl.h:405:2: warning: control reaches end of non-void function [-Wreturn-type]
+  }
+  ^
+In file included from c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\THERMOCOUPLE\MAX31855.cpp:20:0:
+c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\THERMOCOUPLE\MAX31855.h: In constructor 'MAX31855Class::MAX31855Class(int, arduino::SPIClass&)':
+c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\THERMOCOUPLE\MAX31855.h:46:15: warning: 'MAX31855Class::_spiSettings' will be initialized after [-Wreorder]
+   SPISettings _spiSettings;
+               ^~~~~~~~~~~~
+c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\THERMOCOUPLE\MAX31855.h:43:12: warning:   'float MAX31855Class::_coldOffset' [-Wreorder]
+   float    _coldOffset;
+            ^~~~~~~~~~~
+c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\THERMOCOUPLE\MAX31855.cpp:41:1: warning:   when initialized here [-Wreorder]
+ MAX31855Class::MAX31855Class(int cs, SPIClass& spi) :
+ ^~~~~~~~~~~~~
+c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\THERMOCOUPLE\MAX31855.cpp: In member function 'double MAX31855Class::coldTempTomv(int, double)':
+c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\THERMOCOUPLE\MAX31855.cpp:133:11: warning: 'table' may be used uninitialized in this function [-Wmaybe-uninitialized]
+   voltage = polynomial(temp, tableEntries, table);
+   ~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\THERMOCOUPLE\MAX31855.cpp: In member function 'double MAX31855Class::mvtoTemp(int, double)':
+c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\THERMOCOUPLE\MAX31855.cpp:156:49: warning: 'table' may be used uninitialized in this function [-Wmaybe-uninitialized]
+   return polynomial(voltage, tableEntries, table);
+                                                 ^
+In file included from c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\MAX31865\MAX31865.cpp:20:0:
+c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\MAX31865\MAX31865.h: In constructor 'MAX31865Class::MAX31865Class(PinName)':
+c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\MAX31865\MAX31865.h:100:13: warning: 'MAX31865Class::_spi' will be initialized after [-Wreorder]
+   SPIClass& _spi;
+             ^~~~
+c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\MAX31865\MAX31865.h:99:11: warning:   'PinName MAX31865Class::_cs' [-Wreorder]
+   PinName _cs;
+           ^~~
+c:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\MAX31865\MAX31865.cpp:23:1: warning:   when initialized here [-Wreorder]
+ MAX31865Class::MAX31865Class(PinName cs) : _spi(SPI), _cs(cs) {
+ ^~~~~~~~~~~~~

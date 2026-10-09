@@ -10,6 +10,7 @@
 #include <string.h>
 #include "ProtocoloI2C.h"
 #include "AjusteCatchV2.h"
+#include "RecuperacionEnlace.h"
 
 using namespace machinecontrol;
 using namespace ProtocoloI2C;
@@ -104,10 +105,10 @@ const unsigned long PERIODO_CONTROL_MS = 10UL;
 const unsigned long PERIODO_ESTADO_ESP_MS = 20UL;
 const unsigned long PERIODO_ENCODER_MS = 10UL;
 const unsigned long TIMEOUT_MOVIMIENTO_ENCODER_MS = 500UL;
-const unsigned long TIMEOUT_I2C_MS = 150UL;
-// Un callback I2C todavia podria responder aunque el loop de la ESP32 se
-// hubiera congelado. La secuencia de su snapshot debe avanzar periodicamente.
-const unsigned long TIMEOUT_SECUENCIA_ESP_MS = 150UL;
+const unsigned long TIMEOUT_I2C_MS = RecuperacionEnlace::SIN_RESPUESTA_MS;
+// La secuencia y los errores siguen disponibles para diagnostico. La perdida
+// general depende solo del tiempo desde una respuesta aceptada.
+const unsigned long TIMEOUT_SECUENCIA_ESP_MS = RecuperacionEnlace::SIN_RESPUESTA_MS;
 const unsigned long TIEMPO_ESTABILIZACION_I2C_MS = 5000UL;
 const unsigned long TIMEOUT_CAMARA_MS = 240000UL;
 const uint8_t MAX_PAQUETES_INVALIDOS_CONSECUTIVOS = 10;
@@ -1614,10 +1615,8 @@ uint8_t errorSistemaWire() {
 }
 
 bool enlaceI2CVigente() {
-    return existePaqueteValido &&
-           secuenciaPaqueteESPConocida &&
-           millis() - ultimoPaqueteValidoMs <= TIMEOUT_I2C_MS &&
-           millis() - ultimoCambioSecuenciaESPMs <= TIMEOUT_SECUENCIA_ESP_MS;
+    return RecuperacionEnlace::vigente(existePaqueteValido,
+                                      millis(), ultimoPaqueteValidoMs);
 }
 
 bool baseESPLista() {
@@ -2000,7 +1999,7 @@ void registrarPaqueteValido(const PaqueteESPAPortenta &nuevo) {
         codigoAckObjetivo = ACK_OBJ_NINGUNO;
         secuenciaObjetivoEnMovimiento = 0;
         if (movimientoPosicionadoActivo) {
-            cancelarMovimientoPosicionado("reinicio de ESP32", true);
+            cancelarMovimientoPosicionado("reinicio de ESP32", false);
         }
     }
 
@@ -5203,9 +5202,9 @@ void volverAEsperaI2C(const char *motivo) {
         motoresEnMovimiento() || movimientoPosicionadoActivo;
     detenerTodos();
     if (movimientoInterrumpido) {
-        calibracionXYValida = false;
-        calibracionZValida = false;
-        Serial.println(F("[I2C] Movimiento interrumpido; recalibrar brazo antes de mover"));
+        // Politica solicitada: conservar las referencias de la sesion aunque
+        // la posicion fisica pueda dejar de coincidir con el conteo de pasos.
+        Serial.println(F("[I2C] Movimiento cancelado; calibracion y escalas conservadas"));
     }
     if (secuenciaObjetivoEnMovimiento != 0) {
         ackSecuenciaObjetivo = secuenciaObjetivoEnMovimiento;
@@ -5226,13 +5225,6 @@ void vigilarSeguridadComunicacion() {
         cambioSesionESPPendiente = false;
         if (estadoGeneral == EST_SYSTEM_ERROR) return;
         volverAEsperaI2C("[I2C] Nueva sesion ESP32; esperando enlace estable");
-        return;
-    }
-
-    if (fallosPaqueteConsecutivos >= MAX_PAQUETES_INVALIDOS_CONSECUTIVOS &&
-        estadoGeneral != EST_BOOT_SAFE && estadoGeneral != EST_WAIT_I2C &&
-        estadoGeneral != EST_SYSTEM_ERROR) {
-        volverAEsperaI2C("[I2C] Paquetes invalidos; reintentando enlace");
         return;
     }
 

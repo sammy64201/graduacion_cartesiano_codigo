@@ -1,0 +1,30 @@
+In file included from C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\MAX31865\MAX31865.cpp:20:0:
+C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\MAX31865\MAX31865.h: In constructor 'MAX31865Class::MAX31865Class(PinName)':
+C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\MAX31865\MAX31865.h:100:13: warning: 'MAX31865Class::_spi' will be initialized after [-Wreorder]
+   SPIClass& _spi;
+             ^~~~
+C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\MAX31865\MAX31865.h:99:11: warning:   'PinName MAX31865Class::_cs' [-Wreorder]
+   PinName _cs;
+           ^~~
+C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\MAX31865\MAX31865.cpp:23:1: warning:   when initialized here [-Wreorder]
+ MAX31865Class::MAX31865Class(PinName cs) : _spi(SPI), _cs(cs) {
+ ^~~~~~~~~~~~~
+In file included from C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\THERMOCOUPLE\MAX31855.cpp:20:0:
+C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\THERMOCOUPLE\MAX31855.h: In constructor 'MAX31855Class::MAX31855Class(int, arduino::SPIClass&)':
+C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\THERMOCOUPLE\MAX31855.h:46:15: warning: 'MAX31855Class::_spiSettings' will be initialized after [-Wreorder]
+   SPISettings _spiSettings;
+               ^~~~~~~~~~~~
+C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\THERMOCOUPLE\MAX31855.h:43:12: warning:   'float MAX31855Class::_coldOffset' [-Wreorder]
+   float    _coldOffset;
+            ^~~~~~~~~~~
+C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\THERMOCOUPLE\MAX31855.cpp:41:1: warning:   when initialized here [-Wreorder]
+ MAX31855Class::MAX31855Class(int cs, SPIClass& spi) :
+ ^~~~~~~~~~~~~
+C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\THERMOCOUPLE\MAX31855.cpp: In member function 'double MAX31855Class::coldTempTomv(int, double)':
+C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\THERMOCOUPLE\MAX31855.cpp:133:11: warning: 'table' may be used uninitialized in this function [-Wmaybe-uninitialized]
+   voltage = polynomial(temp, tableEntries, table);
+   ~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\THERMOCOUPLE\MAX31855.cpp: In member function 'double MAX31855Class::mvtoTemp(int, double)':
+C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src\utility\THERMOCOUPLE\MAX31855.cpp:156:49: warning: 'table' may be used uninitialized in this function [-Wmaybe-uninitialized]
+   return polynomial(voltage, tableEntries, table);
+                                                 ^

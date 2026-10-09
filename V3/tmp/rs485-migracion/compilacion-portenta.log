@@ -1,0 +1,17 @@
+C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\automatico v2 rs485\PORTENTA\PORTENTA.ino: In function 'void setup()':
+C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\automatico v2 rs485\PORTENTA\PORTENTA.ino:5754:60: warning: 'void mbed::TickerBase::attach(F&&, float) [with F = void (*)()]' is deprecated: Pass a chrono duration, not a float second count. For example use `10ms` rather than `0.01f`. [since mbed-os-6.0.0] [-Wdeprecated-declarations]
+     motorTicker.attach(&generarPulsoMotor, velocidadMotores);
+                                                            ^
+In file included from C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\cores\arduino/mbed/mbed.h:84:0,
+                 from C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\cores\arduino/mbed.h:8,
+                 from C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src/utility/MAX31865/MAX31865.h:24,
+                 from C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src/Arduino_MachineControl.h:4,
+                 from C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\automatico v2 rs485\PORTENTA\PORTENTA.ino:5:
+C:\Users\samue\AppData\Local\Arduino15\packages\arduino\hardware\mbed_portenta\4.6.0\cores\arduino/mbed/drivers/include/drivers/Ticker.h:92:10: note: declared here
+     void attach(F &&func, float t)
+          ^~~~~~
+In file included from C:\Users\samue\OneDrive\Documents\Universidad\Tesis\Github\graduacion_cartesiano_codigo\V3\automatico v2 rs485\PORTENTA\PORTENTA.ino:5:0:
+C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src/Arduino_MachineControl.h: In member function 'QEI& machinecontrol::EncoderClass::operator[](int)':
+C:\Users\samue\OneDrive\Documents\Arduino\libraries\Arduino_MachineControl\src/Arduino_MachineControl.h:405:2: warning: control reaches end of non-void function [-Wreturn-type]
+  }
+  ^

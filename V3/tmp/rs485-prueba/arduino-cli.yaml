@@ -1,0 +1,6 @@
+directories:
+  data: C:/Users/samue/AppData/Local/Arduino15
+  user: C:/Users/samue/OneDrive/Documents/Arduino
+  downloads: C:/Users/samue/OneDrive/Documents/Universidad/Tesis/Github/graduacion_cartesiano_codigo/V3/tmp/rs485-prueba/downloads
+build_cache:
+  path: C:/Users/samue/OneDrive/Documents/Universidad/Tesis/Github/graduacion_cartesiano_codigo/V3/tmp/rs485-prueba/cache

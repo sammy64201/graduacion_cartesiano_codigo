@@ -128,12 +128,48 @@ segundos. Al terminar, la Portenta envía el estado de confirmación y la OLED
 permanece en una checklist que muestra únicamente `PORTENTA` y `CAMARA`. Con
 ambos en `OK`, se conecta el control y se presiona `X` para entrar al menú.
 
-Si el enlace se pierde después de haber quedado estable, el movimiento se
-detiene y no se inicia otra estabilización automáticamente. La Portenta recupera
-el bus, repite el triple check y espera que el control esté conectado y se pulse
-`X`. Si había un motor en movimiento, se invalida la calibración del brazo para
-volver a medir sus límites antes de moverlo.
+Por instrucción del usuario del 2026-10-08, el enlace permanece vigente
+hasta **1000 ms inclusive desde la última respuesta válida**. La Portenta
+declara pérdida y vuelve a espera/estabilización solo al superar **1000 ms**
+sin una respuesta con CRC y semántica válidos. Los errores consecutivos y
+la secuencia de snapshot congelada no adelantan esa recuperación; si siguen
+llegando respuestas válidas, la secuencia congelada no declara pérdida.
+Los paquetes rechazados no actualizan el reloj ni los controles.
+
+Al declarar pérdida se detienen los motores, se cancela el objetivo y se
+vuelve a la espera, estabilización de cinco segundos y checklist. Se requiere
+control conectado y `X` para volver al menú, y el movimiento cancelado no se
+reanuda automáticamente. Se conservan calibraciones XY/Z, pasos por mm,
+escalas y rangos incluso si se interrumpió movimiento. El usuario pidió
+conservar esas referencias aun si dejan de coincidir con la posición física.
+Un cambio de sesión de arranque ESP provoca cancelación y recuperación
+inmediata, también conservando las referencias de Portenta. Un reinicio real
+de Portenta y el reintento completo desde error mantienen su comportamiento.
 Ninguna de las tres calibraciones se ejecuta por obligación al arrancar.
+
+La política está compartida con la variante RS485 mediante dos copias
+idénticas de `RecuperacionEnlace.h` (`SIN_RESPUESTA_MS=1000`). RS485 mantiene
+el timeout de cada solicitud en 100 ms y la espera de 3 ms de silencio RX
+para ceder DE. No cambian los paquetes de 32 bytes: base I²C versión 16 y
+variante RS485 versión 17. Siguen activos finales, límites, DIN04,
+STOP/cancelación, Bluetooth y las guardas de cámara y encoder. Ver
+`INTEGRACION_AUTOMATICO_V2.md` para el alcance y la verificación de la revisión.
+
+La regresión `../tests/recuperacion_enlace_test.py` ejecuta recepción y
+recuperación reales de ambas variantes: acepta 999/1000 ms, pierde a
+1001 ms, prueba respuesta que renueva el plazo, snapshot congelado con
+respuestas válidas, errores consecutivos, CRC/semántica/correlación,
+wrap del reloj, conservación de referencias y cancelación sin reanudación.
+Pasaron estos casos, el ciclo/handshake I²C y las suites del firmware RS485.
+Logs de esta revisión en `../tmp/recuperacion-enlace-1s/regresiones-v2-i2c.log`
+y `regresiones-v2-rs485.log`. Compilaron los cuatro sketches completos
+ESP/Portenta I²C y RS485, código de salida 0, con Bluepad32 4.1.0 y
+mbed_portenta 4.6.0. Los logs están en la misma carpeta:
+`compilacion-i2c-esp.log`, `compilacion-i2c-portenta.log`,
+`compilacion-rs485-esp.log` y `compilacion-rs485-portenta.log`.
+Portenta conserva advertencias heredadas de bibliotecas. La comprobación
+de esta revisión en placas sigue pendiente; no se cargaron placas ni se
+accionó hardware.
 
 El menú contiene `MANUAL`, `AUTOMATICO`, `AUTOMATICO V2`,
 `REGISTRAR ANGULO`, `CALIBRACIONES`, `PRUEBA SERVOS`, `ENSENANZA ML`,
@@ -746,8 +782,9 @@ del ticker STEP de 100 us. Al fallar una operación, la Portenta realiza hasta
 dos reintentos no bloqueantes, separados primero 3 ms y después 9 ms. Durante
 esa recuperación no intercala otra operación normal del bus.
 
-El timeout de seguridad permanece en 150 ms. Un reintento válido conserva el
-enlace, pero ningún paquete corto, con cabecera incorrecta, CRC inválido o
+El umbral de recuperación general es **más de 1000 ms sin respuesta válida**,
+por la instrucción vigente del usuario. Los reintentos y errores de operación
+no adelantan ese umbral. Ningún paquete corto, con cabecera incorrecta, CRC inválido o
 semántica inválida modifica el estado de control. El eje Y arranca con divisor
 8 y baja hacia el divisor solicitado cada 75 ms para reducir el transitorio de
 conmutación del driver.
@@ -768,7 +805,7 @@ Una vez por segundo la Portenta imprime:
 - `rxErrPct` y `txErrPct`: porcentaje de error de la última ventana de un
   segundo, no el acumulado desde el arranque.
 - `retry`: cantidad acumulada de reintentos ejecutados.
-- `recRx` y `recTx`: ráfagas recuperadas antes de vencer los 150 ms.
+- `recRx` y `recTx`: ráfagas recuperadas por los reintentos de operación.
 - `burstFail`: operaciones que continuaron fallando después de ambos
   reintentos.
 - `pausaLoopMax`: mayor tiempo observado sin ejecutar el `loop()`.
@@ -786,7 +823,13 @@ la ESP vuelve a iniciar su esclavo si `Wire.begin()` falla o si pasan cinco
 segundos sin ninguna solicitud ni escritura. Reiniciar el periférico no cambia
 la sesión de arranque de la ESP y nunca permite reanudar motores por sí solo.
 
-## Diagnóstico de reinicios y pérdidas I²C
+## Antecedente histórico: diagnóstico de reinicios y pérdidas I²C
+
+Esta sección conserva el diseño diagnóstico previo. Las esperas `DIAG I2C
+PORTENTA`, los 150 ms y `SEQ CONGELADA` como disparador no son la política
+vigente: desde el 2026-10-08 rige la recuperación a más de 1000 ms sin
+respuesta válida descrita en «Arranque y menú». El firmware actual vuelve a
+espera/estabilización/checklist y conserva las referencias tras la pérdida.
 
 El protocolo version 16 conserva ambos paquetes en 32 bytes. La ESP publica en
 cada paquete la causa de su último reset y la Portenta distingue un reinicio
@@ -842,4 +885,5 @@ con protocolo 16; mezclar versiones debe producir `VERSION/HEADER`.
 4. Repetir primero sin motores ni servos y reconectar cargas una por una. Si la
    falla aparece al conmutar potencia, revisar EMI, caída de tensión y masas.
 5. Con osciloscopio o analizador lógico, buscar una línea retenida en LOW,
-   flancos lentos, picos o pausas superiores a 150 ms.
+   flancos lentos, picos o pausas que impidan recibir respuestas válidas
+   durante más de 1000 ms.

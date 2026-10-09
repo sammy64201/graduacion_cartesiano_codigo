@@ -1,0 +1,42 @@
+Using built-in specs.
+COLLECT_GCC=C:\Program Files\OpenMV IDE\share\qtcreator\stedgeai\Utilities\windows\mingw64\bin\g++.exe
+COLLECT_LTO_WRAPPER=C:/Program\ Files/OpenMV\ IDE/share/qtcreator/stedgeai/Utilities/windows/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/11.2.0/lto-wrapper.exe
+Target: x86_64-w64-mingw32
+Configured with: ../gcc-11.2.0/configure --prefix=/mingw64 --with-local-prefix=/mingw64/local --build=x86_64-w64-mingw32 --host=x86_64-w64-mingw32 --target=x86_64-w64-mingw32 --with-native-system-header-dir=/mingw64/x86_64-w64-mingw32/include --libexecdir=/mingw64/lib --enable-bootstrap --enable-checking=release --with-arch=x86-64 --with-tune=generic --enable-languages=c,lto,c++,fortran,ada,objc,obj-c++,jit --enable-shared --enable-static --enable-libatomic --enable-threads=posix --enable-graphite --enable-fully-dynamic-string --enable-libstdcxx-filesystem-ts --enable-libstdcxx-time --disable-libstdcxx-pch --disable-libstdcxx-debug --enable-lto --enable-libgomp --disable-multilib --disable-rpath --disable-win32-registry --disable-nls --disable-werror --disable-symvers --with-libiconv --with-system-zlib --with-gmp=/mingw64 --with-mpfr=/mingw64 --with-mpc=/mingw64 --with-isl=/mingw64 --with-pkgversion='Rev8, Built by MSYS2 project' --with-bugurl=https://github.com/msys2/MINGW-packages/issues --with-gnu-as --with-gnu-ld --with-boot-ldflags='-pipe -Wl,--dynamicbase,--high-entropy-va,--nxcompat,--default-image-base-high -Wl,--disable-dynamicbase -static-libstdc++ -static-libgcc' 'LDFLAGS_FOR_TARGET=-pipe -Wl,--dynamicbase,--high-entropy-va,--nxcompat,--default-image-base-high' --enable-linker-plugin-flags='LDFLAGS=-static-libstdc++\ -static-libgcc\ -pipe\ -Wl,--dynamicbase,--high-entropy-va,--nxcompat,--default-image-base-high\ -Wl,--stack,12582912'
+Thread model: posix
+Supported LTO compression algorithms: zlib zstd
+gcc version 11.2.0 (Rev8, Built by MSYS2 project) 
+COLLECT_GCC_OPTIONS='-std=c++11' '-Wall' '-Wextra' '-Werror' '-static' '-v' '-o' 'tmp/rs485-migracion/transporte-test.exe' '-mtune=generic' '-march=x86-64' '-dumpdir' 'tmp/rs485-migracion/transporte-test-'
+ C:/Program Files/OpenMV IDE/share/qtcreator/stedgeai/Utilities/windows/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/11.2.0/cc1plus.exe -quiet -v -iprefix C:/Program Files/OpenMV IDE/share/qtcreator/stedgeai/Utilities/windows/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/11.2.0/ -D_REENTRANT tests/rs485_transporte_test.cpp -quiet -dumpdir tmp/rs485-migracion/transporte-test- -dumpbase rs485_transporte_test.cpp -dumpbase-ext .cpp -mtune=generic -march=x86-64 -Wall -Wextra -Werror -std=c++11 -version -o C:\Users\samue\AppData\Local\Temp\cccr9teC.s
+GNU C++11 (Rev8, Built by MSYS2 project) version 11.2.0 (x86_64-w64-mingw32)
+	compiled by GNU C version 11.2.0, GMP version 6.2.1, MPFR version 4.1.0-p13, MPC version 1.2.1, isl version isl-0.24-GMP
+
+GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072
+ignoring nonexistent directory "C:/Program Files/OpenMV IDE/share/qtcreator/stedgeai/Utilities/windows/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/11.2.0/../../../../include/c++/11.2.0"
+ignoring nonexistent directory "C:/Program Files/OpenMV IDE/share/qtcreator/stedgeai/Utilities/windows/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/11.2.0/../../../../include/c++/11.2.0/x86_64-w64-mingw32"
+ignoring nonexistent directory "C:/Program Files/OpenMV IDE/share/qtcreator/stedgeai/Utilities/windows/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/11.2.0/../../../../include/c++/11.2.0/backward"
+ignoring nonexistent directory "C:/Program Files/OpenMV IDE/share/qtcreator/stedgeai/Utilities/windows/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/11.2.0/../../../../include"
+ignoring nonexistent directory "C:/Program Files/OpenMV IDE/share/qtcreator/stedgeai/Utilities/windows/mingw64/lib/gcc/../../lib/gcc/x86_64-w64-mingw32/11.2.0/../../../../include/c++/11.2.0"
+ignoring nonexistent directory "C:/Program Files/OpenMV IDE/share/qtcreator/stedgeai/Utilities/windows/mingw64/lib/gcc/../../lib/gcc/x86_64-w64-mingw32/11.2.0/../../../../include/c++/11.2.0/x86_64-w64-mingw32"
+ignoring nonexistent directory "C:/Program Files/OpenMV IDE/share/qtcreator/stedgeai/Utilities/windows/mingw64/lib/gcc/../../lib/gcc/x86_64-w64-mingw32/11.2.0/../../../../include/c++/11.2.0/backward"
+ignoring duplicate directory "C:/Program Files/OpenMV IDE/share/qtcreator/stedgeai/Utilities/windows/mingw64/lib/gcc/../../lib/gcc/x86_64-w64-mingw32/11.2.0/include"
+ignoring nonexistent directory "D:/a/msys64/mingw64/include"
+ignoring nonexistent directory "/mingw64/include"
+ignoring duplicate directory "C:/Program Files/OpenMV IDE/share/qtcreator/stedgeai/Utilities/windows/mingw64/lib/gcc/../../lib/gcc/x86_64-w64-mingw32/11.2.0/include-fixed"
+ignoring duplicate directory "C:/Program Files/OpenMV IDE/share/qtcreator/stedgeai/Utilities/windows/mingw64/lib/gcc/../../lib/gcc/x86_64-w64-mingw32/11.2.0/../../../../x86_64-w64-mingw32/include"
+ignoring nonexistent directory "D:/a/msys64/mingw64/x86_64-w64-mingw32/include"
+#include "..." search starts here:
+#include <...> search starts here:
+ C:/Program Files/OpenMV IDE/share/qtcreator/stedgeai/Utilities/windows/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/11.2.0/include
+ C:/Program Files/OpenMV IDE/share/qtcreator/stedgeai/Utilities/windows/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/11.2.0/include-fixed
+ C:/Program Files/OpenMV IDE/share/qtcreator/stedgeai/Utilities/windows/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/11.2.0/../../../../x86_64-w64-mingw32/include
+End of search list.
+GNU C++11 (Rev8, Built by MSYS2 project) version 11.2.0 (x86_64-w64-mingw32)
+	compiled by GNU C version 11.2.0, GMP version 6.2.1, MPFR version 4.1.0-p13, MPC version 1.2.1, isl version isl-0.24-GMP
+
+GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072
+Compiler executable checksum: d661fe4e1f40287be1a63ffba52e047a
+tests/rs485_transporte_test.cpp:1:10: fatal error: cassert: No such file or directory
+    1 | #include <cassert>
+      |          ^~~~~~~~~
+compilation terminated.
