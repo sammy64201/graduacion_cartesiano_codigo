@@ -45,10 +45,13 @@ precaptura**. La posicion de pieza avanza por delta real de cuentas; la
 velocidad y aceleracion predicen solo el corto horizonte de descenso y
 contacto. El cierre exige DIN04 y una prediccion viable, con limite
 de permanencia abajo. DIN04 confirma altura, no presencia ni agarre.
-La orientacion horizontal/vertical busca cerrar sobre el ancho menor;
-sin consenso axial del modelo 129 se conserva el ajuste previo y se
-rechaza el objetivo autonomo. Multiples piezas unicas y cajas recortadas
-tambien se rechazan con un motivo explicito.
+La orientacion busca cerrar sobre el ancho menor en cualquier angulo: la
+camara solo da una caja recta, asi que |theta| se aproxima con sus
+dimensiones y el sentido de la diagonal lo fija `AUTO_V2_SIGNO_DIAGONAL`
+(detalle en `CAPTURA_FIJA_V2.md`, "Giro por caja en cualquier angulo").
+Solo se rechaza el giro si las cajas no corresponden a la pieza o se
+contradicen. Multiples piezas unicas y cajas recortadas tambien se
+rechazan con un motivo explicito.
 
 La configuracion entregada habilita el ensayo solicitado:
 `V2_HABILITAR_PRUEBAS_CATCH=true`, con `V2_CAPTURA_FIJA_VALIDADA=false`.

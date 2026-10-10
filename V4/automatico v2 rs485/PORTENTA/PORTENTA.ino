@@ -15,6 +15,7 @@
 #include "CapturaFijaV2.h"
 #include "AjusteTemporalCapturaV2.h"
 #include "RecuperacionEnlace.h"
+#include "CalibracionAnguloMLV2.h"
 
 using namespace machinecontrol;
 using namespace ProtocoloRS485;
@@ -86,9 +87,11 @@ constexpr float CAMARA_A_HOME_Y_MM =
 // un dedo queda aguas arriba de la pieza. Con la distancia que centra las
 // verticales, la horizontal bajaba ~20 mm antes y ese dedo caia delante de la
 // pieza (maqueta V4, 2026-10-09). Positivo = catch despues, en mm de banda.
-constexpr float V2_RETRASO_CATCH_HORIZONTAL_MM = 20.0f;
-// El giro aplicado distingue la orientacion: CalibracionAnguloMLV2 (ESP) usa
-// 59 para eje largo X y 155/166 para eje largo Y; 107 es el punto medio.
+constexpr float V2_RETRASO_CATCH_HORIZONTAL_MM = 30.0f;
+// Diagonales: el dedo de aguas arriba queda a |cos theta| de esa posicion,
+// con theta deducido del giro aplicado y la clase (CalibracionAnguloMLV2.h,
+// copia identica de la ESP). Sin clase calibrada se conserva el umbral:
+// 59 = eje largo X, 155/166 = eje largo Y; 107 es el punto medio.
 constexpr uint8_t V2_GIRO_LIMITE_HORIZONTAL = 107;
 
 // E6B2-CWZ6C de 1024 P/R, lectura X2 y rueda de 49 mm en contacto 1:1.
@@ -563,7 +566,7 @@ constexpr float V2_ERROR_GEOMETRIA_CAPTURA_MM = 2.0f;
 constexpr float V2_ERROR_RELATIVO_ESCALA = 0.01f;
 constexpr unsigned long V2_ERROR_REFERENCIA_CAMARA_MS = 50UL;
 constexpr float V2_VELOCIDAD_MIN_CAPTURA_MM_S = 1.0f;
-constexpr float V2_VELOCIDAD_MAX_CAPTURA_MM_S = 100.0f;
+constexpr float V2_VELOCIDAD_MAX_CAPTURA_MM_S = 175.0f;
 // Limite exclusivo del ensayo: los registros de la maqueta muestran
 // 125..132 mm/s. No amplia el rango del perfil fisico validado.
 constexpr float V2_VELOCIDAD_MAX_PRUEBA_MM_S = 150.0f;
@@ -1250,23 +1253,27 @@ bool transformarCamaraABrazo(float camXmm, float camYmm,
     return isfinite(brazoXmm) && isfinite(brazoYmm);
 }
 
-float retrasoCatchPorGiroMm(uint8_t giroServo) {
+float retrasoCatchPorGiroMm(uint8_t giroServo, uint8_t clase) {
+    const float fraccionEjeX =
+        CalibracionAnguloMLV2::fraccionEjeXPorServo(clase, giroServo);
+    if (fraccionEjeX >= 0.0f) return V2_RETRASO_CATCH_HORIZONTAL_MM * fraccionEjeX;
     return giroServo < V2_GIRO_LIMITE_HORIZONTAL ? V2_RETRASO_CATCH_HORIZONTAL_MM : 0.0f;
 }
 
 // Pieza sobre la banda en el sistema del brazo, comun a Automatico V2, ML,
 // seguimiento, ajuste y cambios de catch: la camara fija el punto de partida
 // y el delta real de cuentas desde la referencia de imagen, el avance.
-// giroServo aplica el retraso de la pieza horizontal (catch mas tarde).
-// Usa conteoEncoderBanda tal como lo dejo el llamador.
+// giroServo/clase aplican el retraso de la pieza horizontal o diagonal
+// (catch mas tarde). Usa conteoEncoderBanda tal como lo dejo el llamador.
 bool piezaBrazoDesdeCamara(float camXmm, float camYmm, int32_t conteoReferencia,
-                           uint8_t giroServo, float &brazoXmm, float &brazoYmm) {
+                           uint8_t giroServo, uint8_t clase,
+                           float &brazoXmm, float &brazoYmm) {
     float yLocal = 0.0f;
     if (!transformarCamaraABrazo(camXmm, camYmm, brazoXmm, yLocal)) return false;
     const int32_t delta = diferenciaConteosConWrap(conteoEncoderBanda, conteoReferencia);
     brazoYmm = -CAMARA_A_HOME_Y_MM + yLocal +
         static_cast<float>(signoEncoderAvance) * static_cast<float>(delta) *
-        escalaEncoderMmPorCuenta - retrasoCatchPorGiroMm(giroServo);
+        escalaEncoderMmPorCuenta - retrasoCatchPorGiroMm(giroServo, clase);
     return isfinite(brazoYmm);
 }
 
@@ -3542,7 +3549,8 @@ bool actualizarObjetivoMovilV2() {
     if (!piezaBrazoDesdeCamara(automaticoV2.camXReferencia,
                                automaticoV2.camYReferencia,
                                automaticoV2.conteoReferencia,
-                               automaticoV2.anguloPreparado, brazoX, brazoY)) {
+                               automaticoV2.anguloPreparado, automaticoV2.clase,
+                               brazoX, brazoY)) {
         return false;
     }
     automaticoV2.objetivoBrazoX = brazoX;
@@ -3817,7 +3825,7 @@ void registrarPrediccionCapturaFijaV2(const char *etapa,
     Serial.print(F("|catch_offset_ms=")); Serial.print(capturaFijaV2EnPrueba() ? automaticoV2.desfaseCatchMs : 0);
     Serial.print(F("|servo_rot_deg=")); Serial.print(automaticoV2.anguloPreparado);
     Serial.print(F("|orientation_delay_mm=")); Serial.print(
-        retrasoCatchPorGiroMm(automaticoV2.anguloPreparado), 1);
+        retrasoCatchPorGiroMm(automaticoV2.anguloPreparado, automaticoV2.clase), 1);
     Serial.print(F("|enc=")); Serial.print(conteoEncoderBanda);
     Serial.print(F("|remaining_mm=")); Serial.print(posicionCatchYV2() - automaticoV2.objetivoBrazoY, 3);
     Serial.print(F("|velocity_mm_s=")); Serial.print(m.velocidad, 3);
@@ -5069,7 +5077,7 @@ bool actualizarPiezaEntrenamientoML() {
     // En ensenanza el operador puede corregir el giro: usar el aplicado ahora.
     if (!piezaBrazoDesdeCamara(entrenamientoML.camX, entrenamientoML.camY,
                                entrenamientoML.conteoReferencia, posServoRot,
-                               piezaX, piezaY)) {
+                               entrenamientoML.clase, piezaX, piezaY)) {
         return false;
     }
     entrenamientoML.piezaYEstimada = piezaY;

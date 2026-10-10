@@ -86,7 +86,10 @@ $script:Columnas = @(
     'rejected_calibration', 'trial_velocity_max_mm_s',
     'admission_velocity_max_mm_s', 'velocity_sample_age_ms',
     'configured_catch_offset_ms', 'catch_offset_ms', 'nominal_contact_s',
-    'nominal_acceleration_mm_s2'
+    'nominal_acceleration_mm_s2',
+    'box_width_mm', 'box_height_mm', 'box_angle_deg', 'box_norm',
+    'angle_valid_detections', 'angle_spread_deg', 'angle_type', 'angle_sign',
+    'angle_servo_deg', 'orientation_delay_mm'
 )
 
 $script:MapaCampos = @{
@@ -303,6 +306,16 @@ $script:MapaCampos = @{
     'catch_offset_ms' = 'catch_offset_ms'
     'nominal_contact_s' = 'nominal_contact_s'
     'nominal_acceleration_mm_s2' = 'nominal_acceleration_mm_s2'
+    'box_w_mm' = 'box_width_mm'
+    'box_h_mm' = 'box_height_mm'
+    'box_angle' = 'box_angle_deg'
+    'box_norm' = 'box_norm'
+    'angle_n' = 'angle_valid_detections'
+    'angle_spread' = 'angle_spread_deg'
+    'angle_type' = 'angle_type'
+    'angle_sign' = 'angle_sign'
+    'angle_servo' = 'angle_servo_deg'
+    'orientation_delay_mm' = 'orientation_delay_mm'
 }
 
 $script:Reloj = [System.Diagnostics.Stopwatch]::StartNew()

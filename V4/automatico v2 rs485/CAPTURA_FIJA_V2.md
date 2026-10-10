@@ -73,6 +73,9 @@ giro aplicado en ese momento. `FIXED_PREDICTION` registra `servo_rot_deg` y
 `orientation_delay_mm`. No cambia el protocolo ni el firmware ESP.
 Verificado: compilacion Portenta, posicion (vertical sin cambio, horizontal
 -20 mm, limite 106/107), migracion RS485 completa y registrador CSV.
+Desde el giro por caja (ver "Preparacion, orientacion y guardas") el retraso
+es `V2_RETRASO_CATCH_HORIZONTAL_MM * |cos theta|`, con theta deducido del
+giro aplicado y la clase; sin clase calibrada se conserva el umbral 107.
 
 ## Ensayo de catch habilitado (2026-10-09)
 
@@ -242,8 +245,9 @@ de tiempo de preparacion.
 
 En la ruta autonoma se rechazan varias piezas unicas (`MULTIPLES_PIEZAS`),
 cajas recortadas por el borde (`CAJA_RECORTADA`), centro/caja fuera del area
-calibrada (`FUERA_CALIBRACION`) y ausencia de consenso axial
-(`ORIENTACION_AMBIGUA`).
+calibrada (`FUERA_CALIBRACION`) y giro no estimable (`ORIENTACION_AMBIGUA`:
+menos de dos cajas del tamano de la pieza o cajas contradictorias). Una
+pieza inclinada ya no se rechaza por estar en diagonal.
 Las cajas duplicadas de una misma pieza siguen agrupandose. Detectar en
 cualquier punto significa dentro de esa region y con una pieza atribuible;
 no elimina las restricciones de imagen ni de tiempo disponible.
@@ -307,26 +311,76 @@ los dedos y la pieza. Si no cabe, la accion correcta es rechazar o cancelar.
   permanencia abajo tiene un limite independiente; no esperar abajo una
   llegada tardia. Mantener finales, limites, STOP, control y cancelacion.
 
-El objetivo fisico del giro axial es cerrar sobre el **ancho menor** de la
-pieza. El codigo conserva el mapeo de montaje de
-`CalibracionAnguloMLV2::sugerir`: eje largo X -> 59 para ambas clases;
-eje largo Y -> 155 para clase 6 y 166 para clase 7. No intercambiar esos
-votos o etiquetas para deducir el eje de cierre por una regla algebraica.
-La correspondencia real entre esos angulos, el eje de cierre y el ancho
-menor debe comprobarse fisicamente antes de validar el perfil. La caja
-del modelo 129 solo permite consenso axial; una pieza diagonal o una caja
-casi cuadrada no determina giro continuo. Sin consenso se conserva el
-ajuste anterior, se registra la ambiguedad y se rechaza el objetivo
-autonomo; no se intenta capturarlo con una nueva orientacion inventada.
+El objetivo fisico del giro es cerrar sobre el **ancho menor** de la
+pieza. Las rectas conservan el mapeo de montaje de ML V2: eje largo X -> 59
+para ambas clases; eje largo Y -> 155 para clase 6 y 166 para clase 7.
+
+### Giro por caja en cualquier angulo (2026-10-09)
+
+Por pedido del usuario la pieza se acepta en cualquier angulo y el firmware
+decide el giro. **Que entrega la camara:** para el modelo 129 la HUSKYLENS 2
+solo devuelve nombre, centro, ancho y alto de una caja paralela a la imagen
+(`Result` de `DFRobot_HuskylensV2`; ningun algoritmo de objetos trae angulo).
+Eso no basta para un angulo firmado: una pieza a +30 y otra a -30 grados dan
+la misma caja. Por eso se usa una aproximacion:
+
+- **|theta| por dimensiones.** Un rectangulo de largo L y ancho W girado
+  theta mide `L|cos|+W|sin|` en X y `L|sin|+W|cos|` en Y. Cada eje se
+  normaliza con las cajas rectas medidas de su clase (`CAJA_PIEZA6/7` en
+  `CalibracionAnguloMLV2.h`, medianas de `ml_v2_2026-10-05_*` ya en la
+  homografia de 255 mm) y se despeja theta (0 = eje largo X, 90 = eje Y).
+  No depende de la escala ni del margen propio de cada eje de la caja.
+- **Promedio y guardas.** La ESP suma solo cajas con norma 0.5..1.8 (pieza
+  entera de la clase) y decide con su promedio cuando hay al menos 2 y su
+  dispersion no supera 35 grados. Con menos o contradictorias:
+  `ORIENTACION_AMBIGUA`, se conserva el giro y se reune otra ventana.
+- **Servo.** Hasta 12 grados de una recta se usa el servo recto calibrado
+  (replay de 224 cajas rectas reales: todas quedan rectas, peor promedio a 8
+  grados). Entre medio se interpola entre recta X y recta Y de la clase.
+- **Signo: limitacion.** La caja no distingue el sentido de la diagonal.
+  `AUTO_V2_SIGNO_DIAGONAL=+1` (ESP.ino) gira entre 59 y 155/166, sentido que
+  alcanza cualquier |theta|. Si las piezas inclinadas llegan al reves y la
+  garra cierra en espejo, usar -1 (por debajo de 59 o por encima de 155/166;
+  donde el servo no llega elige 0 o 180). Una solucion completa requiere que
+  la camara entregue el sentido, p. ej. reentrenar el modelo con clases por
+  diagonal (sin aumentacion por espejo).
+- **Retraso del catch.** La Portenta incluye la misma cabecera (copia
+  identica) y aplica `V2_RETRASO_CATCH_HORIZONTAL_MM * |cos theta|` segun el
+  giro y la clase: 25 mm horizontal, 0 vertical, ~18 mm a 45 grados.
+
+Rige en Automatico V2, AJUSTE CATCH, ensenanza ML/ML V2/seguimiento (como
+sugerencia corregible) y en Automatico original y registro de angulo, que
+dejan los ejes sin calibrar 90/0 por la misma calibracion. Registros:
+`AUTO_ANGLE_SUGGESTION`, `OBJECTIVE_REFERENCE` y `ML_ANGLE_SUGGESTION`
+agregan `box_w_mm`, `box_h_mm`, `box_angle`, `box_norm`, `angle_n`,
+`angle_spread`, `angle_type` (RECTA_X/RECTA_Y/DIAGONAL) y `angle_sign`;
+`closure_axis_minor` puede valer `DIAGONAL`; `QUERY` agrega `box_angle`,
+`box_norm`, `angle_n` y `angle_servo`. Para recalibrar una clase, registrar
+piezas rectas a la velocidad de trabajo y reemplazar sus cuatro medidas por
+las medianas de `box_w_mm`/`box_h_mm`.
+
+Verificacion (sin placas): ESP 811601 bytes (61 %) y Portenta compilaron con
+Arduino CLI. Prueba de la cabecera: 0..90 grados se estiman y deciden, rectas
+= 59/155/166, inversa de la Portenta con error de |cos| < 0.01. Replay de 228
+cajas reales. Pasaron `rs485_migracion_test.py` (incluye integracion de captura
+fija, giro, ML V2 y vision 129), `captura_fija_posicion_test.py` (retraso
+continuo por clase), `auto_v2_vision_capture_test.py` (diagonales 20..70
+publicadas con flags 7; 0/90 contradictorias rechazadas),
+`rs485_desfase_terminal_test.py`, `rs485_pulsos_motor_test.py` y
+`captura_fija_logger_test.ps1`, sobre copias adaptadas en una raiz temporal;
+`V3/tests` no se modifico. Pendiente en la maqueta: confirmar el sentido de
+`AUTO_V2_SIGNO_DIAGONAL` y que una pieza a ~45 grados cierre centrada.
 
 En el paquete ESP, `reservadoV2` usa
 `OBJ_V2_REFERENCIA_APROXIMADA=1`, `OBJ_V2_ORIENTACION_AXIAL=2` y
-`OBJ_V2_GIRO_APLICADO=4` para la ruta autonoma. La combinacion 7 identifica
-un objetivo aproximado, axial y con orden de giro aplicada; no prueba que
-el servo haya terminado ni que exista agarre. Portenta espera el tiempo
+`OBJ_V2_GIRO_APLICADO=4` para la ruta autonoma. `OBJ_V2_ORIENTACION_AXIAL`
+conserva nombre y valor (protocolo sin cambios) pero significa "giro
+decidido por la caja": recto calibrado o diagonal aproximada. La combinacion 7 no prueba que el
+servo haya terminado ni que exista agarre. Portenta espera el tiempo
 de asentamiento configurado desde la aceptacion. Ensenanza y AJUSTE CATCH
 mantienen esos flags en cero. Las versiones son 18 I2C y 19 RS485, con
-32 bytes; no mezclar ESP/Portenta de revisiones distintas.
+32 bytes; no mezclar ESP/Portenta de revisiones distintas: el retraso de las
+diagonales requiere cargar ambas placas con esta revision.
 
 ## Variables fisicas que deben medirse
 

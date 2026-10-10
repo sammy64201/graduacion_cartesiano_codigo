@@ -43,6 +43,8 @@ struct Point2D;
 struct CandidatoPiezaV2;
 struct FiltroDeteccion;
 struct FiltroDeteccionV2;
+struct AcumuladoGiro;
+struct GiroCaja;
 struct ContextoCamara;
 struct RegistroLogV2;
 
@@ -142,16 +144,26 @@ constexpr uint32_t BAUD_LOG_ESP = 460800;
 constexpr uint16_t CAPACIDAD_COLA_LOG_V2 = 128;
 
 constexpr int ANGULO_SERVO_INICIAL = 90;
-// Ajustar estos dos valores tras comprobar en la maquina la correspondencia
-// entre los ejes X/Y del brazo y el eje de cierre de la garra.
-constexpr int ANGULO_GARRA_EJE_X = 90;
-constexpr int ANGULO_GARRA_EJE_Y = 0;
 constexpr double RELACION_MINIMA_ORIENTACION = VisionModelo129::RELACION_MINIMA_EJE;
-// Modelo 129: la caja no distingue +theta/-theta ni confirma una pieza recta.
-// V2 integra la calibracion de montaje aprendida en ML V2 para consenso X/Y.
-// Sin consenso conserva el giro manual. No estima el giro de diagonales.
+// Modelo 129: la caja no trae angulo. Todos los modos estiman |theta| con
+// CalibracionAnguloMLV2::estimarGiro sobre la caja promedio en mm y giran
+// con la calibracion de montaje de ML V2 (rectas 59 / 155-166, diagonales
+// interpoladas). Los votos X/Y quedan solo como registro.
 // false permite repetir las pruebas anteriores con rotacion fija.
 constexpr bool AUTO_V2_APLICAR_GIRO_POR_CAJA = true;
+// Detecciones con caja compatible con la clase antes de decidir el giro.
+constexpr uint8_t DETECCIONES_GIRO_MINIMAS = 2;
+// Una pieza no gira sobre la banda entre consultas: en 130 ventanas reales
+// de 3..6 cajas el |theta| vario como maximo 8 grados. Mas que esto indica
+// cajas contradictorias (p. ej. 0 y 90) y no se decide giro.
+constexpr float DISPERSION_GIRO_MAXIMA_DEG = 35.0f;
+// La caja no distingue +theta de -theta. +1 gira entre la recta X y la
+// recta Y (59 -> 155/166), sentido alcanzable para cualquier |theta|; -1 usa
+// el otro sentido (por debajo de 59 o por encima de 155/166). Cambiarlo si
+// las diagonales llegan inclinadas al reves; la camara no lo puede medir.
+constexpr int8_t AUTO_V2_SIGNO_DIAGONAL = 1;
+static_assert(AUTO_V2_SIGNO_DIAGONAL == 1 || AUTO_V2_SIGNO_DIAGONAL == -1,
+              "AUTO_V2_SIGNO_DIAGONAL debe ser +/-1");
 constexpr int ANGULO_PINZA_ABIERTA = 0;
 constexpr int ANGULO_PINZA_CERRADA = 130;
 constexpr int PULSO_PINZA_ABIERTA_US = 937;
@@ -363,6 +375,11 @@ struct DiagnosticoDeteccionV2 {
   uint32_t edadConsultaReferenciaObjetivoMs;
   bool referenciaEntreMuestras;
   uint8_t rechazadosFueraCalibracion;
+  // Giro por caja del filtro: NAN/-1 mientras no haya decision.
+  float anguloCajaDeg;
+  float normaCaja;
+  uint8_t giroValidas;
+  int16_t giroServo;
 };
 
 void publicarCausaDiagnosticoV2(
@@ -1258,6 +1275,10 @@ struct RegistroLogV2 {
   uint32_t edadConsultaReferenciaObjetivoMs;
   bool referenciaEntreMuestras;
   uint8_t rechazadosFueraCalibracion;
+  float anguloCajaDeg;
+  float normaCaja;
+  uint8_t giroValidas;
+  int16_t giroServo;
 };
 
 portMUX_TYPE colaLogV2Mux = portMUX_INITIALIZER_UNLOCKED;
@@ -1362,6 +1383,10 @@ void registrarConsultaLogV2(
   registro.flagsObjetivoV2 = diag.flagsObjetivoV2;
   registro.edadConsultaReferenciaObjetivoMs = diag.edadConsultaReferenciaObjetivoMs;
   registro.referenciaEntreMuestras = diag.referenciaEntreMuestras;
+  registro.anguloCajaDeg = diag.anguloCajaDeg;
+  registro.normaCaja = diag.normaCaja;
+  registro.giroValidas = diag.giroValidas;
+  registro.giroServo = diag.giroServo;
   encolarRegistroLogV2(registro);
 }
 
@@ -1388,6 +1413,11 @@ bool extraerRegistroLogV2(RegistroLogV2 &registro) {
   }
   portEXIT_CRITICAL(&colaLogV2Mux);
   return disponible;
+}
+
+void imprimirFinitoONA(float valor, uint8_t decimales) {
+  if (isfinite(valor)) Serial.print(valor, decimales);
+  else Serial.print(F("NA"));
 }
 
 void imprimirRegistroLogV2(const RegistroLogV2 &r) {
@@ -1447,6 +1477,12 @@ void imprimirRegistroLogV2(const RegistroLogV2 &r) {
     Serial.print(F("|rej_crop=")); Serial.print(r.rechazadosCajaRecortada);
     Serial.print(F("|votes_x=")); Serial.print(r.votosEjeX);
     Serial.print(F("|votes_y=")); Serial.print(r.votosEjeY);
+    Serial.print(F("|box_angle=")); imprimirFinitoONA(r.anguloCajaDeg, 1);
+    Serial.print(F("|box_norm=")); imprimirFinitoONA(r.normaCaja, 2);
+    Serial.print(F("|angle_n=")); Serial.print(r.giroValidas);
+    Serial.print(F("|angle_servo="));
+    if (r.giroServo >= 0) Serial.print(r.giroServo);
+    else Serial.print(F("NA"));
     Serial.print(F("|objective_flags=")); Serial.print(r.flagsObjetivoV2);
     Serial.print(F("|reference_query_age_ms="));
     if (r.edadConsultaReferenciaObjetivoMs == UINT32_MAX) Serial.print(F("NA"));
@@ -1725,10 +1761,11 @@ bool pixelToMillimeters(
   return isfinite(physicalPoint.x) && isfinite(physicalPoint.y);
 }
 
-// La caja del modelo es paralela a los ejes de imagen. Solo se distingue el
-// eje dominante en el plano calibrado; no se inventa un angulo diagonal.
-uint8_t estimarEjeCajaV2(const CandidatoPiezaV2 &candidato) {
-  if (candidato.anchoPx <= 0 || candidato.altoPx <= 0) return 0;
+// La caja del modelo es paralela a los ejes de imagen: sus cuatro esquinas
+// transformadas dan la extension X/Y de la pieza en el plano calibrado.
+bool dimensionesCajaMm(const CandidatoPiezaV2 &candidato,
+                       double &anchoMm, double &altoMm) {
+  if (candidato.anchoPx <= 0 || candidato.altoPx <= 0) return false;
   const double izquierda = candidato.centroXpx - candidato.anchoPx * 0.5;
   const double derecha = candidato.centroXpx + candidato.anchoPx * 0.5;
   const double arriba = candidato.centroYpx - candidato.altoPx * 0.5;
@@ -1737,7 +1774,7 @@ uint8_t estimarEjeCajaV2(const CandidatoPiezaV2 &candidato) {
   if (!pixelToMillimeters(izquierda, arriba, true, esquinas[0]) ||
       !pixelToMillimeters(derecha, arriba, true, esquinas[1]) ||
       !pixelToMillimeters(izquierda, abajo, true, esquinas[2]) ||
-      !pixelToMillimeters(derecha, abajo, true, esquinas[3])) return 0;
+      !pixelToMillimeters(derecha, abajo, true, esquinas[3])) return false;
   double minX = esquinas[0].x, maxX = minX;
   double minY = esquinas[0].y, maxY = minY;
   for (uint8_t i = 1; i < 4; ++i) {
@@ -1746,10 +1783,56 @@ uint8_t estimarEjeCajaV2(const CandidatoPiezaV2 &candidato) {
     minY = fmin(minY, esquinas[i].y);
     maxY = fmax(maxY, esquinas[i].y);
   }
-  const double anchoMm = maxX - minX;
-  const double altoMm = maxY - minY;
+  anchoMm = maxX - minX;
+  altoMm = maxY - minY;
+  return isfinite(anchoMm) && isfinite(altoMm);
+}
+
+// Eje dominante para registro (votos). El giro se decide con giroPorCaja().
+uint8_t estimarEjeCajaV2(const CandidatoPiezaV2 &candidato) {
+  double anchoMm = 0.0;
+  double altoMm = 0.0;
+  if (!dimensionesCajaMm(candidato, anchoMm, altoMm)) return 0;
   return VisionModelo129::ejePorDimensiones(
     anchoMm, altoMm, RELACION_MINIMA_ORIENTACION);
+}
+
+// Caja en mm de una deteccion cuya forma corresponde a una pieza entera de
+// su clase; solo esas entran al promedio que decide el giro.
+bool cajaGiroCompatible(const CandidatoPiezaV2 &candidato, uint8_t clase,
+                        double &anchoMm, double &altoMm, float &thetaDeg) {
+  if (!dimensionesCajaMm(candidato, anchoMm, altoMm)) return false;
+  const CalibracionAnguloMLV2::EstimacionGiro e = CalibracionAnguloMLV2::estimarGiro(
+    clase, static_cast<float>(anchoMm), static_cast<float>(altoMm));
+  thetaDeg = e.thetaDeg;
+  return e.valida;
+}
+
+// Cajas compatibles de una misma pieza, comun a los filtros V1 y V2.
+struct AcumuladoGiro {
+  double sumaAnchoMm;
+  double sumaAltoMm;
+  uint8_t validas;
+  float minimoDeg;
+  float maximoDeg;
+};
+
+void sumarCajaGiro(AcumuladoGiro &acumulado, const CandidatoPiezaV2 &candidato,
+                   uint8_t clase) {
+  double anchoMm = 0.0;
+  double altoMm = 0.0;
+  float thetaDeg = 0.0f;
+  if (acumulado.validas == UINT8_MAX ||
+      !cajaGiroCompatible(candidato, clase, anchoMm, altoMm, thetaDeg)) return;
+  if (acumulado.validas == 0) {
+    acumulado.sumaAnchoMm = acumulado.sumaAltoMm = 0.0;
+    acumulado.minimoDeg = acumulado.maximoDeg = thetaDeg;
+  }
+  acumulado.sumaAnchoMm += anchoMm;
+  acumulado.sumaAltoMm += altoMm;
+  acumulado.minimoDeg = fminf(acumulado.minimoDeg, thetaDeg);
+  acumulado.maximoDeg = fmaxf(acumulado.maximoDeg, thetaDeg);
+  ++acumulado.validas;
 }
 
 bool isInsideCalibrationArea(const Point2D &position) {
@@ -1837,6 +1920,7 @@ struct FiltroDeteccion {
   int16_t anchoPx;
   int16_t altoPx;
   int8_t confianza;
+  AcumuladoGiro giro;
 };
 
 struct FiltroDeteccionV2 {
@@ -1863,7 +1947,61 @@ struct FiltroDeteccionV2 {
   uint32_t ultimoMs;
   double primerYRaw;
   uint8_t muestrasYDistintas;
+  // Al final: los inicializadores posicionales existentes lo dejan en cero.
+  AcumuladoGiro giro;
 };
+
+// Giro decidido con la caja promedio de las detecciones compatibles.
+struct GiroCaja {
+  int16_t servo;  // -1 sin decision
+  uint8_t validas;
+  float anchoMm;
+  float altoMm;
+  float dispersionDeg;
+  CalibracionAnguloMLV2::EstimacionGiro estimacion;
+};
+
+GiroCaja giroPorCaja(uint8_t clase, const AcumuladoGiro &acumulado) {
+  const uint8_t validas = acumulado.validas;
+  GiroCaja giro = {-1, validas, NAN, NAN, NAN, {false, NAN, NAN}};
+  if (validas < DETECCIONES_GIRO_MINIMAS) return giro;
+  giro.anchoMm = static_cast<float>(acumulado.sumaAnchoMm / validas);
+  giro.altoMm = static_cast<float>(acumulado.sumaAltoMm / validas);
+  giro.dispersionDeg = acumulado.maximoDeg - acumulado.minimoDeg;
+  giro.estimacion = CalibracionAnguloMLV2::estimarGiro(
+    clase, giro.anchoMm, giro.altoMm);
+  if (giro.estimacion.valida && giro.dispersionDeg <= DISPERSION_GIRO_MAXIMA_DEG) {
+    giro.servo = CalibracionAnguloMLV2::servoPorGiro(
+      clase, giro.estimacion.thetaDeg, AUTO_V2_SIGNO_DIAGONAL);
+  }
+  return giro;
+}
+
+GiroCaja giroPorCajaV2(const FiltroDeteccionV2 &filtro) {
+  return giroPorCaja(filtro.clase, filtro.giro);
+}
+
+// Recta X / recta Y / diagonal, para registros.
+const __FlashStringHelper *tipoGiroCaja(const GiroCaja &giro) {
+  if (giro.servo < 0) return F("NA");
+  if (giro.estimacion.thetaDeg <= CalibracionAnguloMLV2::TOLERANCIA_RECTA_DEG)
+    return F("RECTA_X");
+  if (giro.estimacion.thetaDeg >=
+      90.0f - CalibracionAnguloMLV2::TOLERANCIA_RECTA_DEG) return F("RECTA_Y");
+  return F("DIAGONAL");
+}
+
+void imprimirGiroCaja(const GiroCaja &giro) {
+  Serial.print(F("|box_w_mm=")); imprimirFinitoONA(giro.anchoMm, 1);
+  Serial.print(F("|box_h_mm=")); imprimirFinitoONA(giro.altoMm, 1);
+  Serial.print(F("|box_angle="));
+  imprimirFinitoONA(giro.estimacion.valida ? giro.estimacion.thetaDeg : NAN, 1);
+  Serial.print(F("|box_norm=")); imprimirFinitoONA(giro.estimacion.norma, 2);
+  Serial.print(F("|angle_n=")); Serial.print(giro.validas);
+  Serial.print(F("|angle_spread=")); imprimirFinitoONA(giro.dispersionDeg, 1);
+  Serial.print(F("|angle_type=")); Serial.print(tipoGiroCaja(giro));
+  Serial.print(F("|angle_sign=")); Serial.print(static_cast<int>(AUTO_V2_SIGNO_DIAGONAL));
+}
 
 struct ContextoCamara {
   uint8_t estado;
@@ -1961,7 +2099,8 @@ void reiniciarFiltro(ContextoCamara &ctx) {
   ctx.filtro = {};
 }
 
-void orientarGarraAutomatica(uint8_t votosX, uint8_t votosY, bool modoV2,
+void orientarGarraAutomatica(const GiroCaja &giro, uint8_t votosX,
+                            uint8_t votosY, bool modoV2,
                             uint8_t clase = 0, uint16_t secuencia = 0) {
   if (modoV2 && !AUTO_V2_APLICAR_GIRO_POR_CAJA) {
     Serial.print(F("[AUTO V2] Giro por caja desactivado; conserva servo_deg="));
@@ -1973,9 +2112,8 @@ void orientarGarraAutomatica(uint8_t votosX, uint8_t votosY, bool modoV2,
     return;
   }
   if (modoV2) {
-    const int16_t sugerencia = CalibracionAnguloMLV2::sugerir(clase, votosX, votosY);
-    if (sugerencia >= 0) {
-      anguloServoRotacion = sugerencia;
+    if (giro.servo >= 0) {
+      anguloServoRotacion = giro.servo;
       servoRotacion.write(anguloServoRotacion);
     }
     Serial.print(F("V2LOG|E|event=AUTO_ANGLE_SUGGESTION|session="));
@@ -1984,22 +2122,23 @@ void orientarGarraAutomatica(uint8_t votosX, uint8_t votosY, bool modoV2,
     Serial.print(F("|obj=")); Serial.print(secuencia);
     Serial.print(F("|class=")); Serial.print(clase);
     Serial.print(F("|suggested_rot="));
-    if (sugerencia >= 0) Serial.print(sugerencia);
+    if (giro.servo >= 0) Serial.print(giro.servo);
     else Serial.print(F("NA"));
-    Serial.print(F("|suggestion_source=MLV2_EJES_20261005|votes_x="));
+    Serial.print(F("|suggestion_source=MLV2_CAJA_20261009|votes_x="));
     Serial.print(votosX);
     Serial.print(F("|votes_y=")); Serial.print(votosY);
+    imprimirGiroCaja(giro);
     Serial.print(F("|servo_rot_deg=")); Serial.println(anguloServoRotacion);
     return;
   }
-  const bool ejeX = votosX >= 2 && votosY == 0;
-  const bool ejeY = votosY >= 2 && votosX == 0;
-  anguloServoRotacion = ejeX ? ANGULO_GARRA_EJE_X :
-    (ejeY ? ANGULO_GARRA_EJE_Y : ANGULO_SERVO_INICIAL);
+  // Automatico original: misma decision por caja; sin estimacion vuelve al
+  // giro inicial como antes.
+  anguloServoRotacion = giro.servo >= 0 ? giro.servo : ANGULO_SERVO_INICIAL;
   servoRotacion.write(anguloServoRotacion);
-  Serial.print(modoV2 ? F("[AUTO V2]") : F("[AUTO]"));
-  Serial.print(F(" Orientacion aprox eje="));
-  Serial.print(ejeX ? F("X") : (ejeY ? F("Y") : F("INDETERMINADO")));
+  Serial.print(F("[AUTO] Giro por caja tipo="));
+  Serial.print(tipoGiroCaja(giro));
+  Serial.print(F(" theta="));
+  imprimirFinitoONA(giro.estimacion.valida ? giro.estimacion.thetaDeg : NAN, 1);
   Serial.print(F(" votos_x="));
   Serial.print(votosX);
   Serial.print(F(" votos_y="));
@@ -2218,6 +2357,8 @@ void incorporarDeteccion(
     filtro.maximoY = posicion.y;
     filtro.votosEjeX = static_cast<uint8_t>(ejeCaja == 1);
     filtro.votosEjeY = static_cast<uint8_t>(ejeCaja == 2);
+    filtro.giro = {};
+    sumarCajaGiro(filtro.giro, caja, clase);
     return;
   }
 
@@ -2226,6 +2367,7 @@ void incorporarDeteccion(
   }
   if (ejeCaja == 1 && filtro.votosEjeX < UINT8_MAX) ++filtro.votosEjeX;
   if (ejeCaja == 2 && filtro.votosEjeY < UINT8_MAX) ++filtro.votosEjeY;
+  sumarCajaGiro(filtro.giro, caja, clase);
   filtro.sumaX += posicion.x;
   filtro.sumaY += posicion.y;
   filtro.promedioX = filtro.sumaX / filtro.consecutivas;
@@ -2236,16 +2378,10 @@ void incorporarDeteccion(
   filtro.maximoY = fmax(filtro.maximoY, posicion.y);
 }
 
-// El modelo 129 no transmite giro. Usar el consenso de cajas en el plano
-// calibrado tambien al registrar/ensenar; sin consenso conservar giro manual.
-int16_t sugerirAnguloPorVotos(uint8_t votosX, uint8_t votosY) {
-  if (votosX >= 2 && votosY == 0) return ANGULO_GARRA_EJE_X;
-  if (votosY >= 2 && votosX == 0) return ANGULO_GARRA_EJE_Y;
-  return -1;
-}
-
-int16_t sugerirAnguloRegistro(const FiltroDeteccion &filtro) {
-  return sugerirAnguloPorVotos(filtro.votosEjeX, filtro.votosEjeY);
+// El modelo 129 no transmite giro. Registrar/ensenar usa la misma estimacion
+// por caja que la ruta autonoma; sin estimacion conserva el giro manual.
+GiroCaja giroPorCajaV1(const FiltroDeteccion &filtro) {
+  return giroPorCaja(filtro.clase, filtro.giro);
 }
 
 void publicarObjetivoEstable(ContextoCamara &ctx, bool registrarAngulo) {
@@ -2272,8 +2408,8 @@ void publicarObjetivoEstable(ContextoCamara &ctx, bool registrarAngulo) {
   // El modo de etiquetado conserva la pieza hasta confirmar el angulo.
   ctx.objetivoV2 = registrarAngulo;
   ctx.conteoReferenciaObjetivo = 0;
-  ctx.sugerenciaAngulo = registrarAngulo
-    ? sugerirAnguloRegistro(ctx.filtro) : -1;
+  const GiroCaja giro = giroPorCajaV1(ctx.filtro);
+  ctx.sugerenciaAngulo = registrarAngulo ? giro.servo : -1;
   ctx.rearmada = false;
   if (registrarAngulo) {
     if (ctx.sugerenciaAngulo >= 0) {
@@ -2300,7 +2436,7 @@ void publicarObjetivoEstable(ContextoCamara &ctx, bool registrarAngulo) {
     Serial.print(F("|suggested_rot="));
     if (ctx.sugerenciaAngulo >= 0) Serial.print(ctx.sugerenciaAngulo);
     else Serial.print(F("NA"));
-    Serial.print(F("|suggestion_source=MODEL129_BOX_AXIS_MM"));
+    Serial.print(F("|suggestion_source=MLV2_CAJA_20261009"));
     // El modelo personalizado entrega -128 en el byte compartido con rfu1;
     // no presentarlo como una confianza de deteccion utilizable.
     Serial.print(F("|confidence="));
@@ -2309,17 +2445,13 @@ void publicarObjetivoEstable(ContextoCamara &ctx, bool registrarAngulo) {
     Serial.print(F("|n=")); Serial.print(ctx.filtro.consecutivas);
     Serial.print(F("|votes_x=")); Serial.print(ctx.filtro.votosEjeX);
     Serial.print(F("|votes_y=")); Serial.print(ctx.filtro.votosEjeY);
-    const uint8_t anguloAproximado =
-      ctx.filtro.votosEjeX >= 2 &&
-      ctx.filtro.votosEjeY == 0
-        ? ANGULO_GARRA_EJE_X
-        : (ctx.filtro.votosEjeY >= 2 &&
-           ctx.filtro.votosEjeX == 0
-            ? ANGULO_GARRA_EJE_Y : ANGULO_SERVO_INICIAL);
-    Serial.print(F("|approx_rot=")); Serial.print(anguloAproximado);
+    imprimirGiroCaja(giro);
+    Serial.print(F("|approx_rot="));
+    Serial.print(giro.servo >= 0 ? giro.servo : ANGULO_SERVO_INICIAL);
     Serial.print(F("|servo_rot_deg=")); Serial.println(anguloServoRotacion);
   } else {
-    orientarGarraAutomatica(ctx.filtro.votosEjeX, ctx.filtro.votosEjeY, false);
+    orientarGarraAutomatica(giro, ctx.filtro.votosEjeX,
+                            ctx.filtro.votosEjeY, false);
   }
   reiniciarFiltro(ctx);
 
@@ -2424,6 +2556,9 @@ DiagnosticoDeteccionV2 crearDiagnosticoBaseV2(
   int8_t resultadosHusky
 ) {
   DiagnosticoDeteccionV2 diag = {};
+  diag.anguloCajaDeg = NAN;
+  diag.normaCaja = NAN;
+  diag.giroServo = -1;
   diag.causa = V2_DIAG_SIN_BLOQUEO;
   diag.actualizadoMs = millis();
   diag.edadEncoderMs = encoder.recibidoMs == 0
@@ -2544,11 +2679,13 @@ void incorporarDeteccionV2(
       candidato.posicion.x, candidato.posicion.y,
       static_cast<uint8_t>(ejeCaja == 1),
       static_cast<uint8_t>(ejeCaja == 2),
-      instanteMs, instanteMs, candidato.posicion.y, 1U
+      instanteMs, instanteMs, candidato.posicion.y, 1U, {}
     };
+    sumarCajaGiro(filtro.giro, candidato, candidato.clase);
     ctx.ausenciasFiltroV2 = 0;
     return;
   }
+  sumarCajaGiro(filtro.giro, candidato, candidato.clase);
 
   const int8_t relacion = elegirRelacionYEncoderV2(
     filtro, candidato.posicion, conteo, encoder
@@ -2598,9 +2735,10 @@ bool publicarObjetivoV2(
 ) {
   FiltroDeteccionV2 &filtro = ctx.filtroV2;
   if (filtro.consecutivas < DETECCIONES_ESTABLES_V2) return false;
+  // Se calcula antes de reiniciar el filtro; decide giro y sugerencias.
+  const GiroCaja giro = giroPorCajaV2(filtro);
   if (capturaAutonoma && (!orientarGarra || !AUTO_V2_APLICAR_GIRO_POR_CAJA ||
-      CalibracionAnguloMLV2::sugerir(filtro.clase, filtro.votosEjeX,
-                                  filtro.votosEjeY) < 0)) return false;
+      giro.servo < 0)) return false;
   const double desplazamiento = fabs(
     static_cast<double>(diferenciaConteosConWrap(
       conteoActual,
@@ -2632,6 +2770,8 @@ bool publicarObjetivoV2(
   ctx.objetivoX10 = static_cast<int16_t>(x10);
   ctx.objetivoY10 = static_cast<int16_t>(y10);
   ctx.conteoReferenciaObjetivo = conteoActual;
+  // ORIENTACION_AXIAL conserva su bit (protocolo sin cambios) y significa
+  // "giro decidido por la caja": recto calibrado o diagonal aproximada.
   ctx.flagsObjetivoV2 = capturaAutonoma
     ? OBJ_V2_REFERENCIA_APROXIMADA | OBJ_V2_ORIENTACION_AXIAL | OBJ_V2_GIRO_APLICADO
     : 0;
@@ -2696,13 +2836,9 @@ bool publicarObjetivoV2(
     }
     Serial.println();
   }
-  const bool usarCalibracionEjes = entrenamientoML &&
-    (entrenamientoMLV2 || pruebaSeguimiento);
-  ctx.sugerenciaAngulo = !entrenamientoML ? -1 :
-    (usarCalibracionEjes
-      ? CalibracionAnguloMLV2::sugerir(
-          filtro.clase, filtro.votosEjeX, filtro.votosEjeY)
-      : sugerirAnguloPorVotos(filtro.votosEjeX, filtro.votosEjeY));
+  // Ensenanza ML, ML V2 y seguimiento sugieren el mismo giro que la ruta
+  // autonoma; el operador lo corrige con el control antes del catch.
+  ctx.sugerenciaAngulo = entrenamientoML ? giro.servo : -1;
   if (entrenamientoML) {
     if (ctx.sugerenciaAngulo >= 0) {
       anguloServoRotacion = ctx.sugerenciaAngulo;
@@ -2722,24 +2858,21 @@ bool publicarObjetivoV2(
     Serial.print(F("|suggested_rot="));
     if (ctx.sugerenciaAngulo >= 0) Serial.print(ctx.sugerenciaAngulo);
     else Serial.print(F("NA"));
-    Serial.print(usarCalibracionEjes
-      ? F("|suggestion_source=MLV2_EJES_20261005")
-      : F("|suggestion_source=MODEL129_BOX_AXIS_MM"));
+    Serial.print(F("|suggestion_source=MLV2_CAJA_20261009"));
     Serial.print(F("|votes_x=")); Serial.print(filtro.votosEjeX);
     Serial.print(F("|votes_y=")); Serial.print(filtro.votosEjeY);
+    imprimirGiroCaja(giro);
     Serial.print(F("|servo_rot_deg="));
     Serial.println(anguloServoRotacion);
   }
   if (orientarGarra) {
-    ctx.sugerenciaAngulo = AUTO_V2_APLICAR_GIRO_POR_CAJA
-      ? CalibracionAnguloMLV2::sugerir(filtro.clase, filtro.votosEjeX, filtro.votosEjeY)
-      : -1;
-    orientarGarraAutomatica(filtro.votosEjeX, filtro.votosEjeY, true,
+    ctx.sugerenciaAngulo = AUTO_V2_APLICAR_GIRO_POR_CAJA ? giro.servo : -1;
+    orientarGarraAutomatica(giro, filtro.votosEjeX, filtro.votosEjeY, true,
                             filtro.clase, ctx.secuenciaObjetivo);
   }
   if (capturaAutonoma) {
-    // El eje que devuelve la caja es el lado largo. Los valores aprendidos
-    // corresponden al cierre por el lado menor; no sumar 90 grados al servo.
+    // theta es el eje largo de la caja. Los valores aprendidos corresponden
+    // al cierre por el lado menor; no sumar 90 grados al servo.
     Serial.print(F("V2LOG|E|event=OBJECTIVE_REFERENCE|mode=V2|session="));
     Serial.print(sesionArranque);
     Serial.print(F("|ms=")); Serial.print(millis());
@@ -2749,8 +2882,12 @@ bool publicarObjetivoV2(
     Serial.print(F("|reference_source=QUERY_MIDPOINT_APPROX|capture_timestamp=NA|image_age_known=0"));
     Serial.print(F("|reference_query_age_ms=")); Serial.print(millis() - filtro.ultimoMs);
     Serial.print(F("|closure_axis_minor="));
-    Serial.print(filtro.votosEjeX >= 2 && filtro.votosEjeY == 0 ? F("Y") : F("X"));
-    Serial.print(F("|suggestion_source=MLV2_EJES_20261005|servo_rot_deg="));
+    const float theta = giro.estimacion.thetaDeg;
+    Serial.print(theta <= CalibracionAnguloMLV2::TOLERANCIA_RECTA_DEG ? F("Y") :
+      (theta >= 90.0f - CalibracionAnguloMLV2::TOLERANCIA_RECTA_DEG
+        ? F("X") : F("DIAGONAL")));
+    imprimirGiroCaja(giro);
+    Serial.print(F("|suggestion_source=MLV2_CAJA_20261009|servo_rot_deg="));
     Serial.print(anguloServoRotacion);
     Serial.println(F("|rotation_command_applied=1|rotation_physically_verified=0"));
   }
@@ -3170,6 +3307,12 @@ bool leerPiezasV2UnaVez(
   diag.relacionYEncoder = ctx.filtroV2.relacionYEncoder;
   diag.votosEjeX = ctx.filtroV2.votosEjeX;
   diag.votosEjeY = ctx.filtroV2.votosEjeY;
+  const GiroCaja giroFiltro = giroPorCajaV2(ctx.filtroV2);
+  diag.anguloCajaDeg = giroFiltro.estimacion.valida
+    ? giroFiltro.estimacion.thetaDeg : NAN;
+  diag.normaCaja = giroFiltro.estimacion.norma;
+  diag.giroValidas = giroFiltro.validas;
+  diag.giroServo = giroFiltro.servo;
   diag.yCompensadaMm = compensarYConEncoder(
     candidatoElegido.posicion.y,
     encoder.conteo,
@@ -3194,9 +3337,10 @@ bool leerPiezasV2UnaVez(
 
   publicarCausaDiagnosticoV2(diag, V2_DIAG_OBJETIVO_LISTO);
   if (capturaAutonoma && (!AUTO_V2_APLICAR_GIRO_POR_CAJA ||
-      CalibracionAnguloMLV2::sugerir(ctx.filtroV2.clase,
-        ctx.filtroV2.votosEjeX, ctx.filtroV2.votosEjeY) < 0)) {
-    // Conservar el giro previo y reunir una nueva ventana; la caja no mide diagonales.
+      giroFiltro.servo < 0)) {
+    // Cualquier giro se acepta; aqui solo llegan cajas que no corresponden a
+    // la pieza entera (norma fuera de rango) o menos de dos compatibles.
+    // Conservar el giro previo y reunir una nueva ventana.
     publicarYRegistrarDiagnosticoV2(diag, V2_DIAG_ORIENTACION_AMBIGUA,
                                   encoder, consulta, indiceElegido);
     reiniciarFiltroV2(ctx);
