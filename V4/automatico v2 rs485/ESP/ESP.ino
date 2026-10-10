@@ -157,10 +157,14 @@ constexpr uint8_t DETECCIONES_GIRO_MINIMAS = 2;
 // de 3..6 cajas el |theta| vario como maximo 8 grados. Mas que esto indica
 // cajas contradictorias (p. ej. 0 y 90) y no se decide giro.
 constexpr float DISPERSION_GIRO_MAXIMA_DEG = 35.0f;
-// La caja no distingue +theta de -theta. +1 gira entre la recta X y la
-// recta Y (59 -> 155/166), sentido alcanzable para cualquier |theta|; -1 usa
-// el otro sentido (por debajo de 59 o por encima de 155/166). Cambiarlo si
-// las diagonales llegan inclinadas al reves; la camara no lo puede medir.
+// La caja no distingue +theta de -theta: las dos diagonales usan el mismo
+// sentido. +1 gira entre la recta X y la recta Y (59 -> 155/166); -1 usa el
+// otro sentido (por debajo de 59 o por encima de 155/166; donde el servo no
+// llega elige 0 o 180). Maqueta 2026-10-09, fotos con -1: una pieza a ~34
+// grados de la banda (vista desde el operador con los tags arriba/abajo,
+// bajando hacia la derecha) quedo con los dedos a lo largo de la pieza en
+// vez de cruzarla; se vuelve a +1. La pieza en la diagonal espejo queda
+// con la garra mal alineada mientras la camara no entregue el sentido.
 constexpr int8_t AUTO_V2_SIGNO_DIAGONAL = 1;
 static_assert(AUTO_V2_SIGNO_DIAGONAL == 1 || AUTO_V2_SIGNO_DIAGONAL == -1,
               "AUTO_V2_SIGNO_DIAGONAL debe ser +/-1");

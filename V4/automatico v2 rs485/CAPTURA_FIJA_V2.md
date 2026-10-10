@@ -337,13 +337,17 @@ la misma caja. Por eso se usa una aproximacion:
 - **Servo.** Hasta 12 grados de una recta se usa el servo recto calibrado
   (replay de 224 cajas rectas reales: todas quedan rectas, peor promedio a 8
   grados). Entre medio se interpola entre recta X y recta Y de la clase.
-- **Signo: limitacion.** La caja no distingue el sentido de la diagonal.
-  `AUTO_V2_SIGNO_DIAGONAL=+1` (ESP.ino) gira entre 59 y 155/166, sentido que
-  alcanza cualquier |theta|. Si las piezas inclinadas llegan al reves y la
-  garra cierra en espejo, usar -1 (por debajo de 59 o por encima de 155/166;
-  donde el servo no llega elige 0 o 180). Una solucion completa requiere que
-  la camara entregue el sentido, p. ej. reentrenar el modelo con clases por
-  diagonal (sin aumentacion por espejo).
+- **Signo: limitacion.** La caja no distingue el sentido de la diagonal:
+  "/" y "\" dan la misma caja y reciben el mismo giro.
+  `AUTO_V2_SIGNO_DIAGONAL` (ESP.ino) vale +1 (giro entre 59 y 155/166).
+  Se probo -1 el 2026-10-09: con fotos, una pieza a ~34 grados de la banda
+  (vista desde el operador con los tags arriba/abajo, bajando hacia la
+  derecha) quedo con los dedos a lo largo de la pieza en vez de cruzarla, y
+  se volvio a +1. La pieza en la diagonal espejo queda mal alineada. Con -1
+  el giro iria por debajo de 59 o por encima de 155/166; donde el servo no
+  llega elige 0 o 180 (error maximo ~6 grados pieza6 y ~14 grados pieza7).
+  Una solucion completa requiere que la camara entregue el sentido, p. ej.
+  reentrenar el modelo con clases por diagonal (sin aumentacion por espejo).
 - **Retraso del catch.** La Portenta incluye la misma cabecera (copia
   identica) y aplica `V2_RETRASO_CATCH_HORIZONTAL_MM * |cos theta|` segun el
   giro y la clase: 25 mm horizontal, 0 vertical, ~18 mm a 45 grados.
@@ -368,8 +372,10 @@ continuo por clase), `auto_v2_vision_capture_test.py` (diagonales 20..70
 publicadas con flags 7; 0/90 contradictorias rechazadas),
 `rs485_desfase_terminal_test.py`, `rs485_pulsos_motor_test.py` y
 `captura_fija_logger_test.ps1`, sobre copias adaptadas en una raiz temporal;
-`V3/tests` no se modifico. Pendiente en la maqueta: confirmar el sentido de
-`AUTO_V2_SIGNO_DIAGONAL` y que una pieza a ~45 grados cierre centrada.
+`V3/tests` no se modifico. La prueba de vision comprueba las diagonales por
+su orientacion fisica modulo 180 (error <= 9 grados) con cualquier signo; se
+repitio con -1 y con +1. Pendiente en la maqueta: confirmar con +1 que la
+pieza de las fotos (~34 grados de la banda) cierra cruzada y centrada.
 
 En el paquete ESP, `reservadoV2` usa
 `OBJ_V2_REFERENCIA_APROXIMADA=1`, `OBJ_V2_ORIENTACION_AXIAL=2` y
