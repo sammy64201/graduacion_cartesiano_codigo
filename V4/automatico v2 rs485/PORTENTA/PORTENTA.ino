@@ -544,7 +544,7 @@ constexpr bool V2_HABILITAR_PRUEBAS_CATCH = true;
 // Ajuste del ensayo fijo en ms: +100 adelanta 100 ms; -100 retrasa 100 ms.
 // Tambien se puede cambiar por terminal con CATCH +100 / CATCH -100.
 // Se reserva por pieza y se recalcula en distancia con v/a del encoder.
-constexpr int32_t V2_DESFASE_CATCH_MS = 0;
+constexpr int32_t V2_DESFASE_CATCH_MS = 250;
 static_assert(V2_DESFASE_CATCH_MS >= AjusteTemporalCapturaV2::MIN_MS &&
               V2_DESFASE_CATCH_MS <= AjusteTemporalCapturaV2::MAX_MS,
               "Desfase catch fuera del rango del comando CATCH");
@@ -552,6 +552,15 @@ static_assert(static_cast<int32_t>(V2_TIEMPO_CONTACTO_NOMINAL_MS) +
               AjusteTemporalCapturaV2::MIN_MS >= 50,
               "El retraso maximo de CATCH debe dejar al menos 50 ms de contacto");
 int32_t desfaseCatchConfiguradoMs = V2_DESFASE_CATCH_MS;
+// Adelanto extra solo para piezas en diagonal (+ adelanta, ms), sumado al
+// desfase general. Se pondera con |sin(2*theta)| segun el giro aplicado:
+// completo a 45 grados, ~0.4 en el limite de 12 grados y cero en horizontal y
+// vertical, que conservan su ajuste. Terminal: CATCHDIAG 150 (proxima pieza).
+constexpr int32_t V2_ADELANTO_CATCH_DIAGONAL_MS = 150;
+static_assert(V2_ADELANTO_CATCH_DIAGONAL_MS >= AjusteTemporalCapturaV2::MIN_MS &&
+              V2_ADELANTO_CATCH_DIAGONAL_MS <= AjusteTemporalCapturaV2::MAX_MS,
+              "Adelanto diagonal fuera del rango del comando CATCHDIAG");
+int32_t adelantoDiagonalConfiguradoMs = V2_ADELANTO_CATCH_DIAGONAL_MS;
 constexpr float V2_VENTANA_CAPTURA_Y_MM = 5.0f;
 // Ensayo: el disparo apunta al centro (+/-V2_VENTANA_CAPTURA_Y_MM), pero una
 // vez iniciado el descenso solo se cancela si el contacto previsto sale de
@@ -637,6 +646,7 @@ struct ContextoAutomaticoV2 {
     int32_t desfaseCatchMs;
     bool confirmacionDin04Pendiente;
     unsigned long inicioConfirmacionDin04Ms;
+    int32_t adelantoDiagonalMs;
 };
 
 ContextoAutomaticoV2 automaticoV2 = {};
@@ -3614,12 +3624,28 @@ bool capturaFijaV2EnPrueba() {
     return !V2_CAPTURA_FIJA_VALIDADA && V2_HABILITAR_PRUEBAS_CATCH;
 }
 
+// 0 en horizontal/vertical, 1 a 45 grados: |sin(2 theta)| con theta deducido
+// del giro aplicado y la clase. Sin clase calibrada no hay adelanto diagonal.
+float pesoDiagonalPorGiro(uint8_t giroServo, uint8_t clase) {
+    const float c = CalibracionAnguloMLV2::fraccionEjeXPorServo(clase, giroServo);
+    if (c < 0.0f) return 0.0f;
+    return fminf(1.0f, 2.0f * c * sqrtf(fmaxf(0.0f, 1.0f - c * c)));
+}
+
+int32_t adelantoDiagonalAplicadoMs() {
+    return static_cast<int32_t>(lroundf(automaticoV2.adelantoDiagonalMs *
+        pesoDiagonalPorGiro(automaticoV2.anguloPreparado, automaticoV2.clase)));
+}
+
 float tiempoContactoNominalFijoV2() {
     // Antes se apuntaba al cierre completo + plazo de transporte (608 ms): la
     // pieza llegaba a Y=0 cuando los dedos ya estaban cerrados.
     const float baseS = V2_TIEMPO_CONTACTO_NOMINAL_MS * 0.001f;
-    return AjusteTemporalCapturaV2::horizonte(baseS,
-        capturaFijaV2EnPrueba() ? automaticoV2.desfaseCatchMs : 0);
+    // Desfase general + diagonal; nunca menos de los 50 ms que deja CATCH.
+    const int32_t sumaMs = automaticoV2.desfaseCatchMs + adelantoDiagonalAplicadoMs();
+    const int32_t ajusteMs = !capturaFijaV2EnPrueba() ? 0
+        : (sumaMs < AjusteTemporalCapturaV2::MIN_MS ? AjusteTemporalCapturaV2::MIN_MS : sumaMs);
+    return AjusteTemporalCapturaV2::horizonte(baseS, ajusteMs);
 }
 
 bool perfilCapturaFijaV2Valido() {
@@ -3771,6 +3797,7 @@ void registrarPerfilCapturaFijaV2() {
     Serial.print(F("|test_mode=")); Serial.print(capturaFijaV2EnPrueba() ? 1 : 0);
     Serial.print(F("|configured_catch_offset_ms=")); Serial.print(desfaseCatchConfiguradoMs);
     Serial.print(F("|catch_offset_ms=")); Serial.print(capturaFijaV2EnPrueba() ? automaticoV2.desfaseCatchMs : 0);
+    Serial.print(F("|configured_diagonal_offset_ms=")); Serial.print(adelantoDiagonalConfiguradoMs);
     Serial.print(F("|nominal_contact_s=")); Serial.print(tiempoContactoNominalFijoV2(), 3);
     Serial.print(F("|camera_home_y_mm=")); Serial.print(CAMARA_A_HOME_Y_MM, 1);
     Serial.print(F("|camera_sign_y=")); Serial.print(CAMERA_SIGN_Y);
@@ -3826,6 +3853,8 @@ void registrarPrediccionCapturaFijaV2(const char *etapa,
     Serial.print(F("|servo_rot_deg=")); Serial.print(automaticoV2.anguloPreparado);
     Serial.print(F("|orientation_delay_mm=")); Serial.print(
         retrasoCatchPorGiroMm(automaticoV2.anguloPreparado, automaticoV2.clase), 1);
+    Serial.print(F("|diagonal_offset_ms=")); Serial.print(
+        capturaFijaV2EnPrueba() ? adelantoDiagonalAplicadoMs() : 0);
     Serial.print(F("|enc=")); Serial.print(conteoEncoderBanda);
     Serial.print(F("|remaining_mm=")); Serial.print(posicionCatchYV2() - automaticoV2.objetivoBrazoY, 3);
     Serial.print(F("|velocity_mm_s=")); Serial.print(m.velocidad, 3);
@@ -3854,6 +3883,9 @@ void aceptarObjetivoAutomaticoV2() {
         // Cambiar CATCH en terminal modifica la siguiente reserva, no una
         // pieza que ya esta esperando, bajando o cerrando.
         automaticoV2.desfaseCatchMs = desfaseCatchConfiguradoMs;
+        // El giro de esta pieza aun no esta reservado: el adelanto diagonal
+        // se fija despues, junto con anguloPreparado y clase.
+        automaticoV2.adelantoDiagonalMs = 0;
         registrarPerfilCapturaFijaV2();
         if (!perfilCapturaFijaV2Valido()) {
             registrarEventoPortentaV2("CALIBRATION_REQUIRED", "perfil fisico fijo pendiente");
@@ -3911,6 +3943,7 @@ void aceptarObjetivoAutomaticoV2() {
     automaticoV2.clase = claseObjetivo;
     automaticoV2.flagsReferencia = flagsObjetivoV2;
     automaticoV2.anguloPreparado = posServoRot;
+    automaticoV2.adelantoDiagonalMs = adelantoDiagonalConfiguradoMs;
     automaticoV2.aceptadoMs = millis();
     automaticoV2.inicioXEstable = 0;
     automaticoV2.camXReferencia = camX;
@@ -6147,6 +6180,7 @@ void mostrarAyudaTerminal() {
     Serial.println(F("CATCH +100  -> adelantar 100 ms en la siguiente pieza"));
     Serial.println(F("CATCH -100  -> retrasar 100 ms; rango -250..+500 ms"));
     Serial.println(F("CATCH 0     -> quitar ajuste temporal; no cambia geometria"));
+    Serial.println(F("CATCHDIAG 150 -> adelanto extra solo diagonales (completo a 45 grados)"));
     Serial.println(F("STOP        -> parada inmediata"));
     Serial.println(F("REINTENTAR  -> reinicio seguro desde estado de error"));
     Serial.println(F("AYUDA       -> esta ayuda"));
@@ -6192,6 +6226,25 @@ void procesarComandoTerminal(String comando) {
 
     String mayuscula = comando;
     mayuscula.toUpperCase();
+    if (mayuscula == "CATCHDIAG" || mayuscula.startsWith("CATCHDIAG ")) {
+        if (mayuscula != "CATCHDIAG") {
+            const String datos = comando.substring(10);
+            int32_t propuesto = 0;
+            if (!AjusteTemporalCapturaV2::analizar(datos.c_str(), propuesto)) {
+                Serial.println(F("[CATCHDIAG] Usar CATCHDIAG <ms enteros de -250 a +500>; +adelanta, -retrasa"));
+                return;
+            }
+            adelantoDiagonalConfiguradoMs = propuesto;
+        }
+        Serial.print(F("V2LOG|P|event=CATCH_DIAGONAL_OFFSET|configured_diagonal_offset_ms="));
+        Serial.print(adelantoDiagonalConfiguradoMs);
+        Serial.print(F("|test_mode=")); Serial.print(capturaFijaV2EnPrueba() ? 1 : 0);
+        Serial.println(F("|message=proxima reserva; completo a 45 grados, cero en horizontal y vertical"));
+        Serial.print(F("[CATCHDIAG] Proxima pieza: ")); Serial.print(adelantoDiagonalConfiguradoMs);
+        Serial.println(F(" ms a 45 grados (+adelanta/-retrasa), se suma a CATCH."));
+        Serial.println(F("[CATCHDIAG] Se restablece al reiniciar. Permanente: V2_ADELANTO_CATCH_DIAGONAL_MS."));
+        return;
+    }
     if (mayuscula == "CATCH" || mayuscula.startsWith("CATCH ")) {
         if (mayuscula != "CATCH") {
             const String datos = comando.substring(6);

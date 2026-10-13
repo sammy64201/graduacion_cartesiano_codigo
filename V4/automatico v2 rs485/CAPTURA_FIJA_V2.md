@@ -351,6 +351,16 @@ la misma caja. Por eso se usa una aproximacion:
 - **Retraso del catch.** La Portenta incluye la misma cabecera (copia
   identica) y aplica `V2_RETRASO_CATCH_HORIZONTAL_MM * |cos theta|` segun el
   giro y la clase: 25 mm horizontal, 0 vertical, ~18 mm a 45 grados.
+- **Adelanto diagonal (2026-10-12).** Con el desfase general
+  (`V2_DESFASE_CATCH_MS`) ajustado para verticales y horizontales, las
+  diagonales seguian cerrando tarde. `V2_ADELANTO_CATCH_DIAGONAL_MS=150`
+  (Portenta) se suma al desfase solo en diagonal, ponderado con
+  |sin(2 theta)| del giro aplicado: completo a 45 grados, ~87 % a 30/60, ~41 %
+  en el limite de 12 grados y cero en las rectas (servo 59/155/166 exacto).
+  En milisegundos, como `CATCH`, se adapta a la velocidad de banda. Terminal:
+  `CATCHDIAG <ms>` (-250..+500) para la siguiente pieza; se restablece al
+  reiniciar. `FIXED_PROFILE` registra `configured_diagonal_offset_ms` y
+  `FIXED_PREDICTION` el valor aplicado, `diagonal_offset_ms`.
 
 Rige en Automatico V2, AJUSTE CATCH, ensenanza ML/ML V2/seguimiento (como
 sugerencia corregible) y en Automatico original y registro de angulo, que

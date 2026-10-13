@@ -89,7 +89,8 @@ $script:Columnas = @(
     'nominal_acceleration_mm_s2',
     'box_width_mm', 'box_height_mm', 'box_angle_deg', 'box_norm',
     'angle_valid_detections', 'angle_spread_deg', 'angle_type', 'angle_sign',
-    'angle_servo_deg', 'orientation_delay_mm'
+    'angle_servo_deg', 'orientation_delay_mm',
+    'configured_diagonal_offset_ms', 'diagonal_offset_ms'
 )
 
 $script:MapaCampos = @{
@@ -316,6 +317,8 @@ $script:MapaCampos = @{
     'angle_sign' = 'angle_sign'
     'angle_servo' = 'angle_servo_deg'
     'orientation_delay_mm' = 'orientation_delay_mm'
+    'configured_diagonal_offset_ms' = 'configured_diagonal_offset_ms'
+    'diagonal_offset_ms' = 'diagonal_offset_ms'
 }
 
 $script:Reloj = [System.Diagnostics.Stopwatch]::StartNew()
