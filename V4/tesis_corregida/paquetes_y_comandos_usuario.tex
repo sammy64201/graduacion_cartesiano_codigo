@@ -1,0 +1,14 @@
+% ================================================================================
+% Comandos definidos por el usuario
+% ================================================================================
+% La opción "mexico" de babel nombra las tablas "Tabla"; la guía UVG usa "Cuadro".
+\addto\captionsspanish{%
+	\renewcommand{\tablename}{Cuadro}%
+	\renewcommand{\listtablename}{Lista de cuadros}%
+	\renewcommand{\listfigurename}{Lista de figuras}%
+}
+\AtBeginDocument{%
+	\renewcommand{\tablename}{Cuadro}%
+	\renewcommand{\listtablename}{Lista de cuadros}%
+	\renewcommand{\listfigurename}{Lista de figuras}%
+}

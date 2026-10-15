@@ -1,0 +1,400 @@
+La metodología adoptada para este trabajo se estructuró a partir de los objetivos específicos y del orden en el que se desarrolló el prototipo. El proceso se dividió en seis fases: evaluación del sistema original, selección de componentes y rediseño mecánico, implementación mecánica, desarrollo del accionamiento electrónico y del modo manual, integración del sistema de visión y del control automático, y validación experimental. Esta organización permitió integrar de manera progresiva los subsistemas mecánicos, electrónicos y de control.
+
+El trabajo se enmarcó en una investigación aplicada de desarrollo tecnológico, debido a que tuvo como finalidad intervenir un sistema existente mediante su rediseño y la incorporación de funciones de automatización. El proyecto se orientó a mejorar el comportamiento mecánico de un brazo robótico cartesiano y a incorporar las funciones necesarias para su operación manual y automática dentro de una línea de empaque.
+
+Durante el desarrollo se realizaron comprobaciones funcionales en cada etapa de integración. Las evaluaciones iniciales de los mecanismos fueron principalmente cualitativas, mientras que las etapas posteriores incorporaron variables obtenidas del firmware, de los sensores y de los registros de operación. La evaluación cuantitativa de precisión y repetibilidad se reservó para la fase final de validación.
+
+
+% ============================================================
+% FASE 1
+% ============================================================
+
+\section{Fase 1. Evaluación del sistema original}
+
+En la primera fase se inspeccionó el brazo robótico cartesiano existente y se examinó, mediante manipulación directa, el desplazamiento de los ejes X, Y y Z. El sistema electrónico permaneció desenergizado durante esta evaluación con el propósito de analizar el comportamiento mecánico de manera independiente al accionamiento de los motores.
+
+Se revisaron los elementos de guiado, los carros, los rodamientos y la disposición del conjunto vertical. Se observaron el contacto entre componentes, la resistencia al desplazamiento, la alineación de las guías y las diferencias de avance entre los extremos del pórtico. En el eje Z se inspeccionó la alineación del mecanismo vertical y la disposición del motor, las guías y el efector final.
+
+Las observaciones realizadas en esta etapa fueron de carácter cualitativo. No se utilizaron instrumentos para medir fuerzas de desplazamiento, deflexión, precisión o repetibilidad. La configuración original se documentó mediante fotografías y las observaciones se organizaron por eje para utilizarlas como referencia durante la selección de componentes y el rediseño mecánico.
+
+
+% ============================================================
+% FASE 2
+% ============================================================
+
+\section{Fase 2. Selección de componentes y rediseño mecánico}
+
+En la segunda fase se seleccionaron los componentes de guiado y se desarrolló el rediseño mecánico mediante Autodesk Inventor. Se conservó la arquitectura cartesiana y la disposición general de los ejes X, Y y Z, mientras que se modificaron los elementos relacionados con el guiado, los carros y la integración del conjunto vertical.
+
+Se retomaron los diseños de los soportes de los ejes guía y de los motores de X y Y y se adaptaron sus dimensiones a los nuevos componentes. Esta reutilización correspondió únicamente a la geometría de los diseños y no a las piezas impresas utilizadas en el mecanismo original.
+
+Se seleccionaron ejes guía de acero de 12~mm de diámetro y rodamientos lineales compatibles. Para los carros de los ejes X y Y se emplearon rodamientos lineales con carcasa y puntos de fijación, mientras que para el conjunto central se utilizaron rodamientos lineales cilíndricos.
+
+Los carros se modelaron a partir de la geometría de los rodamientos seleccionados. En los modelos se incorporaron los espacios necesarios para el paso del eje perpendicular, la fijación de los rodamientos y el recorrido de las fajas dentadas. Posteriormente, se desarrolló el conjunto central y se estableció la separación entre las guías a partir de la disposición de los rodamientos.
+
+En el ensamblaje CAD se incorporó el mecanismo del eje Z, compuesto por dos guías y un tornillo de avance. Se diseñaron sus soportes superior e inferior y se desarrolló el soporte necesario para integrar el efector final al conjunto móvil.
+
+Los componentes se integraron en un ensamblaje digital utilizado como referencia para la fabricación. Las modificaciones identificadas durante el montaje físico se incorporaron posteriormente al modelo CAD.
+
+
+% ============================================================
+% FASE 3
+% ============================================================
+
+\section{Fase 3. Implementación mecánica}
+
+En la tercera fase se fabricaron los componentes y se ensambló el mecanismo rediseñado. Los perfiles de aluminio y los ejes de acero se cortaron en el Laboratorio de Máquinas de la Universidad del Valle de Guatemala según las dimensiones establecidas durante el diseño.
+
+Los componentes personalizados se fabricaron mediante impresión tridimensional en ácido poliláctico (PLA) utilizando una impresora Bambu Lab A1. Se fabricaron nuevamente los soportes de los ejes guía, los soportes de los motores, los carros de desplazamiento, las piezas del conjunto central, los soportes del mecanismo vertical y los elementos complementarios de montaje.
+
+La estructura se ensambló mediante perfiles de aluminio 2020 de ranura en T, escuadras, tornillería compatible con los perfiles y arandelas en las uniones. Los ejes X y Y conservaron la transmisión mediante fajas dentadas y el eje Z utilizó un tornillo de avance.
+
+El montaje se desarrolló de forma iterativa. Se verificó la retención de los rodamientos, la alineación de las guías y las restricciones asociadas con la fabricación mediante impresión tridimensional. Los modelos que presentaron dificultades durante el montaje se modificaron y se fabricaron nuevamente. Las principales iteraciones correspondieron al conjunto central y al soporte inferior del eje Z.
+
+Para el efector final se utilizó un modelo de garra obtenido de una fuente externa y se desarrolló un soporte específico para integrarlo al mecanismo vertical.
+
+% PENDIENTE DOCUMENTAL:
+% Incorporar la referencia correspondiente al modelo original de la garra.
+
+Durante el ensamblaje, las distancias definidas en Autodesk Inventor se trasladaron al mecanismo físico y se utilizaron como referencia para alinear los soportes y las guías. Las fajas dentadas se fijaron a los carros mediante tornillos y su posición se ajustó durante el tensado. En el eje Z se ensamblaron las guías y el tornillo de avance de acuerdo con la disposición definida en el modelo.
+
+Antes de incorporar el accionamiento electrónico se comprobó manualmente el desplazamiento de los tres ejes. Se verificaron la continuidad del movimiento, la presencia de atascos, la permanencia de los carros sobre sus guías, la retención de los rodamientos y el avance relativo de los extremos del pórtico.
+
+Estas comprobaciones fueron cualitativas y se diferenciaron de las pruebas posteriores realizadas mediante los motores. En esta etapa no se realizaron mediciones instrumentadas de fricción, deflexión, precisión o repetibilidad. El proceso de fabricación y ensamblaje se documentó mediante fotografías y videos.
+
+% PENDIENTES DOCUMENTALES:
+% - Confirmar el procedimiento utilizado para medir los recorridos X = 446 mm e Y = 336 mm.
+% - Incorporar el recorrido físico del eje Z cuando se disponga de la medición.
+
+
+% ============================================================
+% FASE 4
+% ============================================================
+
+\section{Fase 4. Accionamiento electrónico, operación manual y referenciación}
+
+\subsection{Desarrollo inicial del sistema electrónico}
+
+Después de comprobar el funcionamiento mecánico, el accionamiento electrónico se desarrolló inicialmente mediante placas de conexiones sin soldadura o protoboards. Esta configuración se utilizó para integrar progresivamente los microcontroladores, los controladores de motores, los finales de carrera, los servomotores y las interfaces de comunicación antes de construir una instalación permanente.
+
+Durante esta etapa se empleó cable calibre AWG~22 para parte de las interconexiones entre módulos y microcontroladores. Debido al carácter experimental del montaje, el cableado no se organizó inicialmente mediante una distribución física definitiva.
+
+En la ESP32 se utilizaron temporalmente dos elementos auxiliares. Se conectó un capacitor entre las terminales RST y GND para prolongar el tiempo previo a la inicialización del microcontrolador y se instaló otro capacitor en paralelo con la alimentación de la placa.
+
+Durante el desarrollo posterior, el retardo requerido durante el encendido se implementó mediante software, por lo que el capacitor conectado entre RST y GND dejó de utilizarse. De igual manera, el capacitor adicional conectado sobre la alimentación de la ESP32 se retiró en la implementación posterior.
+
+
+\subsection{Arquitectura de control y desarrollo del firmware}
+
+El control se distribuyó entre una Arduino Portenta H7 con Machine Control y una ESP32. La Portenta H7 se utilizó para el accionamiento de los motores paso a paso, la adquisición de los finales de carrera, la ejecución de las rutinas de referenciación, el conteo de pasos y la coordinación de la máquina de estados principal.
+
+La ESP32 se utilizó para administrar el mando inalámbrico, la pantalla OLED, los dos servomotores del efector final y la comunicación con la cámara. También se utilizó para el procesamiento de las detecciones y la calibración geométrica asociada con el sistema de visión.
+
+El firmware se desarrolló dentro del ecosistema Arduino. En la Portenta se utilizó la biblioteca \texttt{Arduino\_MachineControl} para acceder a las entradas, salidas y al encoder de Machine Control. La comunicación I2C se implementó mediante \texttt{Wire}.
+
+En la ESP32 se utilizó Bluepad32 para la comunicación con el mando inalámbrico, \texttt{ESP32Servo} para el control de los servomotores, \texttt{Adafruit\_GFX} y \texttt{Adafruit\_SH110X} para la pantalla OLED, y posteriormente \texttt{DFRobot\_HuskylensV2} para la integración de la cámara.
+
+La programación se desarrolló de manera incremental. Primero se implementaron las funciones asociadas con el movimiento individual de los ejes, posteriormente se incorporaron los finales de carrera y la referenciación, y después se integraron el mando inalámbrico, la interfaz de usuario y las comunicaciones entre los microcontroladores.
+
+% Versiones encontradas en las compilaciones conservadas:
+% Arduino_MachineControl 1.1.2
+% ESP32Servo 3.1.3
+% Adafruit_GFX 1.12.5
+% Adafruit_SH110X 2.1.14
+% DFRobot_HuskylensV2 1.0.9
+%
+% Confirmar cuáles corresponden exactamente al firmware final.
+
+
+\subsection{Accionamiento de los ejes y finales de carrera}
+
+La programación del movimiento se inició mediante funciones individuales para los tres motores paso a paso. La Portenta generó señales STEP y DIR mediante las salidas de Machine Control y mantuvo contadores de los pulsos ordenados para cada eje.
+
+En la configuración integrada se asignaron los canales DO04 y DO05 a las señales STEP y DIR del eje X, respectivamente; DO02 y DO03 al eje Y; y DO00 y DO01 al eje Z.
+
+La generación de pulsos se implementó mediante una tarea periódica basada en \texttt{mbed::Ticker}. El período base se configuró en 100~\textmu s y se utilizaron divisores para modificar la frecuencia nominal durante las diferentes operaciones.
+
+Se incorporaron seis finales de carrera, dos para cada eje. Los sensores de X se conectaron a DIN00 y DIN01, los de Y a DIN02 y DIN03 y, en la configuración de firmware más reciente, los de Z se asociaron con DIN04 para el extremo inferior y DIN05 para el extremo superior.
+
+% CONFIRMAR:
+% - DIN04 = Z inferior.
+% - DIN05 = Z superior.
+% - configuración física de los contactos.
+
+La lectura de los finales de carrera se incorporó a las funciones de movimiento. El firmware bloqueó el desplazamiento en el sentido correspondiente cuando un sensor de límite se encontraba activo y permitió el movimiento en el sentido opuesto para liberar el mecanismo. También se incorporó una comprobación del estado conjunto de los dos sensores pertenecientes a un mismo eje.
+
+
+\subsection{Comunicación entre la Portenta H7 y la ESP32}
+
+La comunicación entre los dos microcontroladores se implementó mediante I2C. La Portenta se configuró como maestra y la ESP32 como esclava en la dirección \texttt{0x40}. El bus se configuró a una frecuencia de 100~kHz. En la ESP32 se utilizaron GPIO27 para SDA y GPIO14 para SCL.
+
+Se desarrolló un protocolo binario de longitud fija para intercambiar órdenes y estados del sistema. En la versión integrada más reciente los paquetes tuvieron una longitud de 32 bytes en ambos sentidos.
+
+Los mensajes incorporaron campos de identificación, versión, longitud, secuencia y estado. También se utilizó una comprobación CRC-8/ATM con polinomio \texttt{0x07} y valor inicial \texttt{0x00}. Antes de utilizar los datos recibidos se verificaron el tamaño del mensaje, su identificación, la versión del protocolo, la longitud declarada, el CRC y la validez de los campos.
+
+La ESP32 preparó periódicamente una copia de los datos destinados a la Portenta. Cuando la Portenta realizó una solicitud de lectura, la función de atención del bus entregó esa copia. En el sentido contrario, los datos recibidos por la ESP32 se almacenaron inicialmente y posteriormente se procesaron fuera de la función inmediata de recepción.
+
+Además de la comprobación de integridad se incorporaron números de secuencia, identificación de sesión y límites temporales para controlar la vigencia de la información intercambiada.
+
+La pantalla OLED utilizó un bus I2C independiente administrado por la ESP32. Se configuró un controlador SH1106 de 128~$\times$~64 píxeles con dirección \texttt{0x3C}, mediante GPIO21 para SDA y GPIO22 para SCL.
+
+
+\subsection{Operación manual e interfaz de usuario}
+
+El modo de operación manual se implementó mediante un mando inalámbrico administrado por Bluepad32 en la ESP32. Los valores analógicos de los joysticks se transformaron en órdenes discretas de dirección con valores de $-1$, $0$ y $+1$.
+
+El joystick izquierdo se utilizó para controlar los desplazamientos de X y Y, mientras que el eje vertical del joystick derecho se utilizó para Z. Para estos ejes se configuró una zona neutra de 100 unidades.
+
+Las órdenes generadas por la ESP32 se transmitieron hacia la Portenta mediante el enlace I2C. La Portenta utilizó estas órdenes para mantener el movimiento del eje solicitado mientras la dirección permaneciera activa y las condiciones de los finales de carrera permitieran el desplazamiento.
+
+El eje horizontal del joystick derecho se utilizó para modificar la orientación del efector final. La apertura y el cierre de la pinza se controlaron mediante un botón del mando.
+
+Los servomotores se conectaron a GPIO25 y GPIO26 de la ESP32 y se configuraron con una frecuencia de 50~Hz. El primero se utilizó para la rotación del efector final y el segundo para la apertura y cierre de la pinza.
+
+La pantalla OLED se utilizó como interfaz local para presentar los estados principales del sistema, las opciones de menú, la calibración, las órdenes de movimiento y los estados asociados con la operación del brazo.
+
+
+\subsection{Referenciación y posicionamiento cartesiano}
+
+Después de integrar el accionamiento y los finales de carrera se desarrolló una rutina automática de referenciación para establecer el recorrido de los tres ejes.
+
+La secuencia se ejecutó primero en X, posteriormente en Y y finalmente en Z. Para cada eje se realizó una primera aproximación hacia el final mínimo, seguida de la liberación del sensor y una separación adicional de 300 pasos. Posteriormente se ejecutó una segunda aproximación a menor frecuencia de pulsos y se estableció el contador correspondiente como referencia.
+
+Después se desplazó el eje hacia el extremo opuesto, se repitió el procedimiento de liberación y segunda aproximación y se registró el número total de pasos entre ambos extremos.
+
+Se configuró un recorrido mínimo aceptado de 100 pasos y un tiempo límite de 180~s para cada fase de la rutina.
+
+Una vez medidos los tres ejes se calculó el punto medio de cada recorrido y se desplazó el mecanismo hacia esas posiciones. Al alcanzar el centro, los contadores de X, Y y Z se reiniciaron a cero. El origen utilizado por el sistema correspondió, por tanto, al centro del recorrido calibrado.
+
+Para X y Y se calcularon factores de conversión entre milímetros y pasos a partir del recorrido contado y de las longitudes físicas configuradas. Se utilizaron longitudes de referencia de 446~mm para X y 336~mm para Y.
+
+Los factores se calcularon mediante:
+
+\[
+s_X=\frac{N_X}{L_X},
+\qquad
+s_Y=\frac{N_Y}{L_Y},
+\]
+
+donde $N_X$ y $N_Y$ correspondieron al número de pasos medido entre los extremos y $L_X$ y $L_Y$ a los recorridos físicos configurados.
+
+Para una coordenada deseada se calcularon los destinos:
+
+\[
+n_X=\operatorname{round}(X\,s_X),
+\qquad
+n_Y=\operatorname{round}(Y\,s_Y).
+\]
+
+Se incorporó un margen de seguridad de 2~mm respecto de los extremos antes de aceptar un destino.
+
+El posicionamiento mediante coordenadas se mantuvo separado del movimiento manual. El modo manual utilizó órdenes direccionales continuas, mientras que el posicionamiento cartesiano convirtió coordenadas X/Y a destinos en pasos.
+
+El eje Z se controló mediante conteos de pasos y posiciones utilizadas por las secuencias de movimiento. No se implementó una conversión cartesiana de Z expresada en milímetros.
+
+
+\subsection{Montaje permanente en placas perforadas y organización del cableado}
+
+Después de desarrollar y comprobar las funciones principales de movimiento, comunicación, operación manual y referenciación, la electrónica se trasladó desde los protoboards a placas perforadas.
+
+El montaje se distribuyó en cinco placas perforadas de acuerdo con la función de cada subsistema. Una placa se destinó a los convertidores reductores de tensión y a la alimentación de la cámara. Una segunda placa se utilizó para la alimentación y el control de los servomotores. Una tercera placa concentró la distribución de 24~V y los conductores de retorno a tierra.
+
+Una cuarta placa alojó la ESP32 y las conexiones correspondientes al enlace I2C con la Portenta H7 y a la interfaz de la pantalla. Finalmente, una quinta placa se destinó a la conexión de la pantalla OLED para permitir su ubicación en la estructura del brazo.
+
+% PENDIENTE:
+% Incorporar:
+% - modelos de convertidores step-down;
+% - tensiones de entrada y salida;
+% - distribución de alimentación de ESP32;
+% - alimentación de HUSKYLENS;
+% - alimentación de servomotores;
+% - esquema de tierras.
+
+El cableado se encaminó utilizando el riel DIN de la estructura. En la disposición utilizada posteriormente, los conductores correspondientes a la alimentación de 24~V se distribuyeron por uno de los laterales, mientras que los conductores de retorno a tierra se encaminaron por el lado opuesto. Las líneas de señal se dispusieron de manera separada entre ambos grupos.
+
+Esta organización se mantuvo durante las etapas posteriores de integración del sistema.
+
+
+% ============================================================
+% FASE 5
+% ============================================================
+
+\section{Fase 5. Integración de visión, encoder y control automático}
+
+\subsection{Preparación del conjunto de datos y modelo de visión}
+
+En la quinta fase se desarrolló la integración del sistema de percepción visual y del control automático del brazo.
+
+Para preparar el material utilizado por el sistema de visión se capturaron fotografías y videos de las piezas en diferentes posiciones. De los videos se seleccionaron fotogramas que posteriormente se incorporaron al conjunto junto con las fotografías.
+
+Se utilizó Mind+ para cargar las imágenes y preparar las anotaciones mediante cajas delimitadoras en formato YOLO. Se reunieron 400 imágenes correspondientes a cada uno de los dos tipos de pieza, para un total de 800 imágenes.
+
+El modelo se preparó con el propósito de detectar las piezas e identificar la región correspondiente dentro de la imagen. La información de posición producida por las detecciones se utilizó posteriormente como entrada del sistema de posicionamiento.
+
+% PENDIENTE DOCUMENTAL:
+% - arquitectura exacta del detector;
+% - versión;
+% - particiones entrenamiento/validación/prueba;
+% - épocas;
+% - batch;
+% - resolución;
+% - métricas;
+% - correspondencia entre clases y piezas 6/7.
+
+
+\subsection{Integración de la HUSKYLENS 2}
+
+La HUSKYLENS 2 se utilizó como dispositivo de adquisición y procesamiento visual. La comunicación con la cámara se implementó finalmente mediante UART.
+
+En la configuración integrada se utilizó un puerto UART hardware de la ESP32 con una velocidad de 115200 baudios y formato 8N1. Se asignó GPIO32 a la recepción de datos provenientes de la cámara y GPIO33 a la transmisión hacia ella.
+
+La comunicación se implementó mediante la biblioteca \texttt{DFRobot\_HuskylensV2}. El programa permitió seleccionar el algoritmo utilizado para los marcadores y posteriormente abrir el modelo personalizado utilizado para la detección de las piezas.
+
+Las operaciones asociadas con la cámara se concentraron en una tarea independiente de FreeRTOS. Esta tarea gestionó la conexión, la selección del algoritmo, la calibración, la apertura del modelo personalizado y la adquisición de resultados.
+
+La tarea se creó mediante \texttt{xTaskCreatePinnedToCore()}, con prioridad de reposo y una cesión de 2~ms entre sus iteraciones. Las variables compartidas entre la tarea de cámara y el programa principal se protegieron mediante secciones críticas.
+
+
+\subsection{Calibración geométrica del plano de trabajo}
+
+Para establecer una correspondencia entre las coordenadas de la imagen y el plano físico de la banda se utilizaron cuatro marcadores fiduciales AprilTag con identificadores 0, 1, 2 y 3.
+
+Se utilizaron como referencias geométricas un ancho útil de banda de 292~mm, un ancho total de 412~mm y una separación longitudinal de 382~mm entre las filas de marcadores.
+
+A partir de estas dimensiones se asignaron las coordenadas:
+
+\[
+(-176,-191), \quad
+(176,-191), \quad
+(176,191), \quad
+(-176,191)\ \text{mm}.
+\]
+
+Durante la calibración se acumularon 25 observaciones del centro de cada marcador. Las coordenadas de imagen asociadas con cada identificador se promediaron y las cuatro correspondencias resultantes se utilizaron para calcular una homografía plana.
+
+La transformación se representó mediante:
+
+\[
+H=
+\begin{bmatrix}
+h_{00} & h_{01} & h_{02}\\
+h_{10} & h_{11} & h_{12}\\
+h_{20} & h_{21} & 1
+\end{bmatrix}.
+\]
+
+Las ocho incógnitas se obtuvieron resolviendo el sistema lineal generado por los cuatro pares de puntos mediante eliminación de Gauss--Jordan con selección de pivote por magnitud.
+
+Para una detección con centro $(u,v)$ en la imagen, la posición métrica se obtuvo mediante:
+
+\[
+X_c=
+\frac{h_{00}u+h_{01}v+h_{02}}
+{h_{20}u+h_{21}v+1},
+\]
+
+\[
+Y_c=
+\frac{h_{10}u+h_{11}v+h_{12}}
+{h_{20}u+h_{21}v+1}.
+\]
+
+El algoritmo comprobó la validez del denominador y descartó coordenadas no finitas o posiciones fuera del área configurada.
+
+El procedimiento correspondió a una transformación geométrica bidimensional del plano definido mediante los marcadores.
+
+
+\subsection{Integración del encoder de la banda transportadora}
+
+Para incorporar el movimiento de la banda se integró un codificador rotativo incremental a la interfaz de encoder de Machine Control.
+
+En la configuración desarrollada se utilizaron las entradas A0, B0 y Z0 del encoder 0 de la Portenta. El firmware se configuró para un encoder de 1024 pulsos por revolución y decodificación X2, equivalente a 2048 cuentas por revolución.
+
+Para convertir el conteo a desplazamiento lineal se utilizó un diámetro configurado de 49~mm y una relación de transmisión 1:1.
+
+La escala se calculó mediante:
+
+\[
+k=\frac{\pi D}{N},
+\]
+
+donde $D$ correspondió al diámetro utilizado para la rueda y $N$ al número de cuentas por revolución.
+
+Con los parámetros configurados se obtuvo:
+
+\[
+k \approx 0.0752\ \text{mm/cuenta}.
+\]
+
+La Portenta adquirió periódicamente el conteo del encoder y calculó el desplazamiento y la velocidad de la banda. Esta información también se incorporó al intercambio de datos con la ESP32.
+
+Antes de utilizar esta información en el modo automático se desarrolló una rutina de calibración de la banda. El operador ajustó la banda al 50~\% de su control y confirmó el inicio de la medición.
+
+Se estableció un período de estabilización de 2~s seguido por una medición de 5~s mediante ventanas de 200~ms. La rutina requirió un mínimo de 100 cuentas y 20 ventanas válidas. A partir de la información obtenida se determinó el sentido de desplazamiento y una velocidad de referencia utilizada durante la sesión.
+
+% CONFIRMAR:
+% - modelo físico definitivo del encoder;
+% - resolución física;
+% - diámetro de 49 mm;
+% - relación 1:1;
+% - método de acoplamiento a la banda.
+
+
+\subsection{Sincronización y modo automático}
+
+El modo automático se desarrolló inicialmente mediante posicionamiento con la banda detenida y posteriormente se extendió para incorporar el movimiento de la banda mediante la información proporcionada por el encoder.
+
+Las coordenadas obtenidas mediante la homografía se transformaron al sistema de referencia del brazo. En la configuración integrada se utilizaron las relaciones:
+
+\[
+X_b=-X_c+15,
+\qquad
+Y_b=-Y_c.
+\]
+
+% CONFIRMAR:
+% offset físico X = 15 mm.
+
+Antes de publicar una coordenada como objetivo se requirió que diferentes observaciones correspondieran a una detección consistente. Para la operación con la banda en movimiento se utilizó además el desplazamiento calculado mediante el encoder para actualizar la posición de la pieza entre observaciones.
+
+Cada objetivo publicado incorporó un número de secuencia para diferenciarlo de los anteriores y evitar la ejecución repetida de la misma orden.
+
+Para el modo automático con la banda en movimiento se utilizó una distancia configurada de 845~mm entre la zona de referencia asociada con la cámara y la zona de captura.
+
+% CONFIRMAR:
+% procedimiento de medición de los 845 mm.
+
+Una vez aceptado un objetivo, el brazo se preposicionó transversalmente según la coordenada X de la pieza y longitudinalmente respecto de la zona de captura.
+
+La información del encoder se utilizó para estimar el desplazamiento restante de la pieza y determinar el instante de ejecución de la secuencia de captura.
+
+El eje Z se llevó inicialmente a una posición ubicada 3000 pasos por encima de su extremo inferior. Posteriormente se ejecutó la bajada final hacia la zona de captura.
+
+El extremo inferior se verificó mediante el final de carrera correspondiente. Después se envió a la ESP32 la orden utilizada para cerrar la pinza.
+
+Una vez ejecutado el cierre, se ordenó el desplazamiento del eje Z hacia su posición de referencia. La coordinación de estas etapas utilizó los estados y mensajes de reconocimiento intercambiados entre la Portenta H7 y la ESP32.
+
+Las variantes posteriores utilizadas durante el desarrollo incorporaron funciones adicionales para registrar correcciones manuales de posición y orientación y para ejecutar una secuencia de traslado hacia una posición de entrega. Estas funciones se utilizaron como herramientas de ajuste y evaluación durante el desarrollo.
+
+
+% ============================================================
+% FASE 6
+% ============================================================
+
+\section{Fase 6. Validación experimental}
+
+% PENDIENTE DE REDACTAR DESPUÉS DE REALIZAR EL OBJETIVO 4.
+%
+% Debe incluir únicamente el procedimiento realmente realizado:
+% - posiciones de prueba;
+% - instrumento de medición;
+% - número de repeticiones;
+% - precisión;
+% - repetibilidad;
+% - criterio de aceptación;
+% - condiciones de la banda;
+% - tiempos;
+% - evaluación de recogida/depósito si corresponde.
+%
+% Los valores obtenidos deberán presentarse en Resultados,
+% no en Metodología.

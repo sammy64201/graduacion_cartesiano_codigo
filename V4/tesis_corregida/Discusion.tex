@@ -1,0 +1,257 @@
+% ============================================================
+% FASE 1
+% ============================================================
+
+\section{Fase 1. Evaluación del sistema original}
+\label{sec:discusion_fase1}
+
+La inspección inicial orientó la intervención hacia los mecanismos de guiado y traslación. El contacto observado entre las piezas plásticas y los tubos metálicos se consideró un factor asociado con la resistencia percibida durante el desplazamiento. Sin embargo, debido a que no se realizaron mediciones independientes de fuerza o fricción, esta relación no permitió identificar una causa única para el comportamiento del mecanismo.
+
+En los ejes X y Y, la desalineación de los carros y el avance desigual entre los extremos del pórtico mostraron que el desplazamiento del conjunto no se producía de manera uniforme. El comportamiento identificado como \textit{gantry racking} pudo estar relacionado tanto con las condiciones de guiado como con la alineación de los componentes. La evaluación realizada no permitió separar experimentalmente la contribución de cada uno de estos factores.
+
+En el eje Z, la desalineación del conjunto móvil indicó que el problema no se encontraba únicamente en el contacto entre los elementos de guiado, sino también en la geometría general del mecanismo vertical. Por esta razón, el rediseño posterior consideró conjuntamente las guías, los soportes y la ubicación del efector final.
+
+Los resultados de esta fase proporcionaron el diagnóstico utilizado para orientar el primer objetivo específico. No obstante, debido al carácter cualitativo de la inspección, no fue posible establecer una comparación numérica entre la precisión, repetibilidad o resistencia al movimiento del mecanismo original y del mecanismo rediseñado.
+
+
+% ============================================================
+% FASE 2
+% ============================================================
+
+\section{Fase 2. Selección de componentes y rediseño mecánico}
+\label{sec:discusion_fase2}
+
+La conservación de la arquitectura cartesiana permitió concentrar la intervención sobre los mecanismos de guiado y traslación que habían presentado las principales limitaciones durante la evaluación inicial. Esta decisión evitó sustituir completamente la estructura y permitió aprovechar componentes y geometrías que todavía resultaban funcionales.
+
+La utilización de ejes de acero de 12~mm y rodamientos lineales modificó el principio de guiado respecto del sistema original. Los rodamientos con carcasa utilizados en X y Y facilitaron la generación de uniones atornilladas entre los carros y los elementos de guiado, mientras que los rodamientos cilíndricos del conjunto central permitieron conservar una geometría compacta en la intersección de ambos ejes.
+
+El conjunto central requirió un desarrollo específico debido a que debía integrar simultáneamente el desplazamiento en X, el desplazamiento en Y y el mecanismo vertical. La ubicación del eje Z respecto de la intersección de X y Y proporcionó una referencia geométrica común para el montaje del efector final. Sin embargo, esta disposición geométrica no constituyó por sí sola una demostración de precisión de posicionamiento.
+
+La conservación de las fajas dentadas en X y Y y del tornillo de avance en Z permitió mantener los principios de transmisión disponibles en el sistema anterior. Por ello, la intervención se concentró principalmente en el guiado, los soportes y la integración de los nuevos componentes.
+
+El modelo CAD permitió establecer dimensiones y relaciones geométricas antes de la fabricación, pero no representó una validación física del mecanismo. Las tolerancias de impresión, la retención de los rodamientos y la alineación de las guías requirieron comprobaciones posteriores durante el ensamblaje.
+
+Por tanto, esta fase aportó el rediseño requerido por el primer objetivo específico, mientras que su comportamiento real dependió de los resultados obtenidos después de la fabricación.
+
+
+% ============================================================
+% FASE 3
+% ============================================================
+
+\section{Fase 3. Implementación mecánica}
+\label{sec:discusion_fase3}
+
+La fabricación y el ensamblaje mostraron diferencias entre las condiciones ideales establecidas en el modelo CAD y las condiciones obtenidas físicamente mediante impresión tridimensional y montaje manual. Las principales dificultades se relacionaron con la retención de los rodamientos del conjunto central, la alineación de las guías y el ajuste de los componentes impresos.
+
+El uso de PLA permitió fabricar nuevamente los componentes y modificar rápidamente las geometrías durante el desarrollo. Esta característica facilitó el proceso iterativo, aunque introdujo variaciones propias de la fabricación mediante impresión tridimensional. Por esta razón, algunos ajustes definidos digitalmente requirieron modificaciones después de comprobar físicamente las piezas.
+
+Las tres iteraciones del conjunto central evidenciaron que la división de una pieza para facilitar su fabricación no garantizaba automáticamente la retención adecuada de los rodamientos. La configuración final, que utilizó tornillos para unir las diferentes secciones, mantuvo los rodamientos dentro de sus alojamientos durante las comprobaciones realizadas. Este resultado indicó que la solución debía considerar conjuntamente la facilidad de fabricación y la forma de transmitir las fuerzas entre las piezas.
+
+La alineación de las guías también tuvo influencia sobre el comportamiento obtenido. El traslado de las dimensiones definidas en Autodesk Inventor proporcionó referencias para colocar los soportes, pero el ajuste final dependió del ensamblaje físico. La ausencia de los atascos observados en la configuración original fue consistente con una mejora del guiado; sin embargo, no permitió determinar qué proporción de dicha mejora se debió a los rodamientos lineales y qué proporción correspondió al ajuste de alineación.
+
+La menor resistencia percibida durante la manipulación directa y la reducción visual del avance desigual del pórtico respaldaron una mejora cualitativa del movimiento respecto de la configuración original. No obstante, debido a que no se midieron fuerzas, deflexiones ni diferencias de posición entre ambos lados del pórtico, estos resultados no demostraron la eliminación total de las limitaciones mecánicas ni permitieron cuantificar una mejora de precisión o repetibilidad.
+
+Esta fase materializó el rediseño asociado con el primer objetivo específico y proporcionó una base mecánica funcional para incorporar posteriormente el accionamiento electrónico. La comprobación manual realizada en esta etapa no sustituyó las pruebas cuantitativas previstas para la validación final.
+
+
+% ============================================================
+% FASE 4
+% ============================================================
+
+\section{Fase 4. Accionamiento electrónico, operación manual y referenciación}
+\label{sec:discusion_fase4}
+
+
+\subsection{Arquitectura de control y accionamiento}
+
+La distribución de funciones entre la Portenta H7 con Machine Control y la ESP32 permitió separar las tareas directamente relacionadas con el movimiento de aquellas correspondientes a la interacción con el usuario y los periféricos.
+
+La Portenta concentró el accionamiento de los motores, la lectura de los finales de carrera, la referenciación y los estados principales del brazo. Por otra parte, la ESP32 concentró el mando inalámbrico, la pantalla OLED, los servomotores y posteriormente el sistema de visión. Esta distribución evitó que la ESP32 tuviera que generar directamente las señales de movimiento de los tres ejes mientras atendía simultáneamente las interfaces de usuario y la cámara.
+
+Aunque las órdenes de operación manual se originaron en el mando conectado a la ESP32, esto no significó que esta actuara como maestra del enlace. En la implementación inicial mediante I2C, la Portenta inició las transacciones y recibió las órdenes preparadas por la ESP32. Esta distribución se conservó después de la migración a UART sobre RS485, ya que la Portenta continuó iniciando las solicitudes y la ESP32 respondió a ellas. Por lo tanto, el origen funcional de una orden y la coordinación del protocolo de comunicación correspondieron a conceptos diferentes.
+
+La respuesta de los seis finales de carrera permitió establecer restricciones físicas sobre los movimientos. El bloqueo únicamente en el sentido del límite activo permitió liberar posteriormente el sensor sin anular completamente el movimiento del eje. La detección simultánea de ambos finales de un mismo eje proporcionó además una condición para identificar estados incompatibles.
+
+Estos mecanismos aumentaron la capacidad del firmware para evitar movimientos fuera del recorrido definido. Sin embargo, los finales de carrera únicamente proporcionaron información discreta en los extremos y no constituyeron una medición continua de la posición física del brazo.
+
+
+\subsection{Comunicación entre microcontroladores}
+
+La etapa inicial mediante I2C permitió integrar funcionalmente los dos controladores con un formato común de órdenes y estados. Sin embargo, la persistencia de dificultades de comunicación y paquetes inválidos durante la integración mostró que la validación de los mensajes por software no resultó suficiente para mantener estable el enlace en todas las comprobaciones efectuadas.
+
+La sustitución del enlace de control por UART sobre RS485 mantuvo la distribución de funciones de los microcontroladores y la estructura de aplicación de 32 bytes. El cambio se concentró en el medio de transmisión y en la incorporación de una capa de transporte capaz de delimitar tramas, comprobar su integridad y relacionar cada respuesta con una solicitud vigente. Esta separación permitió reutilizar la información intercambiada sin reconstruir completamente las funciones de control manual, supervisión y visión.
+
+El uso del par diferencial A/B representó una alternativa técnicamente apropiada para un montaje con motores y líneas de alimentación próximas al cableado de señales. No obstante, la susceptibilidad de I2C a las perturbaciones eléctricas no constituyó por sí sola una prueba de que el ruido electromagnético hubiera sido la causa exclusiva de las fallas observadas. Tampoco se efectuó una medición instrumental comparativa de tasas de error bajo condiciones idénticas para cuantificar la mejora atribuible al cambio de interfaz.
+
+La trama RS485 combinó un CRC16 de transporte con el CRC-8 del paquete de aplicación. Esta redundancia permitió detectar alteraciones de datos en dos niveles, mientras que la sesión y el número de solicitud atendieron una necesidad distinta: descartar respuestas ajenas, repetidas o fuera de plazo. Así, la integridad de un mensaje y su vigencia temporal se trataron como propiedades diferentes de la comunicación.
+
+Las dificultades registradas al comienzo de las pruebas del propio enlace RS485 mostraron que utilizar un medio diferencial no eliminó la necesidad de controlar correctamente el acceso compartido al bus. La incorporación de un intervalo de silencio antes de la siguiente solicitud atendió la pérdida de bytes asociada con el retorno de turno en modo \textit{half-duplex}. Sin embargo, como quedó pendiente una nueva captura prolongada de registros del firmware integrado, no fue posible afirmar que la corrección hubiera eliminado todos los errores de comunicación en operación continua.
+
+La separación de la pantalla OLED, que continuó utilizando I2C con la ESP32, y de la cámara HUSKYLENS 2, conectada mediante otra UART, evitó que sus transferencias compartieran el nuevo enlace de control. Esta disposición conservó la autonomía de los periféricos y mantuvo a la Portenta como responsable de coordinar el movimiento del brazo.
+
+
+\subsection{Operación manual e interfaz de usuario}
+
+La operación mediante mando inalámbrico cumplió la función de proporcionar un método de desplazamiento independiente de una computadora. El usuario pudo controlar X, Y y Z, además de modificar la orientación y el estado de la pinza desde una sola interfaz.
+
+La utilización de órdenes direccionales continuas resultó adecuada para operaciones de posicionamiento manual, ajuste y mantenimiento, ya que el usuario no necesitó introducir previamente coordenadas absolutas.
+
+La neutralización de las órdenes al liberar los joysticks o perderse la conexión con el mando redujo la posibilidad de conservar movimientos activos sin una entrada vigente. Asimismo, los finales de carrera mantuvieron las restricciones de movimiento independientemente de las órdenes recibidas.
+
+La información presentada en la OLED facilitó la identificación del modo de operación y de los estados del sistema. Sin embargo, las posiciones mostradas dependieron del conteo interno de pasos generado por el controlador y no de una medición independiente de la posición física del efector final.
+
+En consecuencia, los resultados funcionales obtenidos en esta fase respaldaron el cumplimiento del segundo objetivo específico en cuanto al desarrollo de un modo de operación manual mediante un controlador inalámbrico.
+
+
+\subsection{Referenciación y posicionamiento cartesiano}
+
+La rutina de referenciación proporcionó una referencia común para los movimientos posteriores y evitó depender de la posición física en la que se encontrara el mecanismo al iniciar una sesión.
+
+La selección del centro de cada recorrido como origen permitió representar posiciones a ambos lados de una referencia común. Esta configuración resultó conveniente para relacionar posteriormente las coordenadas producidas por el sistema de visión con el espacio de trabajo del brazo.
+
+Los factores de conversión calculados para X y Y permitieron expresar los destinos en milímetros aunque los motores fueran accionados mediante pulsos. Sin embargo, esta conversión dependió del número de pasos ordenados por el firmware y del recorrido físico configurado.
+
+Por tanto, el valor calculado representó una estimación de posición derivada de las órdenes enviadas al motor y no una medición directa de la ubicación real del carro. Posibles pérdidas de pasos, holguras mecánicas o deformaciones no podían detectarse únicamente mediante estos contadores.
+
+La ausencia de una conversión equivalente para Z limitó el posicionamiento cartesiano métrico a X y Y. Aunque Z participó en la referenciación, el modo manual y las secuencias automáticas, sus posiciones continuaron expresándose mediante pasos.
+
+Por ello, la rutina proporcionó la referencia funcional necesaria para las etapas posteriores, pero la precisión física de los movimientos debía determinarse mediante las pruebas experimentales correspondientes al cuarto objetivo específico.
+
+
+\subsection{Montaje permanente y dificultades del enlace I2C}
+
+La transición desde los protoboards hacia las placas perforadas permitió convertir una configuración de desarrollo modificable en un montaje destinado a permanecer instalado sobre la estructura. La separación de las placas según sus funciones también permitió ordenar físicamente la alimentación, los microcontroladores y los periféricos.
+
+La primera organización del cableado priorizó la concentración de los conductores en una misma trayectoria con el propósito de mantener un montaje visualmente ordenado. Sin embargo, durante la operación del sistema completo se observaron paquetes inválidos o corruptos en el enlace I2C.
+
+Después de comprobar las conexiones y reorganizar físicamente el cableado, el comportamiento del enlace mejoró. La separación de los conductores de 24~V, los retornos y las señales coincidió con la desaparición de las corrupciones observadas en las comprobaciones inmediatas. Sin embargo, la reaparición posterior de problemas de comunicación indicó que la reorganización física no había constituido una solución definitiva.
+
+Este comportamiento fue consistente con una reducción de la susceptibilidad del bus de comunicación a interferencias asociadas con los conductores de potencia y con el accionamiento de los motores. La cercanía entre conductores que transportaban corrientes mayores y las líneas SDA y SCL pudo favorecer mecanismos de acoplamiento electromagnético.
+
+Sin embargo, no se realizaron mediciones mediante osciloscopio antes y después de la modificación. Por esta razón, no fue posible cuantificar el nivel de ruido presente en el bus ni atribuir el comportamiento observado exclusivamente a un mecanismo de acoplamiento inductivo, capacitivo o a perturbaciones sobre las referencias de tierra.
+
+La evidencia disponible permitió establecer una relación experimental entre la reorganización del cableado y la mejoría temporal observada, pero no determinar cuantitativamente la causa eléctrica de los errores ni garantizar la estabilidad del enlace I2C durante todas las condiciones de operación. Este resultado contribuyó a justificar la migración posterior a UART sobre RS485.
+
+La eliminación de componentes temporales utilizados durante el prototipado, como el capacitor empleado inicialmente para retardar el arranque de la ESP32, también reflejó la evolución desde una configuración de prueba hacia una solución integrada. En la implementación posterior, el retardo requerido se administró mediante software, por lo que el componente dejó de ser necesario.
+
+
+% ============================================================
+% FASE 5
+% ============================================================
+
+\section{Fase 5. Integración de visión, encoder y control automático}
+\label{sec:discusion_fase5}
+
+
+\subsection{Alcance del modelo de detección}
+
+La detección de una pieza y su clasificación correspondieron a dos resultados diferentes. El primero permitió obtener una región de imagen y una posición útil para el sistema de control; el segundo requirió diferenciar correctamente entre los tipos de pieza 6 y 7.
+
+Aunque se conformó un conjunto equilibrado de 800 imágenes, la cantidad de ejemplos por clase no permitió por sí sola determinar la calidad del modelo. La ausencia de métricas de precisión, exhaustividad, mAP y matriz de confusión impidió cuantificar el desempeño del reconocimiento.
+
+La similitud visual entre ambas piezas pudo haber contribuido a las confusiones observadas, pero esta explicación no pudo establecerse como causa única debido a que tampoco se documentaron completamente las particiones del conjunto, los parámetros del entrenamiento ni la distribución de condiciones visuales de las imágenes.
+
+La decisión de utilizar principalmente la localización permitió continuar con el desarrollo del posicionamiento guiado por visión aun cuando la clasificación no estuviera validada. Sin embargo, detectar una pieza no implicó demostrar que el sistema pudiera identificar correctamente su tipo.
+
+Por lo tanto, el resultado alcanzado permitió utilizar la cámara para generar información espacial, pero la función de clasificación no quedó demostrada cuantitativamente.
+
+
+\subsection{Integración de la HUSKYLENS 2}
+
+El traslado de la comunicación de la HUSKYLENS 2 desde I2C hacia UART permitió disponer de un enlace serial dedicado para la cámara. En la configuración posterior, la ESP32 utilizó UART1 con la HUSKYLENS 2, UART2 sobre RS485 con la Portenta y un bus I2C independiente para la pantalla OLED.
+
+Esta distribución permitió separar los intercambios del subsistema visual respecto de las solicitudes del controlador principal y de las actualizaciones de pantalla. La coexistencia de dos enlaces UART no implicó que la cámara compartiera el medio RS485, puesto que cada comunicación utilizó sus propios pines y periféricos de la ESP32.
+
+La utilización de una tarea independiente de FreeRTOS permitió concentrar las operaciones de la cámara fuera del flujo principal encargado de las demás interfaces. La función \texttt{tareaCamara()} y la máquina de estados administrada mediante \texttt{procesarEstadoCamara()} permitieron diferenciar las etapas de conexión, calibración, cálculo de la transformación y carga del modelo.
+
+La separación explícita entre \texttt{ABRIENDO\_MODELO} y \texttt{LISTA} resultó especialmente relevante porque recibir una respuesta de la cámara no fue equivalente a disponer inmediatamente de una detección. De manera similar, una respuesta válida obtenida mediante \texttt{getResult()} pudo confirmar la comunicación aun cuando el número de objetos detectados fuera cero.
+
+La máquina de estados permitió, por tanto, representar con mayor precisión la disponibilidad del subsistema visual y evitar tratar la inicialización como una única operación instantánea. Los períodos configurados en el firmware correspondieron a tiempos de planificación y espera, por lo que no se interpretaron como tiempos experimentales de respuesta de la cámara.
+
+
+\subsection{Significado y límites de la calibración geométrica}
+
+Los cuatro AprilTags proporcionaron referencias identificables sobre el plano de la banda. La acumulación de 25 observaciones por marcador redujo la dependencia de una única lectura de su centro antes de calcular la transformación.
+
+Sin embargo, utilizar 25 observaciones para cada uno de los cuatro marcadores no produjo 100 puntos geométricos independientes. El cálculo de la homografía continuó basado en cuatro posiciones físicas de referencia, utilizando como coordenadas de imagen los centros promedio obtenidos para cada marcador.
+
+La obtención de una matriz válida permitió aplicar la transformación entre coordenadas de píxeles y coordenadas métricas dentro del plano calibrado, pero la existencia de una solución numérica no demostró por sí sola la exactitud de la transformación.
+
+Para cuantificar esa exactitud sería necesario utilizar puntos independientes de los empleados para construir la homografía y comparar sus posiciones físicas conocidas con las posiciones calculadas.
+
+La transformación implementada correspondió a una relación geométrica bidimensional. No se realizó una calibración intrínseca completa de la cámara ni una reconstrucción tridimensional de la posición de las piezas. Por esta razón, diferencias entre la altura del plano definido por los marcadores y la superficie visible de una pieza pudieron introducir errores no cuantificados.
+
+Asimismo, el centro de la caja delimitadora se utilizó como referencia para la posición de la pieza. Este punto no necesariamente coincidió con el punto óptimo de agarre para cualquier geometría u orientación del objeto.
+
+La transformación adicional entre el sistema de coordenadas de la cámara y el del brazo permitió adaptar la orientación y el origen de ambas referencias. Sin embargo, los cambios de signo y desplazamientos utilizados debían ser comprobados físicamente y no podían validarse únicamente a partir de la homografía.
+
+
+\subsection{Integración del encoder y retroalimentación de la banda}
+
+La incorporación del encoder introdujo una variable medida físicamente durante el movimiento de la banda. A diferencia del conteo de pasos utilizado para estimar la posición del brazo, el conteo del encoder provino de un sensor asociado directamente con el desplazamiento de la banda transportadora.
+
+La escala de aproximadamente 0.0752~mm por cuenta permitió convertir el conteo a una estimación de desplazamiento lineal. Sin embargo, este valor dependió de los parámetros configurados para la resolución del encoder, el diámetro de la rueda y la relación mecánica utilizada.
+
+Debido a que no se realizó una comparación entre el desplazamiento calculado y una distancia externa medida, dicha escala no pudo considerarse una calibración metrológica del desplazamiento. Factores como el diámetro efectivo de contacto, el montaje del encoder y un posible deslizamiento entre la rueda y la banda pudieron modificar la relación real.
+
+La rutina de calibración de dirección y velocidad permitió adaptar la operación automática a la dirección observada y a la velocidad de la banda durante cada sesión. Esto resultó más adecuado que asumir un valor fijo de velocidad para todas las condiciones de operación.
+
+La incorporación del encoder constituyó la principal fuente de retroalimentación utilizada para la sincronización con la banda. Sin embargo, esta retroalimentación correspondió al movimiento de la banda y no a la posición física X, Y o Z del efector final.
+
+Esta distinción resulta importante para interpretar el tercer objetivo específico: el sistema utilizó una variable medida para actualizar la posición estimada de la pieza durante su transporte, pero no implementó un lazo cerrado de posición cartesiana del brazo basado en una medición independiente de la posición del efector.
+
+
+\subsection{Sincronización y modo automático}
+
+Las cinco pruebas realizadas con la banda detenida permitieron comprobar inicialmente la cadena formada por detección visual, transformación de coordenadas y posicionamiento X/Y sin introducir todavía el movimiento de la banda como variable adicional.
+
+El resultado de 5/5 indicó que, bajo las condiciones examinadas, el brazo se desplazó hacia la ubicación considerada correspondiente a la pieza en todos los casos. Sin embargo, la ausencia de coordenadas de referencia medidas y de una tolerancia numérica impidió interpretar este resultado como una precisión del 100~\%.
+
+Asimismo, esta serie no permitió establecer repetibilidad ni una probabilidad general de éxito debido al número reducido de pruebas. Tampoco correspondió a una tasa de recogida, ya que durante esa subetapa no se ejecutó el agarre de la pieza.
+
+La incorporación posterior del encoder permitió modificar la lógica del automático para considerar que la posición de una pieza continuaba cambiando después de ser observada por la cámara. Esta modificación resultó necesaria debido a que una coordenada obtenida en el instante de detección dejaría de representar la posición actual de la pieza si la banda continuara desplazándose.
+
+El automático V2 utilizó la referencia del encoder asociada con cada detección para actualizar la posición longitudinal estimada y coordinar la preparación del brazo con la llegada de la pieza a la zona de captura.
+
+La secuencia que incluyó preposicionamiento X/Y, preparación de Z, descenso, confirmación del final inferior, cierre de la pinza y retirada de Z mostró que el control dejó de limitarse a enviar una coordenada X/Y y pasó a coordinar diferentes subsistemas dentro de una operación de captura.
+
+Los registros electrónicos confirmaron que el programa alcanzó estados correspondientes al cierre de la pinza, al evento de captura y a la finalización del ciclo. Sin embargo, un estado de software que indicara finalización no constituyó por sí solo una confirmación física de que la pieza hubiera quedado retenida en la garra.
+
+Por ello, la tasa de éxito del proceso automático debía obtenerse mediante observación física o mediante un sensor independiente y no únicamente a partir de los mensajes de finalización generados por el programa.
+
+Con los resultados disponibles, el tercer objetivo específico quedó respaldado en cuanto a la integración funcional de visión, finales de carrera, encoder y lógica de sincronización con la banda. La retroalimentación utilizada correspondió principalmente al desplazamiento de la banda, mientras que la posición de los ejes del brazo continuó estimándose a partir del conteo de pasos ordenados.
+
+Las pruebas físicas posteriores permitieron cuantificar la proporción de intentos de agarre exitosos a partir de observaciones de cada ensayo, en lugar de inferirla de las señales de finalización del software. Esta evidencia se analizó en la Sección~\ref{sec:discusion_fase6}. No obstante, quedaron sin registrar tanto la verificación del depósito final como la precisión y repetibilidad métricas del posicionamiento.
+
+% ============================================================
+% FASE 6: DISCUSIÓN DE LAS PRUEBAS DE AGARRE
+% ============================================================
+
+\section{Fase 6. Validación experimental}
+\label{sec:discusion_fase6}
+
+\subsection{Desempeño observado según la condición de velocidad}
+
+Las 120 pruebas individuales aportaron una verificación física del éxito del agarre que no había sido posible obtener mediante los registros de estados del firmware. La proporción global de 74 agarres exitosos de 120 intentos (61,7\%) indicó que el sistema logró recoger piezas en condiciones dinámicas, pero también que la operación no fue consistente en todos los ensayos. Los 46 intentos clasificados como fallidos constituyeron una limitación observable del desempeño de la solución integrada.
+
+La comparación entre consignas mostró una tasa de éxito de 73,3\% al 25\%, frente a 50,0\% al 35\%, con una diferencia descriptiva de 23,3 puntos porcentuales. En ambas clases de pieza la condición del 25\% presentó un resultado global superior: para la pieza 6, la diferencia fue de 16,7 puntos porcentuales, y para la pieza 7 fue de 30,0 puntos porcentuales. Esto resultó compatible con que una condición de menor velocidad concediera más margen temporal para ejecutar la aproximación y el cierre de la pinza, aunque no permitió demostrar que la velocidad fuera la única variable responsable.
+
+La velocidad se consignó en porcentaje, sin una medición asociada en mm/s en las hojas de resultados. Tampoco se documentaron en el mismo registro los tiempos de respuesta, el instante de contacto o las variaciones de parámetros entre ensayos. Por tanto, no fue posible determinar una velocidad crítica de operación, cuantificar el error de sincronización ni establecer una relación funcional entre velocidad lineal y probabilidad de captura a partir de estos datos.
+
+\subsection{Influencia de la orientación y del tipo de pieza}
+
+La desagregación por orientación mostró un comportamiento desigual. Los agarres verticales alcanzaron 29/32 (90,6\%) entre las dos condiciones, mientras que los horizontales alcanzaron 14/31 (45,2\%) y los diagonales 31/57 (54,4\%). Esta variación indicó que la capacidad de recogida no fue equivalente para todas las orientaciones registradas. Sin embargo, las cantidades de pruebas no fueron iguales entre orientaciones, por lo que estas proporciones debieron interpretarse por grupo y no como una medida ponderada de la composición habitual del flujo de piezas.
+
+La pieza 7 obtuvo una tasa general de 45/60 (75,0\%), superior a la pieza 6, que registró 29/60 (48,3\%). En particular, la orientación horizontal de la pieza 6 presentó únicamente 3 éxitos en 15 intentos. Este resultado sugirió un área de mejora específica para la configuración de agarre de esa pieza, sin que el registro permitiera aislar si la limitación procedía de la estimación de orientación, el centrado, la geometría de contacto, el movimiento de la banda o el cierre de la pinza.
+
+La mayor tasa global obtenida al 25\% tampoco se reprodujo en todas las combinaciones particulares. Por ejemplo, en la pieza 6 horizontal se observaron 2 éxitos en 7 intentos al 35\%, frente a 1 en 8 al 25\%. En cambio, las dos clases mostraron incrementos importantes para las orientaciones diagonales al comparar las dos condiciones. Estas diferencias desaconsejaron atribuir todos los fallos a una sola causa, especialmente porque el registro no incluyó medidas individuales de desfase temporal ni de error de posicionamiento.
+
+Una observación consignó que una pieza se desprendió durante una prueba horizontal. Aunque aportó evidencia cualitativa de un mecanismo de falla posible, esta única anotación no permitió extrapolar la misma causa a los restantes intentos negativos. La evaluación de fallos requeriría registrar de forma sistemática si la pieza fue detectada, si la garra llegó centrada, si existió contacto y si la retención se mantuvo durante la elevación.
+
+\subsection{Alcance de la validación respecto de los objetivos}
+
+Los resultados respaldaron la integración funcional del sistema de visión, la sincronización con la banda y la secuencia física de recogida, al mostrar agarres exitosos en dos condiciones de operación. Asimismo, evidenciaron que la implementación todavía necesitaba ajustes para aumentar la consistencia del proceso, especialmente con determinadas combinaciones de pieza y orientación. Esta interpretación se limitó a las condiciones ensayadas y no permitió asegurar un comportamiento equivalente en otras velocidades o distribuciones de piezas.
+
+El porcentaje de agarres exitosos fue una medida del resultado de una operación completa y no una medición directa de la exactitud de posicionamiento ni de su repetibilidad. En particular, el cuarto objetivo específico del trabajo contempló evaluar precisión y repetibilidad, magnitudes que habrían requerido medir errores respecto de posiciones de referencia y su dispersión en repeticiones. El libro de pruebas no contuvo estos valores y, por tanto, no permitió cuantificarlos o considerarlos demostrados.
+
+La validación aportó así una medición cuantitativa del éxito físico de agarre, que complementó las cinco verificaciones anteriores de posicionamiento con la banda detenida y los registros electrónicos del modo automático. Permanecieron como limitaciones la ausencia de una velocidad lineal medida, la falta de un registro sistemático de causas de falla y la falta de evidencia individual sobre la entrega o depósito exitoso de las piezas. Por ello, los datos respaldaron el funcionamiento parcial del proceso automatizado y señalaron aspectos concretos pendientes de mejora y comprobación.

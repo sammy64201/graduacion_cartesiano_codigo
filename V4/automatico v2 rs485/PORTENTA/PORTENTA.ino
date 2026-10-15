@@ -87,7 +87,7 @@ constexpr float CAMARA_A_HOME_Y_MM =
 // un dedo queda aguas arriba de la pieza. Con la distancia que centra las
 // verticales, la horizontal bajaba ~20 mm antes y ese dedo caia delante de la
 // pieza (maqueta V4, 2026-10-09). Positivo = catch despues, en mm de banda.
-constexpr float V2_RETRASO_CATCH_HORIZONTAL_MM = 30.0f;
+constexpr float V2_RETRASO_CATCH_HORIZONTAL_MM = 40.0f;
 // Diagonales: el dedo de aguas arriba queda a |cos theta| de esa posicion,
 // con theta deducido del giro aplicado y la clase (CalibracionAnguloMLV2.h,
 // copia identica de la ESP). Sin clase calibrada se conserva el umbral:
@@ -544,7 +544,7 @@ constexpr bool V2_HABILITAR_PRUEBAS_CATCH = true;
 // Ajuste del ensayo fijo en ms: +100 adelanta 100 ms; -100 retrasa 100 ms.
 // Tambien se puede cambiar por terminal con CATCH +100 / CATCH -100.
 // Se reserva por pieza y se recalcula en distancia con v/a del encoder.
-constexpr int32_t V2_DESFASE_CATCH_MS = 250;
+constexpr int32_t V2_DESFASE_CATCH_MS = 0;
 static_assert(V2_DESFASE_CATCH_MS >= AjusteTemporalCapturaV2::MIN_MS &&
               V2_DESFASE_CATCH_MS <= AjusteTemporalCapturaV2::MAX_MS,
               "Desfase catch fuera del rango del comando CATCH");
@@ -556,7 +556,7 @@ int32_t desfaseCatchConfiguradoMs = V2_DESFASE_CATCH_MS;
 // desfase general. Se pondera con |sin(2*theta)| segun el giro aplicado:
 // completo a 45 grados, ~0.4 en el limite de 12 grados y cero en horizontal y
 // vertical, que conservan su ajuste. Terminal: CATCHDIAG 150 (proxima pieza).
-constexpr int32_t V2_ADELANTO_CATCH_DIAGONAL_MS = 150;
+constexpr int32_t V2_ADELANTO_CATCH_DIAGONAL_MS = -50;
 static_assert(V2_ADELANTO_CATCH_DIAGONAL_MS >= AjusteTemporalCapturaV2::MIN_MS &&
               V2_ADELANTO_CATCH_DIAGONAL_MS <= AjusteTemporalCapturaV2::MAX_MS,
               "Adelanto diagonal fuera del rango del comando CATCHDIAG");
