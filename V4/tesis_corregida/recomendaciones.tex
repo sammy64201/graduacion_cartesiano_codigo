@@ -1,0 +1,17 @@
+\begin{enumerate}
+	\item Medir la exactitud y la repetibilidad de pose del efector final según ISO~9283, con un instrumento externo, como un comparador de carátula o una cuadrícula calibrada, en varias posiciones del espacio de trabajo y con ciclos repetidos~\cite{iso9283}.
+
+	\item Incorporar un sensor de presencia en la garra para confirmar el agarre y la entrega de cada pieza, de modo que el firmware distinga un ciclo exitoso de uno que solo completó la secuencia.
+
+	\item Obtener el ángulo real de las piezas, ya sea transmitiendo el contorno de la segmentación o utilizando un modelo de cajas orientadas, para resolver el sentido de inclinación de las piezas diagonales.
+
+	\item Registrar en cada ensayo la velocidad lineal de la banda en mm/s, el sentido de las piezas diagonales, la clase detectada y la causa de cada falla, y conservar los registros del firmware de cada sesión.
+
+	\item Medir el desempeño del modelo de visión en la cámara, con imágenes obtenidas en sesiones distintas de las de entrenamiento, para conocer la tasa de clasificación real del modelo cuantizado.
+
+	\item Validar la homografía con puntos independientes de los marcadores y comparar periódicamente el recorrido medido por la cámara con el del encoder.
+
+	\item Ejecutar la prueba física del banco de comunicación RS485 con el firmware final y, si persisten tramas recortadas, medir con osciloscopio las señales de dirección y del par diferencial durante el cambio de turno.
+
+	\item Calibrar el perfil temporal de la captura, en particular el tiempo entre la orden de cierre y el contacto, para cada velocidad de banda, y ampliar la muestra de piezas horizontales y diagonales.
+\end{enumerate}

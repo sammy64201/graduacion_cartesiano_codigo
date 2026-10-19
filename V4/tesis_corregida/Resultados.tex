@@ -27,6 +27,8 @@ En los cuatro carros de X y Y se observó resistencia al desplazamiento y falta 
     \par\small Fuente: elaboración propia.
 \end{figure}
 
+La aplicación de lubricante WD-40 sobre las guías y los carros no eliminó la resistencia al desplazamiento ni el avance desigual del pórtico, lo que indicó que las deficiencias no se debían únicamente a la falta de lubricación.
+
 En Z se observó desalineación del conjunto móvil respecto a la dirección vertical. La disposición del motor, el mecanismo de desplazamiento y la garra se documentó en la Figura~\ref{fig:fase1_eje_z}. Las observaciones de la inspección manual se resumieron en el Cuadro~\ref{tab:fase1_deficiencias}.
 
 \begin{figure}[H]
@@ -150,7 +152,7 @@ El conjunto ensamblado incorporó perfiles de aluminio 2020 de ranura en T, guí
         Dimensiones generales de la estructura & $700 \times 580 \times 420$~mm \\
         Recorrido reportado del eje X\textsuperscript{a} & 446~mm \\
         Recorrido reportado del eje Y\textsuperscript{a} & 336~mm \\
-        Recorrido del eje Z & \textit{Pendiente de medición} \\
+        Recorrido del eje Z\textsuperscript{b} & 14\,687 pasos \\
         Diámetro de los ejes guía & 12~mm \\
         Ejes de 700~mm & 3 unidades \\
         Ejes de 580~mm & 3 unidades \\
@@ -166,6 +168,7 @@ El conjunto ensamblado incorporó perfiles de aluminio 2020 de ranura en T, guí
     \par\small\raggedright Fuente: elaboración propia a partir de los datos de fabricación y ensamblaje del proyecto.
     \par\small La altura se refirió a la superficie de la mesa. El consumo de PLA incluyó las pruebas y no correspondió a la masa del brazo ensamblado.
     \par\small\textsuperscript{a} Se conservaron los valores reportados; su procedencia, del modelo CAD o de medición física, quedó pendiente de confirmación.
+    \par\small\textsuperscript{b} Promedio de nueve referenciaciones registradas; no se implementó la conversión de Z a milímetros.
 \end{table}
 
 
@@ -353,14 +356,7 @@ El movimiento cartesiano se mantuvo separado del movimiento manual: el primero u
 
 El eje Z quedó integrado en la calibración, el modo manual, el retorno a la posición de referencia y las secuencias automáticas de captura. Sin embargo, no se implementó una conversión de Z en milímetros equivalente a la utilizada para X y Y.
 
-% PENDIENTE PARA LA VALIDACIÓN FINAL:
-% Incorporar:
-% - recorrido de X en pasos;
-% - recorrido de Y en pasos;
-% - recorrido de Z en pasos;
-% - factores pasos/mm;
-% - precisión;
-% - repetibilidad.
+En las referenciaciones registradas, el recorrido medio entre finales de carrera fue de 19\,944,5 pasos en X, 11\,811,9 pasos en Y y 14\,687,2 pasos en Z. Con las longitudes configuradas, los factores medios fueron de 44,72~pasos/mm en X y 35,15~pasos/mm en Y, equivalentes a una resolución de 0,022~mm y 0,028~mm por paso, respectivamente. La dispersión de estas mediciones se presenta en la Sección~\ref{sec:resultados_repetibilidad}.
 
 
 \subsection{Montaje permanente y comportamiento inicial del enlace I2C}
@@ -457,13 +453,11 @@ El cambio observado se resumió en el Cuadro~\ref{tab:fase4_cableado_i2c}.
 
 \subsection{Persistencia de las fallas y migración a UART sobre RS485}
 
-A pesar de la mejoría observada después de reorganizar los conductores, en comprobaciones posteriores del sistema integrado volvieron a presentarse dificultades de comunicación y recepción de paquetes inválidos o corruptos entre la Portenta H7 y la ESP32. Por consiguiente, la corrección inicial del cableado no resultó suficiente para considerar resuelta de forma definitiva la inestabilidad del enlace I2C. Ante esta situación, se sustituyó la comunicación entre ambos microcontroladores por una interfaz UART transmitida mediante transceptores RS485, manteniendo la distribución de tareas de la arquitectura electrónica.
+A pesar de la mejoría observada después de reorganizar los conductores, en comprobaciones posteriores del sistema integrado volvieron a presentarse dificultades de comunicación y recepción de paquetes inválidos o corruptos entre la Portenta H7 y la ESP32. Por consiguiente, la corrección inicial del cableado no resultó suficiente para considerar resuelta de forma definitiva la inestabilidad del enlace I2C.
 
-La nueva conexión funcionó en modalidad \textit{half-duplex} sobre un par diferencial A/B, con la Portenta H7 como coordinadora de las solicitudes y la ESP32 como dispositivo respondedor. En el extremo de la Portenta se utilizó la interfaz RS485 integrada en Machine Control; en el extremo de la ESP32 se incorporó un módulo MAX485, alimentado a 5~V, junto con un convertidor de niveles lógicos entre 3,3 y 5~V. Se mantuvo una referencia común de tierra entre los dispositivos y se separó el cableado de comunicación de los conductores de potencia.
+Un registro de aproximadamente 30~s obtenido el 6 de octubre de 2026 durante una referenciación cuantificó el problema. En la captura completa fallaron el 10,7~\% de las lecturas de la Portenta (231 de 2158), el 15,7~\% de sus envíos (196 de 1250) y el 14,9~\% de las recepciones de la ESP32 (174 de 1165). Mientras se movía el eje Y, las tres tasas aumentaron a valores entre 22 y 30~\%, y la Portenta declaró la pérdida del enlace, detuvo el movimiento y reinició el periférico I2C. La ESP32 recibió longitudes de 1 a 31 bytes cuando se esperaban paquetes de 32 bytes.
 
-En la ESP32 se configuró UART2 con GPIO27 como transmisión, GPIO14 como recepción y GPIO18 como control conjunto de las señales DE y \texttt{/RE} del MAX485. La conexión diferencial se realizó entre los terminales A/B del módulo y los bornes TX P/TX N de Machine Control, utilizados para el intercambio bidireccional en modo \textit{half-duplex}. La transmisión se configuró a 115200 baudios, con ocho bits de datos, sin paridad y un bit de parada (8N1).
-
-El Cuadro~\ref{tab:fase4_comparacion_enlace} resume las diferencias entre el enlace inicial y la configuración implementada posteriormente.
+Ante esta situación, se sustituyó la comunicación entre ambos microcontroladores por UART sobre RS485, según el procedimiento descrito en la metodología, manteniendo la distribución de tareas de la arquitectura electrónica. La conexión diferencial se realizó entre los terminales A/B del módulo MAX485 y los bornes TX P/TX N de Machine Control, utilizados para el intercambio bidireccional en modo \textit{half-duplex}. El Cuadro~\ref{tab:fase4_comparacion_enlace} resume las diferencias entre el enlace inicial y la configuración implementada posteriormente.
 
 \begin{table}[H]
     \centering
@@ -483,21 +477,15 @@ El Cuadro~\ref{tab:fase4_comparacion_enlace} resume las diferencias entre el enl
     \par\small\raggedright Fuente: elaboración propia a partir de las configuraciones documentadas en el firmware del sistema.
 \end{table}
 
-Para conservar el contenido funcional de los mensajes se mantuvieron los paquetes de aplicación de 32 bytes, pero se incorporó una capa de transporte específica para la comunicación serial. Cada mensaje añadió un identificador de sesión de cuatro bytes, un número de solicitud de cuatro bytes y una comprobación CRC16 de dos bytes. El bloque resultante de 42 bytes se codificó mediante COBS y se completó con un delimitador \texttt{0x00}, de manera que cada trama transmitida ocupó 44 bytes. Además, el paquete de aplicación conservó una comprobación CRC-8, por lo que la versión final incorporó validaciones de integridad en ambas capas.
-
-La aplicación del nuevo enlace conservó el esquema de intercambio de estados completos: la Portenta transmitió sus estados y órdenes, mientras que la ESP32 devolvió el estado del mando, los servomotores y el sistema de visión. Para validar las respuestas se utilizaron la sesión y el identificador de solicitud, además de la comprobación de versión, longitud e integridad del paquete. Esta adaptación permitió mantener la comunicación funcional entre los controladores sin trasladar la pantalla OLED ni la cámara al bus diferencial; la primera conservó su conexión I2C con la ESP32 y la segunda utilizó su enlace UART independiente.
+La versión final incorporó validaciones de integridad en dos capas: el CRC16 de la trama de transporte y el CRC-8 del paquete de aplicación de 32 bytes. La aplicación del nuevo enlace conservó el esquema de intercambio de estados completos: la Portenta transmitió sus estados y órdenes, mientras que la ESP32 devolvió el estado del mando, los servomotores y el sistema de visión. Para validar las respuestas se utilizaron la sesión y el identificador de solicitud, además de la comprobación de versión, longitud e integridad del paquete. Esta adaptación permitió mantener la comunicación funcional entre los controladores sin trasladar la pantalla OLED ni la cámara al bus diferencial; la primera conservó su conexión I2C con la ESP32 y la segunda utilizó su enlace UART independiente.
 
 \subsection{Pruebas y ajustes del enlace RS485}
 
-La verificación de la nueva comunicación se efectuó de forma progresiva. Primero se realizaron pruebas aisladas de la interfaz de Machine Control, el módulo MAX485 y el convertidor de niveles lógicos, incluyendo montajes de diagnóstico con placas Arduino Nano y Uno. Posteriormente se emplearon programas de intercambio entre la ESP32 y la Portenta con mensajes cortos y comprobación de integridad, antes de incorporar los paquetes completos del sistema.
+Se confirmó el intercambio funcional de mensajes en el montaje físico a una velocidad de 115200 baudios. Esta prueba permitió fijar la asignación final de pines y las temporizaciones utilizadas para habilitar y liberar la transmisión. Las pruebas del protocolo completo con tramas de 44 bytes, que sumaron 11\,000 intercambios y 20 casos de fallas inducidas, se ejecutaron en un entorno simulado, por lo que no se interpretaron como una medición de la confiabilidad del prototipo energizado.
 
-Se confirmó el intercambio funcional de mensajes en el montaje físico a una velocidad de 115200 baudios. Esta prueba permitió fijar la asignación final de pines y las temporizaciones utilizadas para habilitar y liberar la transmisión. En pruebas posteriores del protocolo completo se utilizaron tramas de 44 bytes; se documentaron bancos de ensayo de 1000 y 10000 intercambios, junto con casos de fallas inducidas. Estas últimas pruebas correspondieron a validaciones del transporte y de su lógica mediante entornos simulados, por lo que no se interpretaron como una medición equivalente de confiabilidad del prototipo energizado.
+Durante el ajuste inicial de RS485, los registros del 8 de octubre de 2026 mostraron un 1,66~\% de tramas malformadas y 186 respuestas que excedieron el plazo de espera entre 10\,129 solicitudes (1,84~\%). El diagnóstico identificó solicitudes que perdían uno o dos bytes al comienzo, debido a que la Portenta podía iniciar una transmisión nueva antes de que la ESP32 liberara completamente el medio compartido. Como corrección se incorporó una espera de 3~ms sin recepción de bytes antes de iniciar la siguiente solicitud. Según las temporizaciones configuradas, cada intercambio requiere como mínimo unos 26~ms, calculados a partir de la duración de las tramas y de las esperas; en los registros, el tiempo de respuesta máximo fue de 73~ms, inferior al plazo de 100~ms.
 
-Durante el ajuste inicial de RS485, los registros del 8 de octubre de 2026 mostraron un 1,66\% de tramas malformadas y un 1,84\% de respuestas que excedieron el plazo de espera. El diagnóstico identificó solicitudes que perdían uno o dos bytes al comienzo, debido a la posibilidad de que la Portenta iniciara una transmisión nueva antes de que la ESP32 liberara completamente el medio compartido. Como corrección se incorporó una espera de 3~ms sin recepción de bytes antes de iniciar la siguiente solicitud.
-
-En la configuración documentada, la ESP32 esperó 15~ms antes de contestar, con márgenes adicionales de 200~\(\mu\)s antes y después de su transmisión. La Portenta mantuvo un retardo posterior de transmisión de 2000~\(\mu\)s y utilizó un plazo de 100~ms para aceptar una respuesta correspondiente a la solicitud vigente. La pérdida de enlace se estableció al superar 1000~ms sin una respuesta válida; en esta condición se cancelaron los movimientos y se conservó la información de calibración para efectuar una recuperación controlada.
-
-Los resultados y los límites de la verificación se resumen en el Cuadro~\ref{tab:fase4_pruebas_rs485}.
+Los resultados y los límites de la verificación se resumen en el Cuadro~\ref{tab:fase4_pruebas_rs485}, y el Cuadro~\ref{tab:fase4_errores_enlaces} compara los indicadores de error registrados con ambos enlaces.
 
 \begin{table}[H]
     \centering
@@ -508,7 +496,7 @@ Los resultados y los límites de la verificación se resumen en el Cuadro~\ref{t
         Etapa & Resultado documentado \\
         \hline
         Prueba física de comunicación & Intercambio funcional entre ESP32 y Portenta a 115200 baudios con el cableado final. \\
-        Pruebas del transporte y protocolo & Ensayos de 1000 y 10000 intercambios, más casos de error, efectuados con simulación del hardware. \\
+        Pruebas del transporte y protocolo & Ensayos de 1000 y 10\,000 intercambios, más 20 casos de error, efectuados con simulación del hardware. \\
         Diagnóstico inicial integrado & Se registraron 1,66\% de tramas malformadas y 1,84\% de respuestas fuera de plazo. \\
         Corrección del retorno de turno & Se incorporó una espera de 3~ms de silencio antes de la siguiente solicitud. \\
         Comprobación pendiente & No se disponía de una nueva serie completa de registros del firmware integrado para confirmar la desaparición de las tramas recortadas. \\
@@ -517,7 +505,24 @@ Los resultados y los límites de la verificación se resumen en el Cuadro~\ref{t
     \par\small\raggedright Fuente: elaboración propia a partir de los registros y de la documentación técnica de migración del sistema.
 \end{table}
 
-La migración produjo una arquitectura de comunicación operativa mediante UART sobre RS485 y permitió incorporar comprobaciones de integridad, identificación de solicitudes y mecanismos de recuperación. No obstante, la evidencia disponible no incluyó una comparación instrumental realizada bajo las mismas condiciones entre I2C y RS485, ni una serie final completa de funcionamiento continuo que permitiera cuantificar la tasa de errores del firmware integrado después de los últimos ajustes.
+\begin{table}[H]
+    \centering
+    \caption{Indicadores de error registrados con el enlace I2C y con el enlace RS485.}
+    \label{tab:fase4_errores_enlaces}
+    \begin{tabular}{p{0.20\textwidth}p{0.30\textwidth}p{0.38\textwidth}}
+        \hline
+        Enlace & Registro & Indicador \\
+        \hline
+        I2C & 6 de octubre de 2026, $\approx$30~s durante una referenciación. &
+        10,7~\% de lecturas fallidas en la Portenta; 15,7~\% de envíos fallidos; 14,9~\% de recepciones rechazadas en la ESP32. Entre 22 y 30~\% durante el movimiento de Y. \\
+        RS485 & 8 de octubre de 2026, 10\,129 solicitudes, antes de la corrección de 3~ms. &
+        1,66~\% de tramas malformadas; 1,84~\% de respuestas fuera de plazo. \\
+        \hline
+    \end{tabular}
+    \par\small\raggedright Fuente: elaboración propia a partir de los registros de diagnóstico de ambos enlaces. Los registros se obtuvieron en condiciones de operación distintas.
+\end{table}
+
+La migración produjo una arquitectura de comunicación operativa mediante UART sobre RS485 y permitió incorporar comprobaciones de integridad, identificación de solicitudes y mecanismos de recuperación. Las tasas de error registradas fueron menores con RS485 que con I2C; sin embargo, los registros no se obtuvieron bajo las mismas condiciones y no se dispuso de una serie final de funcionamiento continuo que permitiera cuantificar la tasa de errores del firmware integrado después de los últimos ajustes.
 
 
 % ============================================================
@@ -528,15 +533,43 @@ La migración produjo una arquitectura de comunicación operativa mediante UART 
 \label{sec:resultados_fase5}
 
 
-\subsection{Conjunto de datos y alcance del reconocimiento}
+\subsection{Conjunto de datos y modelo de visión}
 
-Se obtuvo un conjunto de 800 imágenes a partir de fotografías y fotogramas seleccionados de videos: 400 correspondieron a la pieza 6 y 400 a la pieza 7. Las imágenes se anotaron mediante cajas delimitadoras en formato YOLO utilizando Mind+. Cada tipo de pieza representó el 50\% del conjunto informado.
+El primer modelo se preparó con 800 imágenes, 400 de la pieza 6 y 400 de la pieza 7, anotadas con cajas delimitadoras en Mind+. Con este modelo las piezas se detectaron durante las pruebas, pero no se consiguió una diferenciación consistente entre los tipos 6 y 7, y no se calcularon métricas de desempeño.
 
-Durante las pruebas se obtuvo detección de las piezas, pero no se consiguió una diferenciación consistente entre los tipos 6 y 7.
+Tras incorporar la iluminación sobre la zona de detección se entrenó el modelo definitivo, un YOLO11n de segmentación de instancias, con 2350 imágenes de cinco tipos de pieza. El entrenamiento completó 100 épocas y el mejor desempeño sobre el conjunto de validación se obtuvo en la época 97. El Cuadro~\ref{tab:fase5_metricas_modelo} resume las métricas calculadas sobre las 471 imágenes de validación.
 
-No se dispuso de una matriz de confusión ni de métricas de precisión, exhaustividad o mAP que permitieran cuantificar este comportamiento. Por esta razón, la clasificación por tipo no se presentó como un resultado validado y la información visual se utilizó principalmente para localizar las piezas.
+\begin{table}[H]
+    \centering
+    \caption{Métricas de validación del modelo YOLO11n de segmentación.}
+    \label{tab:fase5_metricas_modelo}
+    \begin{tabular}{l r r r r}
+        \hline
+        Región evaluada & Precisión & Exhaustividad & mAP50 & mAP50-95 \\
+        \hline
+        Cajas, cinco clases & 0,993 & 0,991 & 0,987 & 0,958 \\
+        Máscaras, cinco clases & 0,976 & 0,977 & 0,968 & 0,625 \\
+        \hline
+        Cajas, pieza 6 & --- & --- & --- & 0,912 \\
+        Cajas, pieza 7 & --- & --- & --- & 0,932 \\
+        Máscaras, pieza 6 & --- & --- & --- & 0,437 \\
+        Máscaras, pieza 7 & --- & --- & --- & 0,547 \\
+        \hline
+    \end{tabular}
+    \par\small\raggedright Fuente: elaboración propia a partir de la validación del modelo en computadora (Ultralytics, pesos \texttt{best.pt}).
+\end{table}
 
-Las particiones de entrenamiento, validación y prueba, la arquitectura exacta del detector y los parámetros de entrenamiento quedaron pendientes de documentación.
+La matriz de confusión normalizada (Figura~\ref{fig:fase5_matriz_confusion}) mostró que el 93~\% de las instancias de la pieza 6 se clasificaron correctamente, el 3~\% como pieza 7 y el resto como pieza 8 o como fondo. Para la pieza 7, el 98~\% se clasificó correctamente.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.80\textwidth,keepaspectratio]{figuras/fase5_matriz_confusion_seg.png}
+    \caption{Matriz de confusión normalizada del modelo de segmentación sobre el conjunto de validación. Las columnas corresponden a la clase real y las filas a la clase predicha.}
+    \label{fig:fase5_matriz_confusion}
+    \par\small Fuente: elaboración propia, generada por Ultralytics durante la validación.
+\end{figure}
+
+Estas métricas se obtuvieron en computadora con el modelo antes de su cuantización y no con la cámara. Además, las imágenes de entrenamiento y validación provinieron de fotogramas de los mismos videos, por lo que ambos conjuntos pudieron contener escenas muy parecidas. En consecuencia, las métricas describieron el modelo, pero no constituyeron una medición de la clasificación en la cámara durante la operación; esta última no se cuantificó. El sistema utilizó la detección principalmente para localizar las piezas y estimar su orientación.
 
 
 \subsection{Integración de la HUSKYLENS 2}
@@ -587,10 +620,10 @@ La secuencia permitió utilizar inicialmente el algoritmo de AprilTags durante l
 El modelo personalizado quedó configurado con:
 
 \[
-\texttt{CUSTOM\_MODEL\_INDEX}=0,
+\texttt{CUSTOM\_MODEL\_INDEX}=1,
 \]
 
-correspondiente a \texttt{ALGORITHM\_CUSTOM\_BEGIN + 0}.
+correspondiente a \texttt{ALGORITHM\_CUSTOM\_BEGIN + 1}, es decir, al algoritmo 129 de la cámara. Aunque el modelo es de segmentación, la interfaz UART de la cámara entregó para cada detección únicamente el nombre de la clase, el centro y el ancho y alto de la caja delimitadora, sin la máscara.
 
 La función \texttt{getResult()} se utilizó durante la comunicación con la cámara para obtener respuestas y resultados del algoritmo activo. Una respuesta válida sin objetos permitió diferenciar la disponibilidad de la comunicación de la existencia de una detección.
 
@@ -615,7 +648,9 @@ La calibración visual utilizó cuatro AprilTags identificados como 0, 1, 2 y 3.
     \par\small Fuente: elaboración propia.
 \end{figure}
 
-Para cada marcador se utilizaron 25 observaciones de su centro antes de calcular la transformación. La geometría configurada utilizó un ancho útil de banda de 292~mm, un ancho total de 412~mm y una separación longitudinal de 382~mm entre las filas de marcadores.
+Para cada marcador se utilizaron 25 observaciones de su centro antes de calcular la transformación. La geometría configurada utilizó un ancho útil de banda de 292~mm, un ancho total de 412~mm y una separación longitudinal de 255~mm entre las filas de marcadores.
+
+Inicialmente, el firmware se configuró con una separación de 382~mm entre filas. Al comparar las trayectorias registradas de las piezas con el avance medido por el encoder, el desplazamiento longitudinal calculado por la cámara resultó entre 1,42 y 1,55 veces mayor que el de la banda. Además, una misma pieza medía entre 75 y 78 píxeles de largo en X y en Y, pero la homografía le asignaba 0,69~mm/píxel en X y 0,99~mm/píxel en Y. La separación se corrigió a 255~mm, valor que coincidió con la distancia física entre las filas de marcadores. No se registró una nueva comparación entre el recorrido medido por la cámara y el del encoder después de la corrección. En las mismas trayectorias se comprobó que la coordenada Y de la homografía crecía en el sentido de avance de la banda, lo que corrigió también el signo utilizado para transformarla al sistema del brazo.
 
 Las coordenadas de referencia utilizadas por el firmware se resumieron en el Cuadro~\ref{tab:fase5_tags}.
 
@@ -627,10 +662,10 @@ Las coordenadas de referencia utilizadas por el firmware se resumieron en el Cua
         \hline
         Identificador & $X_c$ (mm) & $Y_c$ (mm) \\
         \hline
-        0 & $-176$ & $-191$ \\
-        1 & $176$ & $-191$ \\
-        2 & $176$ & $191$ \\
-        3 & $-176$ & $191$ \\
+        0 & $-176$ & $-127{,}5$ \\
+        1 & $176$ & $-127{,}5$ \\
+        2 & $176$ & $127{,}5$ \\
+        3 & $-176$ & $127{,}5$ \\
         \hline
     \end{tabular}
 
@@ -641,13 +676,7 @@ La secuencia produjo una matriz de homografía válida para convertir los centro
 
 La transformación se utilizó posteriormente para generar los objetivos de posicionamiento del brazo y para descartar detecciones ubicadas fuera del área configurada como válida.
 
-La matriz numérica correspondiente a una calibración final y el error obtenido sobre puntos independientes quedaron pendientes de registro. Por esta razón, la transformación se presentó como funcional, pero no como una medición de exactitud geométrica.
-
-% PENDIENTE:
-% Guardar:
-% - matriz H final;
-% - coordenadas de puntos independientes;
-% - error de transformación en mm.
+La matriz numérica correspondiente a una calibración final y el error obtenido sobre puntos independientes no se registraron. Por esta razón, la transformación se presentó como funcional, pero no como una medición de exactitud geométrica.
 
 
 \subsection{Integración del encoder de la banda transportadora}
@@ -666,14 +695,14 @@ El encoder incremental quedó instalado junto a la banda transportadora para obt
     \par\small Fuente: elaboración propia.
 \end{figure}
 
-El encoder quedó integrado a la interfaz de encoder de Machine Control y fue procesado directamente por la Portenta H7.
+El encoder Omron E6B2-CWZ6C quedó integrado a la interfaz de encoder de Machine Control y fue procesado directamente por la Portenta H7.
 
 La configuración utilizó las entradas A0, B0 y Z0 del encoder 0. El firmware empleó 1024 pulsos por revolución y decodificación X2, equivalente a 2048 cuentas por revolución.
 
 Con una rueda configurada de 49~mm de diámetro y una relación 1:1 se obtuvo una escala utilizada por el firmware de aproximadamente:
 
 \[
-0.0752~\text{mm/cuenta}.
+0{,}0752~\text{mm/cuenta}.
 \]
 
 La función \texttt{actualizarEncoderBanda()} proporcionó al sistema las variables utilizadas para representar el conteo, sentido y desplazamiento de la banda.
@@ -685,7 +714,7 @@ La escala indicada correspondió a la configuración utilizada por el firmware. 
 
 \subsection{Sincronización y modo automático}
 
-La integración del sistema de visión con el movimiento se comprobó inicialmente con la banda detenida.
+La integración del sistema de visión con el movimiento se comprobó inicialmente con la banda detenida, mediante el modo automático que solo desplaza X y Y.
 
 En cinco pruebas funcionales, el brazo se desplazó hasta la ubicación correspondiente de la pieza en los cinco casos según el criterio funcional utilizado durante esta etapa.
 
@@ -711,25 +740,33 @@ No se realizó la recogida de la pieza durante estas cinco pruebas y no se regis
     \par\small\raggedright Fuente: elaboración propia a partir de los resultados funcionales registrados durante la etapa de posicionamiento estático.
 \end{table}
 
-Posteriormente se integró la información del encoder al flujo automático.
+Posteriormente se integró la información del encoder al flujo automático. El modo automático con la banda en movimiento incorporó la cuenta del encoder asociada con cada objetivo, la orientación automática de la garra y la secuencia completa de captura y entrega descrita en la metodología: aceptación del objetivo, preposicionamiento en la X de la pieza y en la estación $Y=0$, descenso de Z a la altura de espera, predicción del contacto, descenso final, confirmación del final de carrera inferior, cierre y confirmación de la pinza, retirada de Z, traslado al punto de entrega, descenso, apertura de la pinza y regreso a la altura segura.
 
-La versión automática V2 incorporó la referencia de conteo asociada con cada objetivo y permitió actualizar la posición longitudinal estimada de la pieza mientras la banda permanecía en movimiento.
+En la primera versión de este modo, la transformación entre la cámara y el brazo utilizaba una distancia de 845~mm entre el centro de la homografía y la estación de captura, junto con el signo invertido de Y y la escala longitudinal inflada descrita en la Sección~\ref{sec:resultados_fase5}. Estos tres errores se compensaban entre sí solo para las piezas observadas cerca de $Y=-170$~mm, por lo que el error de captura dependía de la posición en que la cámara veía la pieza. Con 22 agarres manuales exitosos registrados en el modo de enseñanza, el error de posición de la pieza en el instante de contacto, calculado con el modelo anterior, fue de $-69\pm103$~mm; con el modelo corregido, de $-1\pm24$~mm. Estos agarres se realizaron con velocidades de banda de 70 a 95~mm/s.
 
-La secuencia implementada incluyó la aceptación del objetivo, el preposicionamiento de X/Y, la preparación del eje Z, la espera de llegada de la pieza, el descenso final, la confirmación del final de carrera inferior, la orden de cierre de la pinza y la retirada de Z hacia una posición segura.
+Los ensayos posteriores en la maqueta con una pieza vertical de 48~mm, marcada en su centro, mostraron que con 565~mm la pinza cerraba unos 14~mm después del centro, por lo que la distancia se fijó en 551~mm. Con ese valor, las piezas horizontales descendían unos 20~mm antes de lo necesario y el dedo de aguas arriba caía delante de la pieza, lo que motivó el retraso de $40\,\lvert\cos\theta\rvert$~mm. El Cuadro~\ref{tab:fase5_modelo_posicion} compara los parámetros de ambas versiones.
 
-La transformación utilizada por el firmware aplicó una inversión de signo en X y Y y un desplazamiento de 15~mm en X:
+\begin{table}[H]
+    \centering
+    \caption{Parámetros del modelo de posición de la pieza antes y después de la corrección.}
+    \label{tab:fase5_modelo_posicion}
+    \begin{tabular}{p{0.36\textwidth}p{0.24\textwidth}p{0.28\textwidth}}
+        \hline
+        Parámetro & Versión inicial & Versión final (V4) \\
+        \hline
+        Separación entre filas de AprilTags & 382~mm & 255~mm \\
+        Signo de Y cámara--brazo & $-1$ & $+1$ \\
+        Distancia homografía--captura & 845~mm & 551~mm \\
+        Transformación en X & $X_b=-X_c-5$~mm & $X_b=-X_c-5$~mm \\
+        Retraso por orientación & No aplicado & $40\,\lvert\cos\theta\rvert$~mm \\
+        Tiempo de la orden de cierre al contacto & 608~ms & 300~ms \\
+        Error de posición al contacto (22 agarres) & $-69\pm103$~mm & $-1\pm24$~mm \\
+        \hline
+    \end{tabular}
+    \par\small\raggedright Fuente: elaboración propia a partir de la configuración del firmware y de los registros del modo de enseñanza.
+\end{table}
 
-\[
-X_b=-X_c+15,
-\qquad
-Y_b=-Y_c.
-\]
-
-Para la predicción longitudinal se utilizó una distancia efectiva configurada de 845~mm entre la referencia utilizada por la cámara y la zona de captura.
-
-Los registros obtenidos durante el desarrollo mostraron secuencias que alcanzaron la orden de cierre, el evento de captura programado y la finalización del ciclo automático.
-
-Sin embargo, estos registros electrónicos no incluyeron una verificación independiente de la presencia física de la pieza dentro de la garra. Por esta razón, no se utilizó el estado de finalización del programa como evidencia de un agarre exitoso. La evaluación del agarre se realizó posteriormente mediante el registro individual de 120 intentos, cuyos resultados se presentan en la Sección~\ref{sec:resultados_fase6}.
+Los registros electrónicos del modo automático mostraron secuencias que alcanzaron la orden de cierre, la confirmación de la pinza y la finalización del ciclo. Sin embargo, el final de carrera inferior confirmó únicamente la altura de Z y no la presencia de la pieza en la garra. Por esta razón, el firmware registró cada ciclo terminado como entregado sin agarre verificado, y el éxito se evaluó mediante la observación directa de 120 intentos, cuyos resultados se presentan en la Sección~\ref{sec:resultados_fase6}.
 
 % ============================================================
 % FASE 6: VALIDACIÓN EXPERIMENTAL DEL AGARRE
@@ -738,26 +775,26 @@ Sin embargo, estos registros electrónicos no incluyeron una verificación indep
 \section{Fase 6. Validación experimental}
 \label{sec:resultados_fase6}
 
-\subsection{Registro de las pruebas de agarre}
+\subsection{Registro de las pruebas de recogida y entrega}
 
-Se registraron 120 intentos de agarre del brazo cartesiano en funcionamiento automático, distribuidos en dos condiciones identificadas en el registro experimental como 35\% y 25\% de velocidad de la banda transportadora. En cada condición se evaluaron 30 intentos con la pieza 6 y 30 con la pieza 7, para un total de 60 ensayos por condición. Cada intento se consignó mediante un identificador de prueba, el tipo de pieza, una respuesta binaria de agarre exitoso (\textit{Sí} o \textit{No}) y una observación sobre la orientación de la pieza.
+Se registraron 120 intentos del ciclo automático con la banda en movimiento, ejecutados con el firmware V4 y distribuidos en dos condiciones identificadas en el registro experimental como 35~\% y 25~\% de velocidad de la banda transportadora. En cada condición se evaluaron 30 intentos con la pieza 6 y 30 con la pieza 7, para un total de 60 ensayos por condición. Cada intento se consignó mediante un identificador de prueba, el tipo de pieza, una respuesta binaria (\textit{Sí} o \textit{No}) y una observación sobre la orientación de la pieza. Un intento se registró como exitoso cuando el brazo recogió la pieza y la depositó en el punto de entrega.
 
 Las orientaciones consignadas fueron vertical, horizontal y diagonal. Se calculó la proporción de éxito como el cociente entre los intentos marcados como \textit{Sí} y el total de intentos del grupo, expresado en porcentaje:
 
 \begin{equation}
-    \text{Éxito de agarre}~(\%) = \frac{N_{\text{agarres exitosos}}}{N_{\text{intentos registrados}}}\times 100.
+    \text{Éxito}~(\%) = \frac{N_{\text{ciclos exitosos}}}{N_{\text{intentos registrados}}}\times 100.
     \label{eq:fase6_tasa_exito}
 \end{equation}
 
-Los porcentajes de velocidad identificaron las consignas utilizadas durante los ensayos. El registro no incluyó la velocidad lineal medida de la banda en mm/s ni la versión exacta del firmware ejecutada en cada prueba. En consecuencia, no se asumió una equivalencia entre las consignas porcentuales y velocidades físicas específicas.
+Los porcentajes de velocidad identificaron las consignas utilizadas durante los ensayos. No se conservaron los registros del firmware de estas sesiones, por lo que no se dispuso de la velocidad lineal de la banda en mm/s para cada consigna. En consecuencia, no se asumió una equivalencia entre las consignas porcentuales y velocidades físicas específicas.
 
-\subsection{Tasa de agarre según velocidad y tipo de pieza}
+\subsection{Tasa de éxito según velocidad y tipo de pieza}
 
-La Tabla~\ref{tab:fase6_resumen_agarre} presenta las frecuencias registradas y las tasas de éxito calculadas. En total se documentaron 74 agarres exitosos y 46 fallidos, correspondientes a una tasa de éxito global de 61,7\%.
+El Cuadro~\ref{tab:fase6_resumen_agarre} presenta las frecuencias registradas y las tasas de éxito calculadas. En total se documentaron 74 ciclos exitosos y 46 fallidos, correspondientes a una tasa de éxito global de 61,7~\%.
 
 \begin{table}[H]
     \centering
-    \caption{Resultados de las pruebas de agarre por condición de velocidad y tipo de pieza.}
+    \caption{Resultados de las pruebas de recogida y entrega por condición de velocidad y tipo de pieza.}
     \label{tab:fase6_resumen_agarre}
     \begin{tabular}{l l r r r r}
         \hline
@@ -777,25 +814,25 @@ La Tabla~\ref{tab:fase6_resumen_agarre} presenta las frecuencias registradas y l
     \par\small\raggedright Fuente: elaboración propia a partir de \textit{Pruebas\_Agarre\_Brazo.xlsx}, hojas \textit{Vel 35\%}, \textit{Vel 25\%} y \textit{Resumen}.
 \end{table}
 
-La condición del 25\% presentó 44 agarres exitosos de 60 intentos (73,3\%), mientras que la del 35\% registró 30 de 60 (50,0\%). La diferencia observada entre las tasas fue de 23,3 puntos porcentuales a favor de la condición del 25\%. Por tipo de pieza, la pieza 7 alcanzó 90,0\% en la condición del 25\% y 60,0\% en la del 35\%, mientras que la pieza 6 alcanzó 56,7\% y 40,0\%, respectivamente.
+La condición del 25~\% presentó 44 ciclos exitosos de 60 intentos (73,3~\%), mientras que la del 35~\% registró 30 de 60 (50,0~\%). La diferencia observada entre las tasas fue de 23,3 puntos porcentuales a favor de la condición del 25~\%. Por tipo de pieza, la pieza 7 alcanzó 90,0~\% en la condición del 25~\% y 60,0~\% en la del 35~\%, mientras que la pieza 6 alcanzó 56,7~\% y 40,0~\%, respectivamente.
 
-La Figura~\ref{fig:fase6_exito_pieza_velocidad} representa estas proporciones junto con el número de agarres exitosos y el total de intentos correspondiente a cada grupo.
+La Figura~\ref{fig:fase6_exito_pieza_velocidad} representa estas proporciones junto con el número de ciclos exitosos y el total de intentos correspondiente a cada grupo.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.88\textwidth,keepaspectratio]{figuras/fase6_exito_pieza_velocidad.png}
-    \caption{Porcentaje de agarres exitosos por tipo de pieza y condición de velocidad. Los valores entre paréntesis indican agarres exitosos e intentos totales.}
+    \caption{Porcentaje de ciclos exitosos por tipo de pieza y condición de velocidad. Los valores entre paréntesis indican ciclos exitosos e intentos totales.}
     \label{fig:fase6_exito_pieza_velocidad}
-    \par\small Fuente: elaboración propia a partir del registro experimental de agarres.
+    \par\small Fuente: elaboración propia a partir del registro experimental de recogida y entrega.
 \end{figure}
 
 \subsection{Resultados según la orientación de las piezas}
 
-El registro permitió desagregar los ensayos de cada pieza en tres orientaciones. El número de intentos no fue uniforme entre orientaciones: en las dos condiciones de velocidad se realizaron, en conjunto, 32 pruebas verticales, 31 horizontales y 57 diagonales. La Tabla~\ref{tab:fase6_orientacion_detalle} conserva esta distinción y presenta los resultados específicos de cada combinación.
+El registro permitió desagregar los ensayos de cada pieza en tres orientaciones. El número de intentos no fue uniforme entre orientaciones: en las dos condiciones de velocidad se realizaron, en conjunto, 32 pruebas verticales, 31 horizontales y 57 diagonales. El Cuadro~\ref{tab:fase6_orientacion_detalle} conserva esta distinción y presenta los resultados específicos de cada combinación.
 
 \begin{table}[H]
     \centering
-    \caption{Resultados de agarre por velocidad, tipo de pieza y orientación.}
+    \caption{Resultados de recogida y entrega por velocidad, tipo de pieza y orientación.}
     \label{tab:fase6_orientacion_detalle}
     \begin{tabular}{l l l r r r}
         \hline
@@ -819,20 +856,70 @@ El registro permitió desagregar los ensayos de cada pieza en tres orientaciones
     \par\small\raggedright Fuente: elaboración propia a partir de las observaciones registradas en ambas hojas de ensayos.
 \end{table}
 
-Al agrupar las dos piezas, los ensayos verticales registraron 29 éxitos de 32 intentos (90,6\%); los horizontales, 14 de 31 (45,2\%); y los diagonales, 31 de 57 (54,4\%). La Figura~\ref{fig:fase6_exito_orientacion} muestra estas tasas separadas por condición de velocidad, sin suponer que el número desigual de pruebas por orientación representa una distribución proporcional del proceso productivo.
+Al agrupar las dos piezas, los ensayos verticales registraron 29 éxitos de 32 intentos (90,6~\%); los horizontales, 14 de 31 (45,2~\%); y los diagonales, 31 de 57 (54,4~\%). La Figura~\ref{fig:fase6_exito_orientacion} muestra estas tasas separadas por condición de velocidad, sin suponer que el número desigual de pruebas por orientación representa una distribución proporcional del proceso productivo.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.88\textwidth,keepaspectratio]{figuras/fase6_exito_orientacion.png}
-    \caption{Tasa de agarre por orientación y condición de velocidad, agrupando los dos tipos de pieza. Los valores entre paréntesis indican agarres exitosos e intentos totales.}
+    \caption{Tasa de éxito por orientación y condición de velocidad, agrupando los dos tipos de pieza. Los valores entre paréntesis indican ciclos exitosos e intentos totales.}
     \label{fig:fase6_exito_orientacion}
-    \par\small Fuente: elaboración propia a partir del registro experimental de agarres.
+    \par\small Fuente: elaboración propia a partir del registro experimental de recogida y entrega.
 \end{figure}
 
-En los ensayos verticales de la pieza 7 se registraron 16 éxitos en 16 intentos entre ambas condiciones. En contraste, los ensayos horizontales de la pieza 6 acumularon 3 éxitos en 15 intentos. En el grupo diagonal, la pieza 6 pasó de 3/15 (20,0\%) a 35\% de velocidad a 10/14 (71,4\%) a 25\%; la pieza 7 pasó de 5/14 (35,7\%) a 13/14 (92,9\%). Estos resultados reflejaron diferencias observadas entre las condiciones, sin establecer por sí solos la causa de dichas diferencias.
+En los ensayos verticales de la pieza 7 se registraron 16 éxitos en 16 intentos entre ambas condiciones. En contraste, los ensayos horizontales de la pieza 6 acumularon 3 éxitos en 15 intentos. En el grupo diagonal, la pieza 6 pasó de 3/15 (20,0~\%) a 35~\% de velocidad a 10/14 (71,4~\%) a 25~\%; la pieza 7 pasó de 5/14 (35,7~\%) a 13/14 (92,9~\%). Estos resultados reflejaron diferencias observadas entre las condiciones, sin establecer por sí solos la causa de dichas diferencias.
+
+\subsection{Intervalos de confianza y comparaciones}
+
+El Cuadro~\ref{tab:fase6_intervalos} presenta los intervalos de confianza del 95~\% de las tasas de éxito agrupadas.
+
+\begin{table}[H]
+    \centering
+    \caption{Tasas de éxito con intervalos de confianza del 95~\% (método de Wilson).}
+    \label{tab:fase6_intervalos}
+    \begin{tabular}{l r r c}
+        \hline
+        Grupo & Éxitos/intentos & Éxito (\%) & IC 95~\% (\%) \\
+        \hline
+        Global & 74/120 & 61,7 & 52,7--69,9 \\
+        Velocidad 25~\% & 44/60 & 73,3 & 61,0--82,9 \\
+        Velocidad 35~\% & 30/60 & 50,0 & 37,7--62,3 \\
+        Pieza 6 & 29/60 & 48,3 & 36,2--60,7 \\
+        Pieza 7 & 45/60 & 75,0 & 62,8--84,2 \\
+        Vertical & 29/32 & 90,6 & 75,8--96,8 \\
+        Horizontal & 14/31 & 45,2 & 29,2--62,2 \\
+        Diagonal & 31/57 & 54,4 & 41,6--66,6 \\
+        \hline
+    \end{tabular}
+    \par\small\raggedright Fuente: elaboración propia a partir del registro experimental.
+\end{table}
+
+La prueba exacta de Fisher bilateral indicó diferencias entre las condiciones del 25 y 35~\% ($p=0{,}014$), entre las piezas 7 y 6 ($p=0{,}005$), entre las orientaciones vertical y horizontal ($p<0{,}001$) y entre las orientaciones vertical y diagonal ($p<0{,}001$). No se encontró diferencia entre las orientaciones horizontal y diagonal ($p=0{,}50$). Como los intentos no se asignaron aleatoriamente y las orientaciones no estuvieron balanceadas entre grupos, estas comparaciones se presentaron como descriptivas.
+
+\subsection{Repetibilidad del recorrido medido en la referenciación}
+\label{sec:resultados_repetibilidad}
+
+El Cuadro~\ref{tab:fase6_repetibilidad} resume los recorridos medidos entre finales de carrera en las referenciaciones registradas entre el 23 de septiembre y el 6 de octubre de 2026.
+
+\begin{table}[H]
+    \centering
+    \caption{Recorrido medido entre finales de carrera en las referenciaciones registradas.}
+    \label{tab:fase6_repetibilidad}
+    \begin{tabular}{c r r r r r r}
+        \hline
+        Eje & $n$ & Media (pasos) & $s$ (pasos) & Rango (pasos) & $s$ (mm) & Rango (mm) \\
+        \hline
+        X & 13 & 19\,944,5 & 57,8 & 173 & 1,29 & 3,87 \\
+        Y & 9 & 11\,811,9 & 16,1 & 45 & 0,46 & 1,28 \\
+        Z & 9 & 14\,687,2 & 10,8 & 28 & --- & --- \\
+        \hline
+    \end{tabular}
+    \par\small\raggedright Fuente: elaboración propia a partir de los registros seriales de la rutina de referenciación. La conversión a milímetros usó 44,72~pasos/mm en X y 35,15~pasos/mm en Y; Z no tiene conversión a milímetros.
+\end{table}
+
+Los recorridos de X variaron entre 19\,839 y 20\,012 pasos; a partir del 5 de octubre se registraron valores alrededor de 120 pasos menores que los anteriores, lo que puede corresponder a ajustes mecánicos entre sesiones. Estas cifras describieron la repetibilidad de la detección de los extremos y del conteo de pasos, no la repetibilidad de pose del efector final.
 
 \subsection{Observaciones y alcance de la validación}
 
-La hoja correspondiente al 35\% incluyó una anotación cualitativa de desprendimiento de la pieza durante una prueba horizontal con la pieza 7, registrada como \textit{No}. En las demás filas sin éxito no se consignó de forma sistemática una causa específica de falla. Por lo tanto, los 46 registros negativos se contabilizaron como agarres no exitosos, pero no se clasificaron en categorías de error mecánico, visual o temporal.
+La hoja correspondiente al 35~\% incluyó una anotación cualitativa de desprendimiento de la pieza durante una prueba horizontal con la pieza 7, registrada como \textit{No}. En las demás filas sin éxito no se consignó de forma sistemática una causa específica de falla. Por lo tanto, los 46 registros negativos se contabilizaron como ciclos no exitosos, pero no se clasificaron en categorías de error mecánico, visual o temporal. Tampoco se registró el sentido de inclinación de las piezas diagonales.
 
-Las 120 observaciones permitieron cuantificar la frecuencia de éxito del agarre bajo las condiciones ensayadas. Sin embargo, el libro no registró distancias entre la posición ordenada y la alcanzada por el brazo, mediciones repetidas de una posición conocida, velocidades físicas de la banda, tiempos de ciclo ni comprobación del depósito final de la pieza. En consecuencia, la evaluación documentó el éxito de la recogida, pero no proporcionó por sí sola valores de precisión o repetibilidad de posicionamiento en milímetros, ni una tasa de transferencia completa.
+Las 120 observaciones permitieron cuantificar la frecuencia con que el ciclo completo de recogida y entrega se ejecutó con éxito bajo las condiciones ensayadas. Sin embargo, el libro no registró distancias entre la posición ordenada y la alcanzada por el brazo, mediciones repetidas de una posición conocida, velocidades físicas de la banda ni tiempos de ciclo. En consecuencia, la evaluación no proporcionó valores de exactitud ni de repetibilidad de pose del efector final en milímetros.
